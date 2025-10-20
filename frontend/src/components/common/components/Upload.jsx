@@ -2,6 +2,7 @@ import React from 'react'
 import { useMutation, useQueryClient } from 'react-query';
 import Dropzone from 'react-dropzone';
 import api from '@/api/api';
+import apiIngestion from '@/api/apiIngesion';
 import toast from 'react-hot-toast';
 import { PlusIcon } from '@heroicons/react/24/solid'
 import { useStore } from '@/stores/chat';
@@ -19,7 +20,7 @@ export default function Upload() {
             });
             formData.append('group', group);
             formData.append('session_id', sessionId);
-            const res = await api.post('/api/user/uploads', formData);
+            const res = await apiIngestion.post('/uploads', formData);
             return res.data;
         },
         {
