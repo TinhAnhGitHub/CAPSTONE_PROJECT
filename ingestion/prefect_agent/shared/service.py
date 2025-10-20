@@ -10,6 +10,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 import asyncio
+import os
 from shared.config import LogConfig, ServiceConfig
 from shared.logger import setup_service_logger
 from shared.metrics import ServiceMetrics
@@ -141,7 +142,8 @@ class BaseService(Generic[InputT, OutputT], ABC):
             self.update_system_metrics()
 
             return self.loaded_model_info
-        except Exception as exc:  
+        except Exception as exc: 
+
             logger.exception(
                 "model_load_failed",
                 model=model_name,

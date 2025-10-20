@@ -6,12 +6,7 @@ from datetime import datetime
 from loguru import logger
 from sqlalchemy import text
 from core.dependencies.application import get_artifact_tracker, get_storage_client
-from core.dependencies.pipeline import (
-    get_client_config,
-    get_image_embedding_milvus_config,
-    get_text_image_caption_milvus_config,
-    get_text_segment_caption_milvus_config
-)
+
 
 from core.pipeline.tracker import ArtifactTracker
 from core.storage import StorageClient
@@ -27,6 +22,7 @@ from core.clients.milvus_client import (
     TextCaptionEmbeddingMilvusClient,
     SegmentCaptionEmbeddingMilvusClient
 )
+from core.app_state import AppState
 
 class HealthStatus(str, Enum):
     HEALTHY = "healthy"
@@ -207,8 +203,8 @@ async def check_milvus(
 async def health_check(
     tracker: ArtifactTracker = Depends(get_artifact_tracker),
     storage: StorageClient = Depends(get_storage_client),
-    asr_config: ClientConfig = Depends(get_client_config),
-):
+):  
+    asr_config = AppState().base_client_config
     components = {}
     components["database"] = await check_component(
         "database",
@@ -280,9 +276,8 @@ async def check_storage_health(
     response_model=ComponentHealth,
     summary="Consul service discovery health check"
 )
-async def check_consul_health(
-    config: ClientConfig = Depends(get_client_config)
-) -> ComponentHealth:
+async def check_consul_health() -> ComponentHealth:
+    config = AppState().base_client_config
     return await check_component("consul", check_consul_connection, config)
 
 
@@ -291,9 +286,8 @@ async def check_consul_health(
     response_model=ComponentHealth,
     summary="ASR service health check"
 )
-async def check_asr_service(
-    config: ClientConfig = Depends(get_client_config)
-) -> ComponentHealth:
+async def check_asr_service() -> ComponentHealth:
+    config = AppState().base_client_config
     return await check_component(
         "asr-service",
         check_microservice,
@@ -308,9 +302,8 @@ async def check_asr_service(
     response_model=ComponentHealth,
     summary="Autoshot service health check"
 )
-async def check_autoshot_service(
-    config: ClientConfig = Depends(get_client_config)
-) -> ComponentHealth:
+async def check_autoshot_service() -> ComponentHealth:
+    config = AppState().base_client_config
     """Check Autoshot microservice connectivity and status."""
     return await check_component(
         "autoshot-service",
@@ -327,10 +320,8 @@ async def check_autoshot_service(
     response_model=ComponentHealth,
     summary="LLM service health check"
 )
-async def check_llm_service(
-    config: ClientConfig = Depends(get_client_config)
-) -> ComponentHealth:
-    """Check LLM microservice connectivity and status."""
+async def check_llm_service() -> ComponentHealth:
+    config = AppState().base_client_config
     return await check_component(
         "llm-service",
         check_microservice,
@@ -345,10 +336,9 @@ async def check_llm_service(
     response_model=ComponentHealth,
     summary="Image embedding service health check"
 )
-async def check_image_embedding_service(
-    config: ClientConfig = Depends(get_client_config)
-) -> ComponentHealth:
-    """Check image embedding microservice connectivity and status."""
+async def check_image_embedding_service() -> ComponentHealth:
+    
+    config = AppState().base_client_config
     return await check_component(
         "image-embedding-service",
         check_microservice,
@@ -363,10 +353,9 @@ async def check_image_embedding_service(
     response_model=ComponentHealth,
     summary="Text embedding service health check"
 )
-async def check_text_embedding_service(
-    config: ClientConfig = Depends(get_client_config)
-) -> ComponentHealth:
+async def check_text_embedding_service() -> ComponentHealth:
     """Check text embedding microservice connectivity and status."""
+    config = AppState().base_client_config
     return await check_component(
         "text-embedding-service",
         check_microservice,
@@ -381,10 +370,10 @@ async def check_text_embedding_service(
     response_model=ComponentHealth,
     summary="Image embeddings Milvus health check"
 )
-async def check_image_embeddings_milvus(
-    milvus_config_collection: MilvusCollectionConfig = Depends(get_image_embedding_milvus_config)
-) -> ComponentHealth:
+async def check_image_embeddings_milvus() -> ComponentHealth:
     """Check image embeddings Milvus collection status."""
+
+    milvus_config_collection = AppState().image_embedding_milvus_config
     from core.config.storage import milvus_settings
     
     return await check_component(
@@ -405,10 +394,9 @@ async def check_image_embeddings_milvus(
     response_model=ComponentHealth,
     summary="Text caption embeddings Milvus health check"
 )
-async def check_text_caption_milvus(
-    milvus_config_collection: MilvusCollectionConfig = Depends(get_text_image_caption_milvus_config)
-) -> ComponentHealth:
-    """Check text caption embeddings Milvus collection status."""
+async def check_text_caption_milvus() -> ComponentHealth:
+
+    milvus_config_collection = AppState().text_image_caption_milvus_config
     from core.config.storage import milvus_settings
     
     return await check_component(
@@ -429,10 +417,10 @@ async def check_text_caption_milvus(
     response_model=ComponentHealth,
     summary="Segment caption embeddings Milvus health check"
 )
-async def check_segment_caption_milvus(
-    milvus_config_collection: MilvusCollectionConfig = Depends(get_text_segment_caption_milvus_config)
-) -> ComponentHealth:
+async def check_segment_caption_milvus() -> ComponentHealth:
     """Check segment caption embeddings Milvus collection status."""
+
+    milvus_config_collection = AppState().text_segment_caption_milvus_config
     from core.config.storage import milvus_settings
     
     return await check_component(

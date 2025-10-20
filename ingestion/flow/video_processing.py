@@ -128,7 +128,7 @@ async def asr_task(
 )
 async def image_processing_task(
     autoshots: list[AutoshotArtifact],
-):
+)-> list[ImageArtifact]:
     task_instance = AppState().image_processing_task
     preprocessed = await task_instance.preprocess(autoshots)
     results = []
@@ -178,7 +178,7 @@ async def segment_caption_task(
 )
 async def image_caption_task(
     images: list[ImageArtifact] | PrefectFuture,
-):
+) -> list[ImageCaptionArtifact]:
     task_instance =  AppState().image_caption_llm_task
     client_config =  AppState().base_client_config
     async with LLMClient(config=client_config) as client:
@@ -448,8 +448,8 @@ async def video_processing_flow(
             videos=videos #type:ignore
         )
 
-        autoshot_artifacts =  autoshot_future.result()
-        asr_artifacts  =  asr_future.result()
+        autoshot_artifacts =  cast(list[AutoshotArtifact], autoshot_future.result())
+        asr_artifacts  =  cast(list[ASRArtifact], asr_future.result())
 
         run_logger.info(
             f"Completed parallel processing: "
@@ -488,13 +488,13 @@ async def video_processing_flow(
             captions=image_captions_future
         )
 
-        segment_captions =  segmentation_captions.result()
-        text_segment_embeddings =  text_segmentation_embeddings.result()
+        segment_captions =  cast(list[SegmentCaptionArtifact], segmentation_captions.result())
+        text_segment_embeddings =  cast(list[TextCapSegmentEmbedArtifact], text_segmentation_embeddings.result())
 
-        images =  images_artifact_future.result()
-        image_captions =  image_captions_future.result()
-        image_embeddings =  image_embeddings_future.result()
-        text_caption_embeddings =  text_caption_embedding_future.result()
+        images =  cast(list[ImageArtifact], images_artifact_future.result())
+        image_captions =  cast(list[ImageCaptionArtifact], image_captions_future.result())
+        image_embeddings =  cast(list[ImageEmbeddingArtifact], image_embeddings_future.result())
+        text_caption_embeddings =  cast(list[TextCaptionEmbeddingArtifact], text_caption_embedding_future.result())
 
         run_logger.info(
             f"Completed Stage 3 branches: "

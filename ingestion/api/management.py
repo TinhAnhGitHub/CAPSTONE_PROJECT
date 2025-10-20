@@ -6,13 +6,18 @@ from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
 import json
 from core.management.cleanup import ArtifactDeleter, DeletionResult
-from core.management.milvus_manager import MilvusManager, MilvusDeletionOutcome
 from core.management.status import VideoStatusManager, VideoStatusInfo
-from core.dependencies.application import get_artifact_deleter, get_artifact_tracker, get_storage_client
+from core.dependencies.application import (
+    get_artifact_deleter,
+    get_artifact_tracker,
+    get_storage_client,
+    get_video_status_manager
+)
 from core.pipeline.tracker import ArtifactTracker
 from core.storage import StorageClient
 from core.lifespan import AppState
 from core.config.logging import run_logger
+
 
 router = APIRouter(prefix='/management', tags=["management"])
 
@@ -21,10 +26,7 @@ class DeletionResponse(BaseModel):
     """Response model for deletion operations."""
     success: bool
     video_id: str
-    message: str
-    deleted_artifacts: int
-    deleted_lineage: int
-    deleted_minio_objects: int
+    metadata:dict
 
 
 class MilvusDeletionResponse(BaseModel):
@@ -50,10 +52,7 @@ async def delete_video(
     return DeletionResponse(
         success=result.success,
         video_id=result.video_id,
-        message=f"Successfully deleted video '{video_id}' and {result.deleted_artifacts} artifacts",
-        deleted_artifacts=result.deleted_artifacts,
-        deleted_lineage=result.deleted_lineage,
-        deleted_minio_objects=result.deleted_minio_objects,
+        metadata=result.metadata
     )
 
 
@@ -78,10 +77,7 @@ async def delete_video_stage(
         return DeletionResponse(
             success=result.success,
             video_id=result.video_id,
-            message=f"Successfully deleted {result.deleted_artifacts} artifacts of type '{artifact_type}'",
-            deleted_artifacts=result.deleted_artifacts,
-            deleted_lineage=result.deleted_lineage,
-            deleted_minio_objects=result.deleted_minio_objects,
+            metadata=result.metadata
         )
     except RuntimeError as e:
         raise HTTPException(
@@ -94,73 +90,6 @@ async def delete_video_stage(
             detail=f"Failed to delete stage artifacts: {str(e)}"
         )
 
-
-@router.post(
-    "/videos/batch-delete",
-    response_model=list[DeletionResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Delete multiple videos in batch"
-)
-async def batch_delete_videos(
-    video_ids: list[str],
-    deleter: ArtifactDeleter = Depends(get_artifact_deleter)
-) -> list[DeletionResponse]:
-    results = []
-    
-    for video_id in video_ids:
-        try:
-            result = await deleter.delete_video_cascade(video_id)
-            results.append(
-                DeletionResponse(
-                    success=result.success,
-                    video_id=result.video_id,
-                    message=f"Deleted {result.deleted_artifacts} artifacts",
-                    deleted_artifacts=result.deleted_artifacts,
-                    deleted_lineage=result.deleted_lineage,
-                    deleted_minio_objects=result.deleted_minio_objects,
-                )
-            )
-        except Exception as e:
-            results.append(
-                DeletionResponse(
-                    success=False,
-                    video_id=video_id,
-                    message=f"Failed: {str(e)}",
-                    deleted_artifacts=0,
-                    deleted_lineage=0,
-                    deleted_minio_objects=0,
-                )
-            )
-    
-    return results
-
-
-@router.delete(
-    "/milvus/users/{user_id}/videos/{related_video_id}",
-    response_model=MilvusDeletionResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Delete Milvus records across all collections for a video",
-    description=(
-        "Dynamically delete all Milvus records referencing the given related_video_id "
-        "across every registered collection scoped by user_id (_{user_id}_<collection>)."
-    ),
-)
-async def delete_milvus_by_video(
-    user_id: str,
-    related_video_id: str,
-) -> MilvusDeletionResponse:
-    manager = MilvusManager()
-    outcome: MilvusDeletionOutcome = await manager.delete_by_related_video_id(user_id, related_video_id)
-    return MilvusDeletionResponse(
-        success=outcome.success,
-        user_id=user_id,
-        related_video_id=related_video_id,
-        total_deleted=outcome.total_deleted,
-        per_collection_deleted=outcome.per_collection_deleted,
-        errors=outcome.errors,
-    )
-
-
 @router.get(
     "/videos/{video_id}/status",
     response_model=VideoStatusInfo,
@@ -170,11 +99,9 @@ async def delete_milvus_by_video(
 )
 async def get_video_status(
     video_id: str,
-    tracker: ArtifactTracker = Depends(get_artifact_tracker),
-    storage: StorageClient = Depends(get_storage_client)
+    status_manager=Depends(get_video_status_manager)
 ) -> VideoStatusInfo:
     """Get the current processing status of a video."""
-    status_manager = VideoStatusManager(tracker, storage)
     
     try:
         video_status = await status_manager.get_video_status(video_id)
@@ -193,6 +120,8 @@ async def get_video_status(
 
 
 
+
+
 # @router.websocket("/ws/progress/{video_id}")
 # async def websocket_progress(websocket: WebSocket, video_id: str):
 #     await websocket.accept()
@@ -203,7 +132,7 @@ async def get_video_status(
 #                 data = {
 #                     "video_id": progress.video_id,
 #                     "overall_percentage": progress.overall_percentage,
-#                     "current_stage": progress.current_stage.value if progress.current_stage else None,
+#                     "current_stage": progress.current_stage.valutẻe if progress.current_stage else None,
 #                     "status": progress.status,
 #                     "stages": {
 #                         stage.value: {

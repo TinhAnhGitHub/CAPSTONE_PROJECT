@@ -91,16 +91,13 @@ class ImageEmbeddingMilvusTask(
             batch_artifacts.append(artifact)
 
             if len(batch) >= self.config.ingest_batch_size:
-                try:
-                    ids = await client.insert_vectors(batch)
-                    logger.info(
-                        f"Inserted batch of {len(ids)} vectors into {client.config.collection_name}"
-                    )
-                    for art in batch_artifacts:
-                        yield art
-                except Exception as e:
-                    logger.exception("Batch insert failed", error=str(e))
-
+                
+                ids = await client.insert_vectors(batch)
+                logger.info(
+                    f"Inserted batch of {len(ids)} vectors into {client.config.collection_name}"
+                )
+                for art in batch_artifacts:
+                    yield art
                 batch.clear()
                 batch_artifacts.clear()
 
@@ -177,8 +174,10 @@ class TextImageCaptionMilvusTask(
             caption_text = caption_data.get('caption', '')
 
             record = {
+                'id': artifact.artifact_id,
                 "frame_index": artifact.frame_index,
                 "related_video_name": artifact.related_video_name,
+                'related_video_id': artifact.related_video_id,
                 "caption": caption_text,
                 "caption_minio_url": artifact.image_caption_minio_url,
                 "embedding": embedding,
@@ -189,15 +188,14 @@ class TextImageCaptionMilvusTask(
             batch_artifacts.append(artifact)
 
             if len(batch) >= self.config.ingest_batch_size:
-                try:
-                    ids = await client.insert_vectors(batch)
-                    logger.info(
-                        f"Inserted batch of {len(ids)} text caption vectors into {client.config.collection_name}"
-                    )
-                    for art in batch_artifacts:
-                        yield art
-                except Exception as e:
-                    logger.exception("Batch insert failed", error=str(e))
+            
+                ids = await client.insert_vectors(batch)
+                logger.info(
+                    f"Inserted batch of {len(ids)} text caption vectors into {client.config.collection_name}"
+                )
+                for art in batch_artifacts:
+                    yield art
+              
                 batch.clear()
                 batch_artifacts.clear()
 
@@ -264,6 +262,8 @@ class TextSegmentCaptionMilvusTask(
             
             embedding_bytes = await fetch_object_from_s3_bytes(artifact.minio_url_path, self.visitor.minio_client)
             embedding = json.loads(embedding_bytes.decode('utf-8'))
+
+
             
             caption_dict_path = await fetch_object_from_s3(
                 artifact.related_segment_caption_url, 
@@ -273,10 +273,13 @@ class TextSegmentCaptionMilvusTask(
             caption_data = json.load(open(caption_dict_path, 'r', encoding='utf-8'))
             caption_text = caption_data.get('caption', '')
 
+
             record = {
+                'id': artifact.artifact_id,
                 "start_frame": artifact.start_frame,
                 "end_frame": artifact.end_frame,
                 "related_video_name": artifact.related_video_name,
+                'related_video_id': artifact.related_video_id,
                 "caption": caption_text,
                 "segment_caption_minio_url": artifact.related_segment_caption_url,
                 "embedding": embedding,
@@ -287,15 +290,14 @@ class TextSegmentCaptionMilvusTask(
             batch_artifacts.append(artifact)
 
             if len(batch) >= self.config.ingest_batch_size:
-                try:
-                    ids = await client.insert_vectors(batch)
-                    logger.info(
-                        f"Inserted batch of {len(ids)} segment caption vectors into {client.config.collection_name}"
-                    )
-                    for art in batch_artifacts:
-                        yield art
-                except Exception as e:
-                    logger.exception("Batch insert failed", error=str(e))
+            
+                ids = await client.insert_vectors(batch)
+                logger.info(
+                    f"Inserted batch of {len(ids)} segment caption vectors into {client.config.collection_name}"
+                )
+                for art in batch_artifacts:
+                    yield art
+              
                 batch.clear()
                 batch_artifacts.clear()
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Literal
+from pathlib import Path
 
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
+from loguru import logger
 
 from service_text_embedding.core.config import TextEmbeddingConfig
 from service_text_embedding.schema import TextEmbeddingRequest, TextEmbeddingResponse

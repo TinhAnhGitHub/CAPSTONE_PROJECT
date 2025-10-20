@@ -18,7 +18,7 @@ class ImageEmbeddingMilvusClient(BaseMilvusClient):
 
     def get_schema(self) -> CollectionSchema:
         fields = [
-            FieldSchema(name='id', dtype=DataType.VARCHAR, is_primary=True, max_length=64, auto_id=False),
+            FieldSchema(name='id', dtype=DataType.VARCHAR, is_primary=True, max_length=128, auto_id=False),
             FieldSchema(name=self.embedding_field, dtype=DataType.FLOAT_VECTOR, dim=self.config.dimension),
             FieldSchema(
                 name="related_video_name",
@@ -28,7 +28,7 @@ class ImageEmbeddingMilvusClient(BaseMilvusClient):
             FieldSchema(
                 name="related_video_id",
                 dtype=DataType.VARCHAR,
-                max_length=64
+                max_length=128
             ),
             FieldSchema(
                 name="segment_index",
@@ -58,9 +58,9 @@ class ImageEmbeddingMilvusClient(BaseMilvusClient):
         user_bucket: str
     ):
         filter_expr = (
-            f"id == {id_} and "
-            f'related_video_id == "{related_video_id}" and '
-            f'user_bucket == {user_bucket} and '
+            f'id == "{id_}" '
+            f'and related_video_id == "{related_video_id}" '
+            f'and user_bucket == "{user_bucket}"'
         )
         return await self.record_exists(filter_expr)
     
@@ -79,7 +79,7 @@ class TextCaptionEmbeddingMilvusClient(BaseMilvusClient):
                 name="id",
                 dtype=DataType.VARCHAR,
                 is_primary=True,
-                max_length=64,
+                max_length=128,
                 auto_id=False
             ),
             FieldSchema(
@@ -99,12 +99,12 @@ class TextCaptionEmbeddingMilvusClient(BaseMilvusClient):
             FieldSchema(
                 name="related_video_id",
                 dtype=DataType.VARCHAR,
-                max_length=64
+                max_length=128
             ),
             FieldSchema(
                 name="caption",
                 dtype=DataType.VARCHAR,
-                max_length=2048
+                max_length=10_000
             ),
             FieldSchema(
                 name="caption_minio_url",
@@ -132,9 +132,9 @@ class TextCaptionEmbeddingMilvusClient(BaseMilvusClient):
         user_bucket: str
     ):
         filter_expr = (
-            f"id == {id_} and "
-            f'related_video_id == "{related_video_id}" and '
-            f'user_bucket == {user_bucket} and '
+            f'id == "{id_}" '
+            f'and related_video_id == "{related_video_id}" '
+            f'and user_bucket == "{user_bucket}"'
         )
         return await self.record_exists(filter_expr)
     
@@ -155,7 +155,7 @@ class SegmentCaptionEmbeddingMilvusClient(BaseMilvusClient):
                 name="id",
                 dtype=DataType.VARCHAR,
                 is_primary=True,
-                max_length=64,
+                max_length=128,
                 auto_id=False
             ),
             FieldSchema(
@@ -184,7 +184,7 @@ class SegmentCaptionEmbeddingMilvusClient(BaseMilvusClient):
             FieldSchema(
                 name="caption",
                 dtype=DataType.VARCHAR,
-                max_length=4096
+                max_length=10_000
             ),
             FieldSchema(
                 name="segment_caption_minio_url",
@@ -211,8 +211,8 @@ class SegmentCaptionEmbeddingMilvusClient(BaseMilvusClient):
         user_bucket: str
     ):
         filter_expr = (
-            f"id == {id_} and "
-            f'related_video_id == "{related_video_id}" and '
-            f'user_bucket == {user_bucket} and '
+            f'id == "{id_}" '
+            f'and related_video_id == "{related_video_id}" '
+        f'and user_bucket == "{user_bucket}"'
         )
         return await self.record_exists(filter_expr)

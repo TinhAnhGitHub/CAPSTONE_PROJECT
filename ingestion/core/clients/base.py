@@ -364,7 +364,7 @@ class BaseMilvusClient(ABC):
     async def connect(self) -> None:
         try:
             
-            uri = f"{self.host}:{self.port}"
+            uri = f"http://{self.host}:{self.port}"
             print(uri)
             self._client = AsyncMilvusClient(
                 uri=uri,

@@ -209,6 +209,9 @@ class ArtifactPersistentVisitor:
         await self.tracker.save_artifact(artifact_metadata)
 
 
+ 
+
+
 
     async def visit_image_caption_embedding(self, artifact: "TextCaptionEmbeddingArtifact", upload_file: BinaryIO):
         object_key = artifact.object_key

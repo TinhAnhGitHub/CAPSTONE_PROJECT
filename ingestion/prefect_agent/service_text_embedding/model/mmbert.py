@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Literal
+from pathlib import Path
 
 import numpy as np
 import torch #type:ignore
 from transformers import AutoModel, AutoTokenizer
+from loguru import logger
 
 from service_text_embedding.core.config import TextEmbeddingConfig
 from service_text_embedding.schema import TextEmbeddingRequest, TextEmbeddingResponse
@@ -30,10 +32,10 @@ class MMBERTHandler(BaseModelHandler[TextEmbeddingRequest, TextEmbeddingResponse
     async def load_model_impl(self, device: Literal["cpu", "cuda"]) -> None:
         if self._model is not None:
             return
-
-        actual_device = "cuda" if device == "cuda" and torch.cuda.is_available() else "cpu"
         self._tokenizer = AutoTokenizer.from_pretrained(self._checkpoint)
         model = AutoModel.from_pretrained(self._checkpoint)
+
+        actual_device = "cuda" if device == "cuda" and torch.cuda.is_available() else "cpu"
         self._model = model.to(actual_device)
         self._model.eval() #type:ignore
         self._device = actual_device

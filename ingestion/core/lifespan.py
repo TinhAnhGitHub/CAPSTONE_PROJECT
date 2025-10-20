@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
+from core.management.status import VideoStatusManager, VideoStatusInfo
 
 
 from core.artifact.persist import ArtifactPersistentVisitor
@@ -39,6 +40,8 @@ from task.milvus_persist_task.main import (
     MilvusIndexSettings
 )
 
+from core.clients.milvus_client import ImageEmbeddingMilvusClient, TextCaptionEmbeddingMilvusClient, SegmentCaptionEmbeddingMilvusClient
+
 from core.management.progress import ProgressTracker
 
 @asynccontextmanager
@@ -61,9 +64,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         tracker=tracker
     )
     logger.info("✅ Artifact visitor initialized")
-
-    deleter = ArtifactDeleter(tracker=tracker, storage=storage_client)
-    logger.info("✅ Artifact deleter initialized")
+    
 
 
     consul_host = os.getenv("CONSUL_HOST", "localhost")
@@ -195,7 +196,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     text_caption_milvus_collection = MilvusCollectionConfig(
         collection_name="text_caption_embeddings",
-        dimension=384,
+        dimension=768,
         metric_type="COSINE",
         index_type="HNSW",
         description="Text embeddings for image captions"
@@ -207,7 +208,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     segment_caption_milvus_collection = MilvusCollectionConfig(
         collection_name="segment_caption_embeddings",
-        dimension=512,
+        dimension=768,
         metric_type="COSINE",
         index_type="HNSW",
         description="Text embeddings for segment captions"
@@ -216,32 +217,49 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         artifact_visitor=visitor,
         config_client=milvus_config,
     )
+    image_client = ImageEmbeddingMilvusClient(
+        config_collection=image_embed_milvus_collection,
+        host=milvus_config.host,
+        port=milvus_config.port,
+        user=milvus_config.user,#type:ignore
+        password=milvus_config.password,#type:ignore
+        db_name=milvus_config.db_name,
+        timeout=milvus_config.time_out
+    )
+    text_client = TextCaptionEmbeddingMilvusClient(
+        config_collection=text_caption_milvus_collection,
+        host=milvus_config.host,
+        port=milvus_config.port,
+        user=milvus_config.user,#type:ignore
+        password=milvus_config.password,#type:ignore
+        db_name=milvus_config.db_name,
+        timeout=milvus_config.time_out
+    )
+    seg_client = SegmentCaptionEmbeddingMilvusClient(
+        config_collection=segment_caption_milvus_collection,
+        host=milvus_config.host,
+        port=milvus_config.port,
+        user=milvus_config.user,#type:ignore
+        password=milvus_config.password,#type:ignore
+        db_name=milvus_config.db_name,
+        timeout=milvus_config.time_out
+    )
 
+    deleter = ArtifactDeleter(tracker=tracker, storage=storage_client, image_client=image_client, text_cap_client=text_client, text_seg_client=seg_client)
+    logger.info("✅ Artifact deleter initialized")
+    
 
+    video_status = VideoStatusManager(
+        storage=storage_client,
+        tracker=tracker,
+        image_client=image_client, text_cap_client=text_client, text_seg_client=seg_client
+    )
 
     app.state.storage_client = storage_client
     app.state.artifact_tracker = tracker
     app.state.artifact_visitor = visitor
     app.state.artifact_deleter = deleter
-
-    app.state.video_ingestion_task = video_ingestion_task
-    app.state.autoshot_task = autoshot_task
-    app.state.asr_task = asr_task
-    app.state.image_processing_task = image_processing_task
-    app.state.segment_caption_llm_task = segment_caption_task
-    app.state.image_caption_llm_task = image_caption_task
-    app.state.image_embedding_task = image_embedding_task
-    app.state.text_image_caption_embedding_task = text_image_caption_task
-    app.state.text_caption_segment_embedding_task = text_segment_caption_task
-
-    app.state.image_embedding_milvus_task = image_embed_milvus_task
-    app.state.text_image_caption_milvus_task = text_caption_milvus_task
-    app.state.text_segment_caption_milvus_task = segment_caption_milvus_task
-
-
-    app.state.image_embedding_milvus_config = image_embed_milvus_collection
-    app.state.text_image_caption_milvus_config = text_caption_milvus_collection
-    app.state.text_segment_caption_milvus_config = segment_caption_milvus_collection
+    app.state.video_status = video_status
 
     state.base_client_config = base_client_config
     state.video_ingestion_task = video_ingestion_task

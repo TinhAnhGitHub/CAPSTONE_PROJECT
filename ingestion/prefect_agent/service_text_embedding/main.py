@@ -4,6 +4,10 @@ from fastapi.responses import Response
 from loguru import logger
 import sys
 import os
+
+
+os.environ.setdefault("HF_HUB_ENABLE_XET", "0")
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
 ROOT_DIR = os.path.abspath(
     os.path.join(
         __file__, '../..'

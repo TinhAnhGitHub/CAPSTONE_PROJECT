@@ -290,6 +290,11 @@ class ImageEmbeddingArtifact(BaseArtifact):
         base_string = f"{self.image_id}:{self.related_video_name}:{self.frame_index}:{self.segment_index}:{self.user_bucket}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
 
+
+
+
+
+
 class TextCaptionEmbeddingArtifact(BaseArtifact):
     artifact_type: str
     frame_index: int

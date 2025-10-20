@@ -156,6 +156,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       NVIDIA_VISIBLE_DEVICES: "all"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      HF_HUB_DISABLE_XET: 1
     volumes:
       - ./prefect_agent/service_autoshot:/app/service_autoshot
       - ./prefect_agent/shared:/app/shared
@@ -187,6 +188,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       NVIDIA_VISIBLE_DEVICES: "all"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      HF_HUB_DISABLE_XET: 1
     volumes:
       - ./prefect_agent/service_asr:/app/service_asr
       - ./prefect_agent/shared:/app/shared
@@ -218,6 +220,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       NVIDIA_VISIBLE_DEVICES: "all"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      HF_HUB_DISABLE_XET: 1
     volumes:
       - ./prefect_agent/service_image_embedding:/app/service_image_embedding
       - ./prefect_agent/shared:/app/shared
@@ -248,6 +251,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       NVIDIA_VISIBLE_DEVICES: "all"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      HF_HUB_DISABLE_XET: 1
     volumes:
       - ./prefect_agent/service_llm:/app/service_llm
       - ./prefect_agent/shared:/app/shared
@@ -278,6 +282,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       NVIDIA_VISIBLE_DEVICES: "all"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      HF_HUB_DISABLE_XET: 1
     volumes:
       - ./prefect_agent/service_text_embedding:/app/service_text_embedding
       - ./prefect_agent/shared:/app/shared
@@ -292,6 +297,7 @@ services:
       timeout: 10s
       retries: 3
     restart: no    
+    command: ["uv", "run", "service_text_embedding/main.py"]
 
   ingestion-api:
     build:
@@ -316,6 +322,7 @@ services:
       CONSUL_HOST: consul
       CONSUL_PORT: "8500"
       PREFECT_API_URL: http://prefect-server:4200/api
+      HF_HUB_DISABLE_XET: 1
 
     ports:
       - "8000:8000"
