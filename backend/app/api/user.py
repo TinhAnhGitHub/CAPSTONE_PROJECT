@@ -2,6 +2,7 @@ import select
 from urllib import request
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 import jwt
+from regex import P
 import requests
 from google.auth.transport import requests as grequests
 from fastapi.security import (
@@ -18,11 +19,12 @@ from google.oauth2 import id_token
 from app.schema.user import ALGORITHM, SECRET_KEY, Token
 from dotenv import load_dotenv
 
-from app.core.dependencies import MinIOServiceDep, UserServiceDep
+from app.core.dependencies import UserServiceDep
 
 load_dotenv()
-import os
+import logging
 from app.core.config import settings
+import httpx
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -151,20 +153,31 @@ async def get_chat_detail(session_id: str, user_service: UserServiceDep):
 
 
 @router.post("/uploads")
-async def upload_file(
+async def upload_files(
     user_service: UserServiceDep,
-    group: str = Form(...),
+    group: str = Form(None),
     session_id: str = Form(None),
     files: List[UploadFile] = File(...),
     user=Depends(verify_token),
 ):
+    # lưu metadata vào db
     user_id = user["user_id"]
-    group = group
     session_id = session_id
-    filenames = [file.filename for file in files]
-    await user_service.add_videos_to_user(user_id, filenames, group, session_id)
-    return {"msg": "File uploaded successfully"}
+    # lưu file lên minio, trả về ids
+    video_id_video_url_thumbnail_url_obj = await user_service.add_videos_to_user(
+        user_id, files, group, session_id
+    )
+    # bảo ingestion ingest mấy video có id đó
+    try: 
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                "http://localhost:8000/api/uploads/",
+                json={video_id_video_url_thumbnail_url_obj},
+            )
+    except Exception as e:
+        logging.error(f"Error notifying ingestion service: {e}")
 
+    return {"msg": "File uploaded successfully"}
 
 @router.get("/groups")
 async def get_user_groups(user_service: UserServiceDep, user=Depends(verify_token)):
@@ -181,9 +194,12 @@ async def get_user_videos(
     session_id: str = Query(...),
     user=Depends(verify_token),
 ):
-    print("Fetching videos for group:", group, "session_id:", session_id, "😡😡😡😡😡😡")
+    print(
+        "Fetching videos for group:", group, "session_id:", session_id, "😡😡😡😡😡😡"
+    )
     videos = await user_service.get_user_videos(group, session_id)
     return {"videos": videos}
+
 
 @router.post("/videos/select")
 async def select_videos(
@@ -193,9 +209,10 @@ async def select_videos(
 ):
     session_id = data.get("session_id")
     video_ids = data.get("video_ids", [])
-    
+
     await user_service.select_videos(session_id, video_ids)
     return {"msg": "Videos selected"}
+
 
 @router.post("/groups/create")
 async def create_user_group(

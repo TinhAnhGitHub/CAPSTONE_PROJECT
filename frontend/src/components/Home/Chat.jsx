@@ -12,6 +12,7 @@ import { RANDOM_IMAGE_URLS } from '@/constants/image';
 import parseChunkToBlock from '@/utils/chat/parseChunkToBlock';
 import addBlockToMessages from '@/utils/chat/addBlockToMessages';
 import BlockRenderer from './BlockRenderer';
+import { useVideos } from '@/api/services/hooks/query';
 
 export default function Chat() {
   const {
@@ -36,8 +37,9 @@ export default function Chat() {
 
   const queryClient = useQueryClient();
 
-  const randomImageUrl = "/images/testImage.png";
-
+  const groupId = useStoreChat((state) => state.currentGroup);
+  const { data: videos = [] } = useVideos(groupId, session_id);
+  const selectedVideosIds = videos.filter(video => video.selected).map(video => video.id);
   useQuery({
     queryKey: ["chatMessages", session_id],
     queryFn: async () => {
@@ -129,7 +131,7 @@ export default function Chat() {
     const prompt = getValues('prompt').trim();
     if (!prompt) return;
 
-    socket.emit('stream_chat', { userId, sessionId: getSessionId(), text: prompt });
+    socket.emit('stream_chat', { userId, sessionId: getSessionId(), text: prompt, videos: selectedVideosIds });
     addChatMessage({
       role: 'user',
       timestamp: Date.now(),

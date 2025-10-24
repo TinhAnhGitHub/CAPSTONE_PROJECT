@@ -41,18 +41,25 @@ async def lifespan(app: FastAPI):
     await init_beanie(database=database, document_models=[ChatHistory, User, Group, Video, SessionVideo, SessionMessage])  # type: ignore
     print("✓ MongoDB and Beanie initialized")
 
-    minio_client = Minio(
-        endpoint=settings.MINIO_PUBLIC_ENDPOINT,
-        access_key=settings.MINIO_ACCESS_KEY,
-        secret_key=settings.MINIO_SECRET_KEY,
-        secure=False,
-    )
-    bucket_name = "avatars"
-    if not minio_client.bucket_exists(bucket_name):
-        minio_client.make_bucket(bucket_name)
-    minio_service = MinioService(minio_client)
+    try: 
+        minio_client = Minio(
+            endpoint=settings.MINIO_PUBLIC_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=False,
+        )
+        bucket_name = "avatars"
+        if not minio_client.bucket_exists(bucket_name):
+            minio_client.make_bucket(bucket_name)
+        bucket_name_videos = "videos"
+        if not minio_client.bucket_exists(bucket_name_videos):
+            minio_client.make_bucket(bucket_name_videos)
+        
+        minio_service = MinioService(minio_client)
 
-    print("✓ MinIO initialDized")
+        print("✓ MinIO initialized")
+    except Exception as e:
+        print(f"✗ MinIO initialization failed: {e}")
 
     llm = MockLLM(max_tokens=2)
     app_state.agent = Agent(llm=llm)

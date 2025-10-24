@@ -32,4 +32,3 @@ def get_minio_service() -> MinioService:
 AgentDep = Annotated[Agent, Depends(get_agent)]
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
-MinIOServiceDep = Annotated[MinioService, Depends(get_minio_service)]

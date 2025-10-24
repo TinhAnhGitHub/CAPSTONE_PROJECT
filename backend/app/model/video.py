@@ -13,7 +13,10 @@ class Video(Document):
     thumbnail: str = ""
     url: str = ""
 
-    ingested: bool = False
+    ingested_status: int = 0 # 0 -100: not ingested, 100: ingested
+    @property 
+    def ingested(self) -> bool:
+        return self.ingested_status >= 100
 
     class Settings:
         name = settings.VIDEO_COLLECTION_NAME

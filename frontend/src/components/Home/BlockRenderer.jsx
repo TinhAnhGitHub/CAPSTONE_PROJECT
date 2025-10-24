@@ -1,4 +1,6 @@
 import clsx from "clsx";
+import ImageViewer from "./Chat/ImageViewer";
+import VideoPlayer from "./Chat/VideoPlayer";
 
 export default function BlockRenderer({ block, role }) {
     if (block.block_type === 'text') {
@@ -20,7 +22,7 @@ export default function BlockRenderer({ block, role }) {
         return (
             <div className="grid grid-cols-3 gap-2">
                 {block.image_urls.map((url, i) => (
-                    <img key={i} src={url} className="w-full rounded-lg" />
+                    <ImageViewer key={i} image={{ url: url, title: `Image ${i + 1}` }} />
                 ))}
             </div>
         );
@@ -30,7 +32,7 @@ export default function BlockRenderer({ block, role }) {
         return (
             <div className="grid grid-cols-3 gap-2">
                 {block.video_urls.map((url, i) => (
-                    <video key={i} src={url} controls className="w-full rounded-lg" />
+                    <VideoPlayer key={i} video={{ url: url, title: `Video ${i + 1}` }} />
                 ))}
             </div>
         );

@@ -5,9 +5,8 @@ from typing import Annotated, Sequence
 
 from beanie import PydanticObjectId
 from bson import ObjectId
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, File, HTTPException, status
 import jwt
-from passlib.exc import InvalidTokenError
 from app.model.user import User
 
 from llama_index.core.base.llms.types import MessageRole
@@ -17,7 +16,6 @@ from uuid import uuid4
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-from app.core.auth import oauth2_scheme
 from app.schema.user import (
     ACCESS_TOKEN_EXPIRE_HOURS,
     ALGORITHM,
@@ -186,15 +184,16 @@ class UserService:
         return new_group
 
     async def add_videos_to_user(
-        self, user_id: str, filenames: list[str], group_id: str, session_id: str = None
+        self, user_id: str, files: list[File], group_id: str, session_id: str = None
     ):
+        filenames = [file.filename for file in files]
         new_videos = [
             Video(user_id=user_id, group_id=group_id, name=filename)
             for filename in filenames
         ]
-        # get video ids
+        # get video ids # order true
         inserted_videos = await Video.insert_many(new_videos)
-        video_ids = inserted_videos.inserted_ids
+        video_ids = inserted_videos.inserted_ids # pydantic object ids
         new_group_videos = [
             SessionVideo(
                 session_id=PydanticObjectId(session_id),
@@ -204,6 +203,18 @@ class UserService:
             for video_id in video_ids
         ]
         await SessionVideo.insert_many(new_group_videos)
+        # save videos to minio
+        video_id_video_url_thumbnail_url_obj = self.minio_service.save_videos(
+            video_ids, files
+        )
+        # update video thumbnail urls
+        for vid, video_url, thumb_url in video_id_video_url_thumbnail_url_obj:
+            video = await Video.get(vid)
+            if video:
+                video.thumbnail = thumb_url
+                await video.save()
+
+        return video_id_video_url_thumbnail_url_obj
 
     async def get_user_videos(self, group_id: str, session_id: str):
         # all videos and their selected state
