@@ -167,12 +167,15 @@ async def upload_files(
     video_id_video_url_thumbnail_url_obj = await user_service.add_videos_to_user(
         user_id, files, group, session_id
     )
+    video_ids_video_url_obj = [
+        (str(vid), video_url) for vid, video_url, thumb_url in video_id_video_url_thumbnail_url_obj
+    ]
     # bảo ingestion ingest mấy video có id đó
     try: 
         async with httpx.AsyncClient() as client:
             await client.post(
                 "http://localhost:8000/api/uploads/",
-                json={video_id_video_url_thumbnail_url_obj},
+                json={video_ids_video_url_obj},
             )
     except Exception as e:
         logging.error(f"Error notifying ingestion service: {e}")
