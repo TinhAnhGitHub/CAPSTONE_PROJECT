@@ -162,25 +162,26 @@ async def upload_files(
 ):
     # lưu metadata vào db
     user_id = user["user_id"]
-    session_id = session_id
     # lưu file lên minio, trả về ids
-    video_id_video_url_thumbnail_url_obj = await user_service.add_videos_to_user(
+    video_id_video_url_thumbnail_url_s3_url_obj = await user_service.add_videos_to_user(
         user_id, files, group, session_id
     )
     video_ids_video_url_obj = [
-        (str(vid), video_url) for vid, video_url, thumb_url in video_id_video_url_thumbnail_url_obj
+        {"video_id": str(vid), "video_url": s3_url}
+        for vid, video_url, thumb_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj
     ]
     # bảo ingestion ingest mấy video có id đó
-    try: 
+    try:
         async with httpx.AsyncClient() as client:
             await client.post(
                 "http://localhost:8000/api/uploads/",
-                json={video_ids_video_url_obj},
+                json={"videos": video_ids_video_url_obj, "user_id": user_id},
             )
     except Exception as e:
         logging.error(f"Error notifying ingestion service: {e}")
 
     return {"msg": "File uploaded successfully"}
+
 
 @router.get("/groups")
 async def get_user_groups(user_service: UserServiceDep, user=Depends(verify_token)):
@@ -197,9 +198,6 @@ async def get_user_videos(
     session_id: str = Query(...),
     user=Depends(verify_token),
 ):
-    print(
-        "Fetching videos for group:", group, "session_id:", session_id, "😡😡😡😡😡😡"
-    )
     videos = await user_service.get_user_videos(group, session_id)
     return {"videos": videos}
 
@@ -226,25 +224,6 @@ async def create_user_group(
     new_group = await user_service.create_user_group(user_id, group_name)
     print("🎉🎉🎉 Created group:", new_group)
     return {"group": new_group}
-
-
-# @router.post("/videos/add")
-# async def add_videos_to_user(video_ids: List[str] = Query(..., description="List of video IDs"), user_service: UserServiceDep = Depends(UserServiceDep), user=Depends(verify_token)):
-#     user_id = user["user_id"]
-#     await user_service.add_videos_to_user(user_id, video_ids)
-#     return {"msg": "Videos added to user"}
-
-# @router.post("/groups/{group_id}/videos/add")
-# async def add_videos_to_group(group_id: str, video_ids: List[str] = Query(..., description="List of video IDs"), user_service: UserServiceDep = Depends(UserServiceDep), user=Depends(verify_token)):
-#     user_id = user["user_id"]
-#     await user_service.add_videos_to_group(group_id, video_ids)
-#     return {"msg": "Videos added to group"}
-
-# @router.delete("/groups/{group_id}/videos/remove")
-# async def remove_videos_from_group(group_id: str, video_ids: List[str] = Query(..., description="List of video IDs"), user_service: UserServiceDep = Depends(UserServiceDep), user=Depends(verify_token)):
-#     user_id = user["user_id"]
-#     await user_service.remove_videos_from_group(group_id, video_ids)
-#     return {"msg": "Videos removed from group"}
 
 
 @router.delete("/groups/{group_id}/delete")

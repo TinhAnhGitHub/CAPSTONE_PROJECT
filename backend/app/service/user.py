@@ -204,17 +204,17 @@ class UserService:
         ]
         await SessionVideo.insert_many(new_group_videos)
         # save videos to minio
-        video_id_video_url_thumbnail_url_obj = self.minio_service.save_videos(
+        video_id_video_url_thumbnail_url_s3_url_obj = await self.minio_service.save_videos(
             video_ids, files
         )
         # update video thumbnail urls
-        for vid, video_url, thumb_url in video_id_video_url_thumbnail_url_obj:
+        for vid, video_url, thumb_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj:
             video = await Video.get(vid)
             if video:
                 video.thumbnail = thumb_url
                 await video.save()
 
-        return video_id_video_url_thumbnail_url_obj
+        return video_id_video_url_thumbnail_url_s3_url_obj
 
     async def get_user_videos(self, group_id: str, session_id: str):
         # all videos and their selected state

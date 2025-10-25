@@ -82,7 +82,7 @@ async def handle_stream_chat(socket_id, data: dict):
             }
 
             full_response = []
-
+            # HTTP stream 
             async with httpx.AsyncClient(timeout=None) as client:
                 async with client.stream("POST", ai_url, json=payload) as response:
                     async for line in response.aiter_lines():
@@ -93,10 +93,10 @@ async def handle_stream_chat(socket_id, data: dict):
                         try:
                             line = line.replace("data:", "").strip()
                             data = json.loads(line)
-
+                            # data: {"chunk": "...", "msg_type": "text"/"image"/"video"}
                             chunk = data.get("chunk", "")
                             msg_type = data.get("msg_type", "text")
-
+                            
                             await sio.emit(
                                 "stream_chunk",
                                 {

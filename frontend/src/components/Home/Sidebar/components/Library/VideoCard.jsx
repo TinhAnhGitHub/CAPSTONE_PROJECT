@@ -25,8 +25,11 @@ export default function VideoCard({ video }) {
     }
     return (
         <div className={clsx("relative mb-4 rounded-lg hover:shadow-lg p-2 cursor-pointer transition",
-            !video.ingested && "opacity-50 cursor-not-allowed hover:shadow-none")}
-            onClick={() => {if (!video.ingested) return; handleToggleSelect(video._id, session_id)}}>
+            // !video.ingested && "opacity-50 cursor-not-allowed hover:shadow-none"
+            )}
+            onClick={() => {
+                // if (!video.ingested) return; 
+                handleToggleSelect(video._id, session_id)}}>
             <img
                 src={"/images/testImage.png"}
                 alt="thumbnail"
