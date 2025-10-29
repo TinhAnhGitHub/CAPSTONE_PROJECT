@@ -1,14 +1,14 @@
 from typing import Annotated, cast
-from collections import defaultdict
-from agentic_ai.tools.schema.artifact import VideoObject, ImageObjectInterface, SegmentObjectInterface
+import base64
+from agentic_ai.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface
 from agentic_ai.tools.clients.milvus.client import ImageMilvusClient, ImageFilterCondition, SegmentCaptionFilterCondition, SegmentCaptionImageMilvusClient
 
 from agentic_ai.tools.clients.external.encode_client import ExternalEncodeClient
 from ingestion.prefect_agent.service_image_embedding.schema import ImageEmbeddingRequest
 from ingestion.prefect_agent.service_text_embedding.schema import TextEmbeddingRequest
-from agentic_ai.tools.clients.postgre.client import PostgresClient
-from ingestion.core.artifact.schema import ImageCaptionArtifact
-from agentic_ai.tools.clients.minio.client import StorageClient
+# from agentic_ai.tools.clients.postgre.client import PostgresClient
+# from ingestion.core.artifact.schema import ImageCaptionArtifact
+# from agentic_ai.tools.clients.minio.client import StorageClient
 
 from .registry import tool_registry
 
@@ -331,4 +331,23 @@ async def get_images_from_multimodal_query(
         )
         result.append((resp.score, img))
     return result
+
+
+
+async def find_similar_images_from_image(
+    reference_image: ImageObjectInterface,
+    top_k: int,
+    list_video_id: Annotated[list[str], "Restrict search to these videos (auto-provided)."],
+    user_id: Annotated[str, "User identifier (auto-provided)."],
+    visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for multimodal image retrieval (auto-provided)."],
+    external_client: Annotated[ExternalEncodeClient, "External encoding client for generating embeddings (auto-provided)."],
+):
+    
+    
+    img_b64 = base64.encode()  
+    embedding_request = ImageEmbeddingRequest(
+        text_input=[visual_query],
+        image_base64=None,
+        metadata={}
+    )
 

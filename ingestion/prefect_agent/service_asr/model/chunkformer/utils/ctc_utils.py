@@ -26,7 +26,7 @@ def milliseconds_to_hhmmssms(milliseconds):
     remaining_ms %= 1000
 
     # Format the result
-    return f"{hours:02}:{minutes:02}:{seconds:02}:{remaining_ms:03}"
+    return f"{hours:02}:{minutes:02}:{seconds:02}.{remaining_ms:03}"
 
 
 def get_output(hyps, char_dict):

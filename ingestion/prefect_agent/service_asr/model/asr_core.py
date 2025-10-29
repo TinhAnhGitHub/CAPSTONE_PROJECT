@@ -59,7 +59,11 @@ class ASRProcessor:
     @staticmethod
     def time_to_frames(time_str: str, fps: float) -> int:
         """Convert HH:MM:SS:ms to frame number."""
-        h, m, s, ms = map(int, time_str.replace(':', ' ').split())
+        time_str = time_str.strip().replace('.', ':')
+        parts = time_str.split(':')
+        if len(parts) != 4:
+            raise ValueError(f"Invalid time format: {time_str} (expected HH:MM:SS:ms)")
+        h, m, s, ms = map(int, parts)
         total_seconds = h * 3600 + m * 60 + s + ms / 1000.0
         return int(round(total_seconds * fps))
 

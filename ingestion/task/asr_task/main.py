@@ -26,7 +26,6 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings])
             visitor=artifact_visitor,
             config=config
         )
-        # Correct task name for ASR artifacts
         self.name = 'asr'
 
     async def preprocess(self, input_data: list[VideoArtifact]) -> list[ASRArtifact]:
