@@ -302,6 +302,7 @@ class TextCaptionEmbeddingArtifact(BaseArtifact):
     image_caption_minio_url: str
     user_bucket:str
     caption_id: str
+    image_id: str
     image_minio_url: str
 
     def __post_init__(self):

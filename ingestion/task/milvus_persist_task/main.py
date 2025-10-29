@@ -6,14 +6,13 @@ from pydantic import BaseModel, Field
 import io
 from  core.pipeline.base_task import BaseTask
 from core.artifact.schema import (
-
     ImageEmbeddingArtifact, 
     TextCapSegmentEmbedArtifact, 
     TextCaptionEmbeddingArtifact,
 )
 from core.artifact.persist import ArtifactPersistentVisitor
 from task.common.util import fetch_object_from_s3_bytes, fetch_object_from_s3
-from core.clients.base import BaseMilvusClient, BaseServiceClient, MilvusCollectionConfig
+from core.clients.base import BaseMilvusClient, BaseServiceClient
 import json
 from core.config.logging import run_logger
 
@@ -30,7 +29,10 @@ class MilvusIndexSettings(BaseModel):
 
 class ImageEmbeddingMilvusTask(
     BaseTask[
-        list[ImageEmbeddingArtifact], ImageEmbeddingArtifact, MilvusIndexSettings
+        tuple[
+            list[ImageEmbeddingArtifact],
+            list[TextCaptionEmbeddingArtifact]
+        ], tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact], MilvusIndexSettings
     ]
 ):
     def __init__(
@@ -46,55 +48,95 @@ class ImageEmbeddingMilvusTask(
         
     
 
-    async def preprocess(self, input_data: list[ImageEmbeddingArtifact]) -> list[ImageEmbeddingArtifact]:
-        return input_data
+    async def preprocess(
+        self, 
+        input_data: tuple[
+            list[ImageEmbeddingArtifact],
+            list[TextCaptionEmbeddingArtifact]
+        ]
+    ) -> list[tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]]:
+        result = []
+        image_embed_artifacts, text_caption_artifacts = input_data
+        image_map = {
+            img.image_id: img for img in image_embed_artifacts
+        }
+        for text_cap in text_caption_artifacts:
+            img = image_map[text_cap.image_id]
+            result.append(
+                (img, text_cap)
+            )
+        return result
 
-    async def execute(self, input_data: list[ImageEmbeddingArtifact], client: BaseMilvusClient | None | BaseServiceClient) -> AsyncIterator[ImageEmbeddingArtifact]:
+
+
+
+    async def execute(
+        self, 
+        input_data: list[tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]], 
+
+        client: BaseMilvusClient | None | BaseServiceClient
+    ) -> AsyncIterator[tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]]:
         
         assert client is not None, "Client required"
         assert isinstance(client, BaseMilvusClient), "Client must be from MilvusClient"
         await client.create_collection_if_not_exists()
 
         batch: list[dict[str, Any]] = []
-        batch_artifacts: list[ImageEmbeddingArtifact] = []
+        batch_artifacts: list[tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]] = []
 
         
+        
 
-        for artifact in tqdm(input_data, desc='Preparing batch...'):
+        for image_artifact, text_artifact in tqdm(input_data, desc='Preparing batch...'):
             
             exists = await client.exists(  # type: ignore[attr-defined]
-                id_= artifact.artifact_id,
-                related_video_id=artifact.related_video_id,
-                user_bucket=artifact.user_bucket
+                id_= image_artifact.image_id,
+                related_video_id=image_artifact.related_video_id,
+                user_bucket=image_artifact.user_bucket
             )
 
             if exists:
                 logger.debug(
-                    f"Skipping duplicate: {artifact.related_video_id}"
+                    f"Skipping duplicate: {image_artifact.related_video_id}"
                 )
                 continue
             
-            data_bytes = await fetch_object_from_s3_bytes(artifact.minio_url_path, self.visitor.minio_client)
-            embedding = json.loads(data_bytes.decode('utf-8'))
+            image_embedding_bytes = await fetch_object_from_s3_bytes(image_artifact.minio_url_path, self.visitor.minio_client)
+            text_caption_embedding_bytes = await fetch_object_from_s3_bytes(
+                image_artifact.minio_url_path, self.visitor.minio_client
+            )
+            caption_dict_path = await fetch_object_from_s3(
+                text_artifact.image_caption_minio_url, 
+                self.visitor.minio_client, 
+                suffix='.json'
+            )
+            caption_data = json.load(open(caption_dict_path, 'r', encoding='utf-8'))
+            
+            caption_text = caption_data['caption']
+            image_embedding = json.loads(image_embedding_bytes.decode('utf-8'))
+            text_caption_embedding = json.loads(text_caption_embedding_bytes.decode('utf-8'))
+
             record = {
-                "id": artifact.artifact_id,
-                "embedding": embedding,
-                "related_video_id": artifact.related_video_id,
-                "minio_url": artifact.minio_url_path,
-                'user_bucket': artifact.user_bucket,
-                'frame_index': artifact.frame_index,
-                'timestamp': artifact.time_stamp
+                'id': image_artifact.image_id,
+                'related_video_id': image_artifact.related_video_id,
+                'image_minio_url': text_artifact.image_minio_url,
+                'user_bucket': image_artifact.user_bucket,
+                'frame_index': image_artifact.frame_index,
+                'timestamp': image_artifact.time_stamp,
+                'visual_embedding_field': image_embedding,
+                'caption_embedding_field': text_caption_embedding,
+                'image_caption':  caption_text
             }
 
 
             batch.append(record)
-            batch_artifacts.append(artifact)
+            batch_artifacts.append((image_artifact, text_artifact))
 
             if len(batch) >= self.config.ingest_batch_size:
                 
                 ids = await client.insert_vectors(batch)
                 logger.info(
-                    f"Inserted batch of {len(ids)} vectors into {client.config.collection_name}"
+                    f"Inserted batch of {len(ids)} vectors into {client.collection_name}"
                 )
                 for art in batch_artifacts:
                     yield art
@@ -106,112 +148,14 @@ class ImageEmbeddingMilvusTask(
                 print("Inserting vectors")
                 ids = await client.insert_vectors(batch)
                 logger.info(
-                    f"Inserted final batch of {len(ids)} vectors into {client.config.collection_name}"
+                    f"Inserted final batch of {len(ids)} vectors into {client.collection_name}"
                 )
                 for art in batch_artifacts:
                     yield art
             except Exception as e:
                 logger.exception("Final batch insert failed", error=str(e))
 
-    async def postprocess(self, output_data: ImageEmbeddingArtifact) -> ImageEmbeddingArtifact:
-        return output_data
-    
-
-class TextImageCaptionMilvusTask(
-    BaseTask[
-        list[TextCaptionEmbeddingArtifact], TextCaptionEmbeddingArtifact, MilvusIndexSettings
-    ]
-):
-    def __init__(
-        self,
-        artifact_visitor: ArtifactPersistentVisitor,
-        config_client: MilvusIndexSettings,
-    ):
-        super().__init__(
-            name=TextImageCaptionMilvusTask.__name__,
-            visitor=artifact_visitor,
-            config=config_client
-        )
-
-    async def preprocess(self, input_data: list[TextCaptionEmbeddingArtifact]) -> list[TextCaptionEmbeddingArtifact]:
-        return input_data
-
-    async def execute(
-        self, 
-        input_data: list[TextCaptionEmbeddingArtifact], 
-        client: BaseMilvusClient | None | BaseServiceClient
-    ) -> AsyncIterator[TextCaptionEmbeddingArtifact]:
-        
-        assert client is not None, "Client required"
-        assert isinstance(client, BaseMilvusClient), "Client must be from MilvusClient"
-        await client.create_collection_if_not_exists()
-        
-        batch: list[dict[str, Any]] = []
-        batch_artifacts: list[TextCaptionEmbeddingArtifact] = []
-
-        for artifact in input_data:
-            exists = await client.exists(  # type: ignore[attr-defined]
-                id_= artifact.artifact_id,
-                related_video_id=artifact.related_video_id,
-                user_bucket=artifact.user_bucket
-            )
-
-            if exists:
-                logger.debug(
-                    f"Skipping duplicate text caption: {artifact.related_video_id} (frame {artifact.frame_index})"
-                )
-                continue
-            
-            embedding_bytes = await fetch_object_from_s3_bytes(artifact.minio_url_path, self.visitor.minio_client)
-            embedding = json.loads(embedding_bytes.decode('utf-8'))
-            
-            caption_dict_path = await fetch_object_from_s3(
-                artifact.image_caption_minio_url, 
-                self.visitor.minio_client, 
-                suffix='.json'
-            )
-            caption_data = json.load(open(caption_dict_path, 'r', encoding='utf-8'))
-            caption_text = caption_data.get('caption', '')
-
-            record = {
-                'id': artifact.artifact_id,
-                "frame_index": artifact.frame_index,
-                "timestamp": artifact.time_stamp,
-                'related_video_id': artifact.related_video_id,
-                "caption": caption_text,
-                "caption_minio_url": artifact.image_caption_minio_url,
-                "embedding": embedding,
-                'user_bucket': artifact.user_bucket,
-                'image_minio_url': artifact.image_minio_url
-            }
-
-            batch.append(record)
-            batch_artifacts.append(artifact)
-
-            if len(batch) >= self.config.ingest_batch_size:
-            
-                ids = await client.insert_vectors(batch)
-                logger.info(
-                    f"Inserted batch of {len(ids)} text caption vectors into {client.config.collection_name}"
-                )
-                for art in batch_artifacts:
-                    yield art
-              
-                batch.clear()
-                batch_artifacts.clear()
-
-        if batch:
-            try:
-                ids = await client.insert_vectors(batch)
-                logger.info(
-                    f"Inserted final batch of {len(ids)} text caption vectors into {client.config.collection_name}"
-                )
-                for art in batch_artifacts:
-                    yield art
-            except Exception as e:
-                logger.exception("Final batch insert failed", error=str(e))
-
-    async def postprocess(self, output_data: TextCaptionEmbeddingArtifact) -> TextCaptionEmbeddingArtifact:
+    async def postprocess(self, output_data: tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]) -> tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]:
         return output_data
 
 
@@ -282,9 +226,9 @@ class TextSegmentCaptionMilvusTask(
                 "start_time": artifact.start_time,
                 "end_time": artifact.end_frame,
                 'related_video_id': artifact.related_video_id,
-                "caption": caption_text,
+                "segment_caption": caption_text,
                 "segment_caption_minio_url": artifact.related_segment_caption_url,
-                "embedding": embedding,
+                "caption_embedding_field": embedding,
                 'user_bucket': artifact.user_bucket
             }
 
@@ -295,7 +239,7 @@ class TextSegmentCaptionMilvusTask(
             
                 ids = await client.insert_vectors(batch)
                 logger.info(
-                    f"Inserted batch of {len(ids)} segment caption vectors into {client.config.collection_name}"
+                    f"Inserted batch of {len(ids)} segment caption vectors into {client.collection_name}"
                 )
                 for art in batch_artifacts:
                     yield art
@@ -307,7 +251,7 @@ class TextSegmentCaptionMilvusTask(
             try:
                 ids = await client.insert_vectors(batch)
                 logger.info(
-                    f"Inserted final batch of {len(ids)} segment caption vectors into {client.config.collection_name}"
+                    f"Inserted final batch of {len(ids)} segment caption vectors into {client.collection_name}"
                 )
                 for art in batch_artifacts:
                     yield art

@@ -8,8 +8,8 @@ from core.clients.base import BaseServiceClient, BaseMilvusClient
 
 
 
-InputTask = TypeVar('InputTask', bound=BaseModel | Sequence[BaseModel])
-OuputTask = TypeVar('OuputTask', bound=BaseModel)
+InputTask = TypeVar('InputTask', bound=BaseModel | Sequence[BaseModel] | Sequence[Sequence[BaseModel]])
+OuputTask = TypeVar('OuputTask', bound=BaseModel | Sequence[BaseModel] | Sequence[Sequence[BaseModel]])
 TaskConfig = TypeVar('TaskConfig', bound=BaseModel)
 
 class BaseTask(Generic[InputTask, OuputTask, TaskConfig], ABC):

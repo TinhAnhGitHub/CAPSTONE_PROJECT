@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any
 from core.clients.progress_client import ProgressClient
-
+from 
 
 class AppState:
     _instance = None
@@ -31,9 +31,8 @@ class AppState:
     text_image_caption_milvus_task: Any = None
     text_segment_caption_milvus_task: Any = None
 
-    image_embedding_milvus_config: Any = None
-    text_image_caption_milvus_config: Any = None
-    text_segment_caption_milvus_config: Any = None
+    image_milvus_client: Any = None
+    seg_milvus_client: Any = None
 
     base_client_config: Any = None
     progress_client: ProgressClient = None #type:ignore

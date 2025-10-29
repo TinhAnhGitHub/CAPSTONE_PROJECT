@@ -10,20 +10,21 @@ from typing import Tuple, cast
 from agentic_ai.tools.schema.artifact import VideoObject, ImageObjectInterface, SegmentObjectInterface
 from typing import Annotated
 from agentic_ai.tools.clients.postgre.client import PostgresClient
-
+from ingestion.core.artifact.schema import ASRArtifact
 from agentic_ai.tools.clients.minio.client import StorageClient
 from collections import defaultdict
 import re
-from  urllib.parse import urlparse
+from .helper import extract_s3_minio_url
+
+from .registry import tool_registry
 
 
-def extract_s3_minio_url(s3_link:str) -> tuple[str,str]:
-    parsed = urlparse(s3_link)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    return bucket, key
 
-
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+)
 def frame_to_timecode(frame_index: int, fps: float) -> str:
     if fps <= 0:
         raise ValueError("FPS must be greater than zero.")
@@ -37,6 +38,11 @@ def frame_to_timecode(frame_index: int, fps: float) -> str:
 
 
 
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+)
 def timecode_to_frame(timecode: str, fps: float) -> int:
     """
     Convert a timecode string (HH:MM:SS.sss) into a frame index given a frame rate (FPS).
@@ -64,6 +70,11 @@ def timecode_to_frame(timecode: str, fps: float) -> int:
 
 
 
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+)
 def organize_images(
         list_images: Annotated[list[ImageObjectInterface], "List of ImageObjectInterface"], 
         query:Annotated[str, "The query that you just search for"]) -> dict:
@@ -77,7 +88,7 @@ def organize_images(
             "frame_index": image.frame_index,
             "timestamp": image.timestamp,
             "caption": image.caption_info,
-            "score": round(image.score, 4),
+            "score": round(image.score, 4) if image.score else "No score",
             "minio_path": image.minio_path,
             "query_relation": f"Match for query: '{query}'"
         })
@@ -92,6 +103,11 @@ def organize_images(
     return readable_result
 
 
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+)
 def organize_segments(
     list_segments: Annotated[list["SegmentObjectInterface"], "List of SegmentObjectInterface"], 
     query: Annotated[str, "The query that you just searched for"]
@@ -113,7 +129,7 @@ def organize_segments(
             "start_time": segment.start_time,
             "end_time": segment.end_time,
             "caption": segment.caption_info,
-            "score": round(segment.score, 4),
+            "score": round(segment.score, 4) if segment.score else "No score",
             "duration": f"{segment.start_time} → {segment.end_time}",
             "query_relation": f"Segment semantically related to query: '{query}'"
         })
@@ -134,6 +150,11 @@ def organize_segments(
     return readable_result
 
 
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+)
 def from_index_to_time(
     video: VideoObject,
     frame_index: int
@@ -148,9 +169,12 @@ def from_index_to_time(
     """
     return frame_to_timecode(frame_index=frame_index, fps=video.fps)
 
-    
 
-
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+)
 def from_range_index_to_range_time(
     video: VideoObject,
     start_frame_index: int,
@@ -168,10 +192,11 @@ def from_range_index_to_range_time(
     return frame_to_timecode(frame_index=start_frame_index, fps=video.fps),frame_to_timecode(frame_index=end_frame_index, fps=video.fps)
 
 
-
-
-
-
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+)
 def from_time_to_index(
     video: VideoObject,
     time: str
@@ -188,6 +213,11 @@ def from_time_to_index(
     
 
 
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=None
+) 
 def from_range_time_to_range_index(
     video: VideoObject,
     start_time: str,
@@ -202,12 +232,15 @@ def from_range_time_to_range_index(
     Returns:
         Tuple[int, int]: Start and end frame indices.
     """
-    return timecode_to_frame(timecode=start_time, fps=video.fps), timecode_to_frame(timecode=start_time, fps=video.fps)
+    return timecode_to_frame(timecode=start_time, fps=video.fps), timecode_to_frame(timecode=end_time, fps=video.fps)
 
 
-
-
-def read_image(image_interface: ImageObjectInterfaceter, minio_client: StorageClient) -> tuple[str, str]:
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=['minio_client']
+) 
+def read_image(image_interface: ImageObjectInterface, minio_client: StorageClient) -> tuple[str, str]:
     """
     Read image, return base64 and mime/type
     """
@@ -219,17 +252,21 @@ def read_image(image_interface: ImageObjectInterfaceter, minio_client: StorageCl
     base64_str = base64.b64encode(image_bytes).decode("utf-8")
     return base64_str, mime_type
 
-
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=['minio_client', 'postgres_client']
+) 
 async def read_segment(
     segment_interface: SegmentObjectInterface, 
     minio_client: StorageClient, 
-    postgre_client: PostgresClient
+    postgres_client: PostgresClient
 ) -> Tuple[str, bytes]:
     """
     Fetch a video segment and return its extension and bytes.
     """
 
-    video_artifact = await postgre_client.get_artifact(artifact_id=segment_interface.related_video_id)
+    video_artifact = await postgres_client.get_artifact(artifact_id=segment_interface.related_video_id)
     if video_artifact is None:
         raise ValueError(f"Video artifact with id {segment_interface.related_video_id} should exist but does not.")
 
@@ -247,19 +284,38 @@ async def read_segment(
     )
     video_bytes = cast(bytes, video_bytes)
     return extension, video_bytes
-
-
-
      
+    
 
-
+@tool_registry.register(
+    category='Utility',
+    tags=["enhance", "visual"],
+    dependencies=['minio_client', 'postgres_client']
+) 
 async def get_related_asr(
-    artifact: Annotated[ImageObjectInterface | SegmentObjectInterface, "Image or segment to contextualize with ASR."],
-    window_seconds: Annotated[float, "Time window around artifact (± seconds for transcript snippet).", default=10.0],
-    postgre_client: Annotated[PostgresClient, "Auto-provided."],
+    artifact: Annotated[ImageObjectInterface, "Image or segment to contextualize with ASR."],
+    window_seconds: Annotated[
+        float,
+        "Time window around artifact (± seconds for transcript snippet)."
+    ],
+    postgres_client: Annotated[PostgresClient, "Auto-provided."],
     minio_client: Annotated[StorageClient, "Auto-provided."],
 ):
+    parent_video_id = artifact.related_video_id
+
+    video_asr_artifact = await postgres_client.get_children_artifact(
+        artifact_id=parent_video_id,
+        filter_artifact_type=[ASRArtifact.__name__]
+    )   
     
+    
+    
+    
+
+
+
+
+
 
 async def link_artifacts_by_lineage(
     start_artifact_id: Annotated[str, "Starting artifact ID (e.g., image artifact_id)."],
@@ -285,3 +341,39 @@ async def find_similar_moments(
     pass
 
 
+
+
+
+
+async def explore_window_events(
+    focal_artifact: Annotated[
+        ImageObjectInterface | SegmentObjectInterface,
+        "Central image/segment to expand from."
+    ],
+    window_seconds: Annotated[float, "± Time window (seconds) for context.", default=30.0],
+    include_segments: Annotated[bool, "Fetch segments too (for hybrid view).", default=True],
+    llm_prompt_template: Annotated[str, "Custom prompt for LLM event generation.", default="Summarize events around {focal}: {artifacts_list}"],
+    postgre_client: Annotated[PostgresClient, "Auto-provided."],
+    minio_client: Annotated[StorageClient, "Auto-provided."],
+    # Note: For real LLM, inject ExternalEncodeClient or call Grok API; here, placeholder concat
+) -> Dict[str, Any]:
+    """
+    Simple agent tool: Fetch window → LLM for events.
+    
+    Chains fetch → list format → LLM summary (placeholder: simple join; replace with ExternalEncodeClient.encode_text for real LLM).
+    """
+
+
+
+
+
+async def rerank_window_artifacts_by(
+    artifacts: Annotated[List[Union[ImageObjectInterface, SegmentObjectInterface]], "Artifacts from window fetch."],
+    relevance_query: Annotated[str, "Query to rerank by (e.g., 'action scene')."],
+    top_k: Annotated[int, "Keep top N after rerank.", default=5],
+    external_client: Annotated[ExternalEncodeClient, "For query embedding."],
+) -> List[Union[ImageObjectInterface, SegmentObjectInterface]]:
+    """
+    Rerank artifacts by cosine sim to query embedding (textual/caption focus). Rerank by LLM
+    """
+   

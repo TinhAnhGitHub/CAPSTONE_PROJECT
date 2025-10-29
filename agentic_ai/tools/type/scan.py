@@ -1,32 +1,34 @@
 """
 This file contains the tools for agents to simulate the human-behaviour to interfact with the video, scanning images...
 """
-from agentic_ai.tools.schema.artifact import VideoObject, ImageObjectInterface, SegmentObjectInterface
+from agentic_ai.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface
 from agentic_ai.tools.clients.postgre.client import PostgresClient
 from agentic_ai.tools.clients.minio.client import StorageClient
-from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageArtifact, ImageCaptionArtifact
+from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact
 from typing import Annotated, Literal, cast
-from urllib.parse import urlparse
-
+from .helper import extract_s3_minio_url
+from .registry import tool_registry
 
 ##########################
 # Segment-based operations
 ##########################
 
 
-def extract_s3_minio_url(s3_link:str) -> tuple[str,str]:
-    parsed = urlparse(s3_link)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    return bucket, key
 
-
+@tool_registry.register(
+    category='video/image/segment interaction',
+    tags=["interaction","segment"],
+    dependencies=[
+        "postgres_client",
+        "minio_client",
+    ]
+)
 async def get_segments(
     current_segment: SegmentObjectInterface,
     hop: Annotated[int, "Define how many steps you want to include/skip. The range is predefined before. For example if you want to see a few segment ahead, it will be like 2 or 3"],
     include_within_range: bool,
     forward_or_backward: Literal['forward', 'backward'],
-    postgre_client: PostgresClient,
+    postgres_client: PostgresClient,
     minio_client: StorageClient
 ) -> SegmentObjectInterface | list[SegmentObjectInterface]:
     """
@@ -40,7 +42,7 @@ async def get_segments(
     
 
     parent_video_id = current_segment.related_video_id
-    children_segments = await postgre_client.get_children_artifact(artifact_id=parent_video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__])
+    children_segments = await postgres_client.get_children_artifact(artifact_id=parent_video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__])
 
     filter_segments: list[SegmentObjectInterface] = []
     for child in children_segments:
@@ -65,7 +67,9 @@ async def get_segments(
                         end_frame_index=segment_artifact.end_frame,
                         caption_info=caption,
                         start_time=segment_artifact.start_timestamp,
-                        end_time=segment_artifact.end_timestamp
+                        end_time=segment_artifact.end_timestamp,
+                        score=None,
+                        segment_caption_query=None
                     )
                 )
         
@@ -78,33 +82,38 @@ async def get_segments(
                         end_frame_index=segment_artifact.end_frame,
                         caption_info=caption,
                         start_time=segment_artifact.start_timestamp,
-                        end_time=segment_artifact.end_timestamp
+                        end_time=segment_artifact.end_timestamp,
+                        score=None,
+                        segment_caption_query=None
                     )
                 )
         
     return filter_segments[:hop] if include_within_range else filter_segments[hop-1]
 
-
-
-
-
-
 ##########################
 # Image-based operations
 ##########################
 
+@tool_registry.register(
+    category='video/image/segment interaction',
+    tags=["intefaction", "image"],
+    dependencies=[
+        "postgres_client",
+        "minio_client",
+    ]
+)
 async def get_images(
     image: ImageObjectInterface,
     hop: int,
     include_within_range: bool,
     forward_or_backward: Literal['forward', 'backward'],
-    postgre_client: PostgresClient,
+    postgres_client: PostgresClient,
     minio_client: StorageClient
 ) -> ImageObjectInterface | list[ImageObjectInterface]:
 
 
     parent_video_id = image.related_video_id
-    child_segments = await postgre_client.get_children_artifact(artifact_id=parent_video_id, filter_artifact_type=[ImageCaptionArtifact.__name__])
+    child_segments = await postgres_client.get_children_artifact(artifact_id=parent_video_id, filter_artifact_type=[ImageCaptionArtifact.__name__])
 
     filter_segments = []
 
@@ -112,7 +121,7 @@ async def get_images(
         minio_path = child.minio_url
         bucket, object_name = extract_s3_minio_url(minio_path)
         image_id = cast(str,child.parent_artifact_id)
-        image_metadata = await postgre_client.get_artifact(artifact_id=image_id)
+        image_metadata = await postgres_client.get_artifact(artifact_id=image_id)
         if image_metadata is None:
             raise ValueError(f"The image id {image_id} should be exists")
 
@@ -130,7 +139,9 @@ async def get_images(
                         frame_index=image_caption_artifact.frame_index,
                         caption_info=caption_image,
                         minio_path=image_metadata.minio_url,
-                        timestamp=image_caption_artifact.time_stamp
+                        timestamp=image_caption_artifact.time_stamp,
+                        score=None,
+                        query=None
                     )
                 )
         elif forward_or_backward == 'backward':
@@ -141,7 +152,9 @@ async def get_images(
                         frame_index=image_caption_artifact.frame_index,
                         caption_info=caption_image,
                         minio_path=image_metadata.minio_url,
-                        timestamp=image_caption_artifact.time_stamp
+                        timestamp=image_caption_artifact.time_stamp,
+                        score=None,
+                        query=None
                     )
                 )
     return filter_segments[:hop] if include_within_range else filter_segments[hop-1]

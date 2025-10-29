@@ -12,7 +12,7 @@ from core.pipeline.tracker import ArtifactTracker, ArtifactSchema
 from core.storage import StorageClient
 
 from core.artifact.schema import VideoArtifact, AutoshotArtifact, ASRArtifact, ImageArtifact, SegmentCaptionArtifact, ImageCaptionArtifact, ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact, TextCapSegmentEmbedArtifact , BaseArtifact
-from core.clients.milvus_client import ImageEmbeddingMilvusClient, TextCaptionEmbeddingMilvusClient, SegmentCaptionEmbeddingMilvusClient
+from core.clients.milvus_client import ImageMilvusClient,  SegmentCaptionEmbeddingMilvusClient
 
 
        
@@ -32,14 +32,12 @@ class VideoStatusManager:
             self, 
             tracker: ArtifactTracker, 
             storage: StorageClient, 
-            image_client: ImageEmbeddingMilvusClient,
-            text_cap_client: TextCaptionEmbeddingMilvusClient,
+            image_client: ImageMilvusClient,
             text_seg_client: SegmentCaptionEmbeddingMilvusClient,):
         
         self.tracker = tracker
         self.storage = storage
         self.image_client = image_client
-        self.text_cap_client = text_cap_client
         self.text_seg_client =  text_seg_client
     
     async def get_all_descendants(
@@ -79,7 +77,6 @@ class VideoStatusManager:
     async def milvus_record_info(self, related_video_id: str):
         clients: list[tuple[str, BaseMilvusClient ]] = [
               ("image_embedding", self.image_client),
-              ("text_caption_embedding", self.text_cap_client),
               ("segment_caption_embedding", self.text_seg_client),
         ]
         errors: list[str] = []

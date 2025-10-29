@@ -1,8 +1,8 @@
 from typing import Annotated, cast
-from urllib.parse import urlparse
 from collections import defaultdict
 from agentic_ai.tools.schema.artifact import VideoObject, ImageObjectInterface, SegmentObjectInterface
-from agentic_ai.tools.clients.milvus.client import VisualImageMilvusClient, VisualImageFilterCondition, CaptionImageFilterCondition, CaptionImageMilvusClient, SegmentCaptionFilterCondition, SegmentCaptionImageMilvusClient
+from agentic_ai.tools.clients.milvus.client import ImageMilvusClient, ImageFilterCondition, SegmentCaptionFilterCondition, SegmentCaptionImageMilvusClient
+
 from agentic_ai.tools.clients.external.encode_client import ExternalEncodeClient
 from ingestion.prefect_agent.service_image_embedding.schema import ImageEmbeddingRequest
 from ingestion.prefect_agent.service_text_embedding.schema import TextEmbeddingRequest
@@ -10,29 +10,31 @@ from agentic_ai.tools.clients.postgre.client import PostgresClient
 from ingestion.core.artifact.schema import ImageCaptionArtifact
 from agentic_ai.tools.clients.minio.client import StorageClient
 
-def extract_s3_minio_url(s3_link:str) -> tuple[str,str]:
-    parsed = urlparse(s3_link)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    return bucket, key
+from .registry import tool_registry
 
+
+@tool_registry.register(
+    category='search',
+    tags=["visual", "semantic", "image"],
+    dependencies=[
+        "visual_milvus_client",
+        "external_client",
+        "minio_client",
+    ]
+)
 async def get_images_from_visual_query(
-    query: Annotated[
+    visual_query: Annotated[
         str,
         "A visually descriptive natural-language query (e.g., 'a red sports car on a wet street at night'). "
         "Avoid non-visual elements such as names, numbers, or abstract concepts."
     ],
     top_k: Annotated[int, "Number of top-matching images to retrieve based on similarity score."],
-    
+    # Runtime-Agent run Injection
     list_video_id: Annotated[list[str], "List of video IDs to search within (auto-provided at runtime)."],
     user_id: Annotated[str, "User identifier for context or permissions (auto-provided)."],
-    metric_type: Annotated[str, "Metric type for similarity computation (auto-provided)."],
-    param: Annotated[dict, "Additional Milvus or embedding parameters (auto-provided)."],
-    milvus_client: Annotated[VisualImageMilvusClient, "Milvus client for semantic retrieval (auto-provided)"],
+    #Runtime-Dependencies Injection
+    visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for semantic retrieval (auto-provided)"],
     external_client: Annotated[ExternalEncodeClient, "External client (auto-provided)"],
-    postgres_client: Annotated[PostgresClient, "Postgre client (auto-provided)"],
-    minio_client: Annotated[StorageClient, "Storage Client (auto-provided)"],
-    output_fields: list[str] = ['id', 'related_video_name', 'related_video_id', 'segment_index', 'minio_url', 'user_bucket']
 ) ->  list[tuple[float, ImageObjectInterface]]:
     """
     Retrieve visually similar images based on a **visual query**.
@@ -43,7 +45,7 @@ async def get_images_from_visual_query(
     """
 
     embedding_request = ImageEmbeddingRequest(
-        text_input=[query],
+        text_input=[visual_query],
         image_base64=None,
         metadata={}
     )
@@ -51,66 +53,64 @@ async def get_images_from_visual_query(
     response = await external_client.encode_visual_text(request=embedding_request)
     query_embedding = cast(list[list[float]], response.image_embeddings) 
     
-    filter_condition = VisualImageFilterCondition(
+    filter_condition = ImageFilterCondition(
         related_video_id=list_video_id,
         user_bucket=user_id
     )
 
-    milvus_response = await milvus_client.search_dense(
-        query_embedding=query_embedding,
-        top_k=top_k,
-        metric_type=metric_type,
-        param=param,
-        output_fields=output_fields,
-        filter_expr=filter_condition
+    request = visual_milvus_client.visual_dense_request(
+        data=query_embedding,
+        limit=top_k,
+        expr=filter_condition.to_expr()
+    )
+
+    milvus_response = await visual_milvus_client.search_combination(
+        requests=[request],
+        limit=top_k,
+        weight=[1.0]
     )
 
     result: list[tuple[float, ImageObjectInterface]] = []
     for resp in milvus_response:
-        postgre_resp = await postgres_client.get_children_artifact(
-            artifact_id=resp.identification,  filter_artifact_type=[ImageCaptionArtifact.__name__]
-        )        
-        caption_artifact = postgre_resp[0]
-        s3_caption_url = caption_artifact.minio_url
-
-        bucket_name, object_name = extract_s3_minio_url(s3_caption_url)
-        caption_object = cast(dict, minio_client.read_json(
-            bucket=bucket_name, object_name=object_name
-        ))
-
-        caption = caption_object['caption']
-
         image = ImageObjectInterface(
             related_video_id=resp.related_video_id,
             frame_index=resp.frame_index,
             timestamp=resp.timestamp,
-            caption_info=caption,
-            minio_path=resp.minio_url,
+            caption_info=resp.image_caption,
+            minio_path=resp.image_minio_url,
+            score=resp.score,
+            query=visual_query
         )
-
         result.append((resp.score, image))
     
 
     return result
 
 
-
+@tool_registry.register(
+    category='search',
+    tags=["caption", "semantic", "image"],
+    dependencies=[
+        "visual_milvus_client",
+        "external_client",
+        "minio_client",
+    ]
+)
 async def get_images_from_caption_query(
     caption_query: Annotated[
         str,
         "A descriptive text query that semantically aligns with image captions (e.g., 'a person surfing during sunset'). "
         "Use this for retrieving images based on caption embeddings rather than raw visual content."
     ],
-    top_k: Annotated[int, "Number of top-matching images to retrieve based on caption embedding similarity."],
+    top_k_each_request: Annotated[int, "Number of top-matching images to retrieve based on caption embedding similarity."],
+    top_k_final:Annotated[int, "Number of top-matching images to retrieve based on caption embedding similarity."],
+    weights: Annotated[tuple[float,float] | None, "If enable, will use the sparse BM25 for hybrid search"],
+    
     list_video_id: Annotated[list[str], "List of video IDs to restrict the search domain (auto-provided)."],
     user_id: Annotated[str, "User identifier for context or permissions (auto-provided)."],
-    metric_type: Annotated[str, "Metric type used for similarity computation in Milvus (auto-provided)."],
-    param: Annotated[dict, "Additional Milvus or embedding parameters (auto-provided)."],
-    milvus_client: Annotated[CaptionImageMilvusClient, "Milvus client for caption-based embedding search (auto-provided)."],
+    
+    visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for caption-based embedding search (auto-provided)."],
     external_client: Annotated[ExternalEncodeClient, "External encoding client for generating caption embeddings (auto-provided)."],
-    postgres_client: Annotated[PostgresClient, "Postgres client for retrieving related artifact metadata (auto-provided)."],
-    minio_client: Annotated[StorageClient, "Storage Client for reading caption data stored in MinIO (auto-provided)."],
-    output_fields: list[str] = ['id', 'related_video_name', 'related_video_id', 'segment_index', 'minio_url', 'user_bucket']
 ) -> list[tuple[float, ImageObjectInterface]]:
     """
     Retrieve images semantically related to a **caption-based query**.
@@ -127,49 +127,73 @@ async def get_images_from_caption_query(
     response = await external_client.encode_text(request=embedding_request)
     query_embedding = cast(list[list[float]], response.embeddings)
 
-    filter_condition =CaptionImageFilterCondition(related_video_id=list_video_id, user_bucket=user_id)
-
-    milvus_response = await milvus_client.search_dense(
-        query_embedding=query_embedding,
-        top_k=top_k,
-        metric_type=metric_type,
-        param=param,
-        output_fields=output_fields,
-        filter_expr=filter_condition
+    filter_condition = ImageFilterCondition(
+        related_video_id=list_video_id,
+        user_bucket=user_id
     )
+    reqs = [
+        visual_milvus_client.caption_dense_request(
+            data=query_embedding,
+            limit=top_k_each_request,
+            expr=filter_condition.to_expr()
+        )
+    ]
+    
+    if weights:
+        reqs.append(
+            visual_milvus_client.caption_sparse_request(
+                data=[caption_query],
+                limit=top_k_each_request,
+                expr=filter_condition.to_expr()
+            )
+        )
+
+    milvus_response = await visual_milvus_client.search_combination(
+        requests=reqs,
+        limit=top_k_final,
+        weight=list(weights) if weights else [1.0]
+    )
+
     result = []
     for resp in milvus_response:
-        
         text_object = ImageObjectInterface(
             related_video_id=resp.related_video_id,
             frame_index=resp.frame_index,
             timestamp=resp.timestamp,
-            caption_info=resp.caption,
+            caption_info=resp.image_caption,
             minio_path=resp.image_minio_url,
+            score=resp.score,
+            query=caption_query
         )
         result.append((resp.score,text_object))
     return result
 
-
-
+@tool_registry.register(
+    category='search',
+    tags=["event", "semantic", "segment"],
+    dependencies=[
+        "segment_milvus_client",
+        "external_client",
+    ]
+)
 async def get_segments_from_event_query(
     event_query: Annotated[
         str,
-        "An event-level natural language query (e.g., 'a person starts running', 'a car accident occurs', "
-        "'a soccer player scores a goal'). This captures **temporal or semantic events** rather than static visuals."
+        "An event-level query (e.g., 'a person starts running', 'a car accident occurs', 'a soccer player scores a goal')."
     ],
-    top_k: Annotated[int, "Number of top-matching video segments to retrieve based on event similarity."],
-    list_video_id: Annotated[list[str], "List of video IDs to limit the event search domain (auto-provided)."],
-    user_id: Annotated[str, "User identifier for context or permissions (auto-provided)."],
-    metric_type: Annotated[str, "Metric type used for similarity computation in Milvus (auto-provided)."],
-    param: Annotated[dict, "Additional Milvus or embedding parameters (auto-provided)."],
-    milvus_client: Annotated[SegmentCaptionImageMilvusClient, "Milvus client for segment-level or event-level embedding search (auto-provided)."],
-    external_client: Annotated[ExternalEncodeClient, "External encoding client for generating event embeddings from natural language queries (auto-provided)."],
-    postgres_client: Annotated[PostgresClient, "Postgres client for retrieving related event or segment metadata (auto-provided)."],
-    minio_client: Annotated[StorageClient, "Storage Client for reading event-level metadata stored in MinIO (auto-provided)."],
-    output_fields: list[str] = ['id', 'related_video_name', 'related_video_id', 'segment_index', 'segment_minio_url', 'user_bucket', 'caption', 'start_time', 'end_time']
+    top_k_each_request: Annotated[int, "Number of top results per subquery (dense/sparse)."],
+    top_k_final: Annotated[int, "Final number of results to return after hybrid ranking."],
+    weights: Annotated[tuple[float, float] | None, "Weights for hybrid dense/sparse reranking. If None, dense-only search."],
+
+    list_video_id: Annotated[list[str], "Video IDs to constrain the search domain (auto-provided)."],
+    user_id: Annotated[str, "User identifier (auto-provided)."],
+    segment_milvus_client: Annotated[SegmentCaptionImageMilvusClient, "Milvus client for segment-level caption retrieval (auto-provided)."],
+    external_client: Annotated[ExternalEncodeClient, "External encoding client for generating text embeddings (auto-provided)."],
 ) -> list[tuple[float, SegmentObjectInterface]]:
-    
+    """
+    Retrieve temporally localized video segments that semantically match a **natural-language event query**.
+    This performs dense or hybrid (dense + sparse) embedding search over segment-level captions.
+    """
 
     embedding_request = TextEmbeddingRequest(
         texts=[event_query],
@@ -178,32 +202,133 @@ async def get_segments_from_event_query(
     response = await external_client.encode_text(request=embedding_request)
     query_embedding = cast(list[list[float]], response.embeddings)
 
-    filter_condition =SegmentCaptionFilterCondition(related_video_id=list_video_id, user_bucket=user_id)
-
-    milvus_response = await milvus_client.search_dense(
-        query_embedding=query_embedding,
-        top_k=top_k,
-        metric_type=metric_type,
-        param=param,
-        output_fields=output_fields,
-        filter_expr=filter_condition
+    filter_condition = SegmentCaptionFilterCondition(
+        related_video_id=list_video_id,
+        user_bucket=user_id
     )
-    result = []
-    for res in milvus_response:
-        result.append(
-            (
-                res.score,
-                SegmentObjectInterface(
-                    related_video_id=res.related_video_id,
-                    start_frame_index=res.start_frame,
-                    end_frame_index=res.end_frame,
-                    start_time=res.start_time,
-                    end_time=res.end_time,
-                    caption_info=res.caption
-                )
+
+    reqs = [
+        segment_milvus_client.dense_request(
+            data=query_embedding,
+            limit=top_k_each_request,
+            expr=filter_condition.to_expr()
+        )
+    ]
+    if weights:
+        reqs.append(
+            segment_milvus_client.sparse_request(
+                data=[event_query],
+                limit=top_k_each_request,
+                expr=filter_condition.to_expr()
             )
         )
 
+    milvus_response = await segment_milvus_client.search_combination(
+        requests=reqs,
+        limit=top_k_final,
+        weight=list(weights) if weights else [1.0]
+    )
+
+    result = []
+    for resp in milvus_response:
+        segment = SegmentObjectInterface(
+            related_video_id=resp.related_video_id,
+            start_frame_index=resp.start_frame,
+            end_frame_index=resp.end_frame,
+            start_time=resp.start_time,
+            end_time=resp.end_time,
+            caption_info=resp.segment_caption,
+            score=resp.score,
+            segment_caption_query=event_query
+        )
+        result.append((resp.score, segment))
+
     return result
 
+
+
+@tool_registry.register(
+    category='search',
+    tags=["multimodal", "visual", "caption", "image"],
+    dependencies=[
+        "visual_milvus_client",
+        "external_client",
+    ]
+)
+async def get_images_from_multimodal_query(
+    visual_query: Annotated[
+        str,
+        "A multimodal query combining visual and textual semantics (e.g., 'a rainy street with a yellow taxi at night')."
+    ],
+    caption_query:  Annotated[
+        str,
+        "A multimodal query combining visual and textual semantics (e.g., 'a rainy street with a yellow taxi at night')."
+    ],
+    top_k_each_request: Annotated[int, "Top results from each modality before reranking."],
+    top_k_final: Annotated[int, "Final number of multimodal results to return."],
+    weights: Annotated[tuple[float, float, float], "Weights for [visual, caption_dense, caption_sparse] reranking."],
+
+    list_video_id: Annotated[list[str], "Restrict search to these videos (auto-provided)."],
+    user_id: Annotated[str, "User identifier (auto-provided)."],
+    visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for multimodal image retrieval (auto-provided)."],
+    external_client: Annotated[ExternalEncodeClient, "External encoding client for generating embeddings (auto-provided)."],
+) -> list[tuple[float, ImageObjectInterface]]:
+    """
+    Perform **multimodal image retrieval** using combined:
+      - Visual embeddings (image encoder)
+      - Caption dense embeddings (text encoder)
+      - Caption sparse (BM25 or keyword) search
+    """
+
+    visual_embed_req = ImageEmbeddingRequest(text_input=[visual_query], image_base64=None, metadata={})
+    text_embed_req = TextEmbeddingRequest(texts=[caption_query], metadata={})
+
+    visual_resp = await external_client.encode_visual_text(request=visual_embed_req)
+    text_resp = await external_client.encode_text(request=text_embed_req)
+
+    visual_emb = cast(list[list[float]], visual_resp.image_embeddings)
+    caption_emb = cast(list[list[float]], text_resp.embeddings)
+
+    filter_condition = ImageFilterCondition(
+        related_video_id=list_video_id,
+        user_bucket=user_id
+    )
+
+    reqs = [
+        visual_milvus_client.visual_dense_request(
+            data=visual_emb,
+            limit=top_k_each_request,
+            expr=filter_condition.to_expr(),
+        ),
+        visual_milvus_client.caption_dense_request(
+            data=caption_emb,
+            limit=top_k_each_request,
+            expr=filter_condition.to_expr(),
+        ),
+        visual_milvus_client.caption_sparse_request(
+            data=[caption_query],
+            limit=top_k_each_request,
+            expr=filter_condition.to_expr(),
+        ),
+    ]
+
+    milvus_response = await visual_milvus_client.search_combination(
+        requests=reqs,
+        limit=top_k_final,
+        weight=list(weights),
+    )
+
+    result = []
+    for resp in milvus_response:
+        img = ImageObjectInterface(
+            related_video_id=resp.related_video_id,
+            frame_index=resp.frame_index,
+            timestamp=resp.timestamp,
+            caption_info=resp.image_caption,
+            minio_path=resp.image_minio_url,
+            score=resp.score,
+            query=[visual_query,caption_query]
+        )
+        result.append((resp.score, img))
+    return result
 

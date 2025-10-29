@@ -4,12 +4,10 @@ from pathlib import Path
 from fastapi import UploadFile
 
 from datetime import datetime
-from core.management.progress import ProgressTracker, ProcessingStage
-from prefect import flow, task, get_run_logger
+from core.management.progress import ProcessingStage
+from prefect import flow, task
 from prefect.futures import PrefectFuture
 from prefect.cache_policies import INPUTS, TASK_SOURCE, NO_CACHE
-from prefect.concurrency.asyncio import concurrency
-from prefect.artifacts import create_table_artifact, create_markdown_artifact
 from datetime import timedelta
 
 from core.artifact.schema import (
@@ -27,9 +25,6 @@ from core.artifact.schema import (
 from task.video_proc.main import VideoInput
 from task.llm_segment_caption.main import ShotASRInput
 
-
-
-from core.config.storage import minio_settings, postgre_settings
 from core.config.logging import run_logger
 
 
@@ -39,9 +34,18 @@ from core.clients.llm_client import LLMClient
 from core.clients.image_embed_client import ImageEmbeddingClient
 from core.clients.text_embed_client import TextEmbeddingClient
 
-from core.clients.milvus_client import ImageEmbeddingMilvusClient, TextCaptionEmbeddingMilvusClient, SegmentCaptionEmbeddingMilvusClient
+from core.clients.milvus_client import ImageMilvusClient, SegmentCaptionEmbeddingMilvusClient
 from core.lifespan import AppState
 from core.clients.progress_client import ProcessingStage
+
+
+from core.clients.milvus_client import ImageMilvusClient, SegmentCaptionEmbeddingMilvusClient
+
+from task.milvus_persist_task.main import (
+    ImageEmbeddingMilvusTask,
+    TextSegmentCaptionMilvusTask,
+    MilvusIndexSettings
+)
 
 @task(
     name='Video registry',
@@ -380,29 +384,23 @@ async def text_image_caption_embedding_task(
     
 )
 async def image_embedding_milvus_persist_task(
-    image_embeddings: list[ImageEmbeddingArtifact] | PrefectFuture,
+    image_caption_embeddings: tuple[list[ImageEmbeddingArtifact], list[TextCaptionEmbeddingArtifact]] | PrefectFuture,
 ):
-    task_instance =  AppState().image_embedding_milvus_task
-    milvus_collection_config = AppState().image_embedding_milvus_config
+    task_instance =  cast(ImageEmbeddingMilvusTask, AppState().image_embedding_milvus_task)
+
+    image_milvus_client = cast(ImageMilvusClient,AppState().image_milvus_client)
     progress_client = AppState().progress_client
     
-    print(f"{task_instance.config.model_dump(mode='json')}")
-    async with ImageEmbeddingMilvusClient(
-        config_collection=milvus_collection_config,
-        host=task_instance.config.host,
-        port=task_instance.config.port,
-        user=task_instance.config.user, #type:ignore
-        password=task_instance.config.password, #type:ignore
-        db_name=task_instance.config.db_name,
-        timeout=task_instance.config.time_out
-    ) as client:
-        print("Before milvus ingestion")
-        preprocessed = await task_instance.preprocess(cast(list[ImageEmbeddingArtifact], image_embeddings))
-        results = []
-        async for result in task_instance.execute(preprocessed, client):
-            processed = await task_instance.postprocess(result)
-            results.append(processed)
+    await image_milvus_client.connect()
+
+    preprocessed = await task_instance.preprocess(cast(tuple[list[ImageEmbeddingArtifact], list[TextCaptionEmbeddingArtifact]], image_caption_embeddings))
+
+    results = []
+    async for result in task_instance.execute(preprocessed, image_milvus_client):
+        processed = await task_instance.postprocess(result)
+        results.append(processed)
     
+    await image_milvus_client.close()
     for res in results:
         progress_client.update_state_progress(
             video_id=res.related_video_id,
@@ -412,50 +410,8 @@ async def image_embedding_milvus_persist_task(
             video_id=res.related_video_id
         )
         print(response)
-    return results
-
-
-
-@task(
-    name='Text Image Caption Milvus Persist',
-    description='Persist text caption embeddings into Milvus vector database',
     
-)
-async def text_image_caption_milvus_persist_task(
-    text_caption_embeddings: list[TextCaptionEmbeddingArtifact] | PrefectFuture,
-):
-    task_instance =  AppState().text_image_caption_milvus_task
-    milvus_config =  AppState().text_image_caption_milvus_config
-    progress_client = AppState().progress_client
-
-    async with TextCaptionEmbeddingMilvusClient(
-        config_collection=milvus_config,
-        host=task_instance.config.host,
-        port=task_instance.config.port,
-        user=task_instance.config.user,#type:ignore
-        password=task_instance.config.password,#type:ignore
-        db_name=task_instance.config.db_name,
-        timeout=task_instance.config.time_out
-    ) as client:
-        preprocessed = await task_instance.preprocess(cast(list[TextCaptionEmbeddingArtifact], text_caption_embeddings))
-        results = []
-        async for result in task_instance.execute(preprocessed, client):
-            processed = await task_instance.postprocess(result)
-            results.append(processed)
-    
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.TEXT_CAP_IMAGE_MILVUS
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
-
     return results
-
-
 
 @task(
     name='Text Segment Caption Milvus Persist',
@@ -466,27 +422,20 @@ async def text_segment_caption_milvus_persist_task(
     text_segment_embeddings: list[TextCapSegmentEmbedArtifact] | PrefectFuture,
 ):
     task_instance =  AppState().text_segment_caption_milvus_task
-    milvus_config =  AppState().text_segment_caption_milvus_config
+    seg_milvus_client =  AppState().seg_milvus_client
     progress_client = AppState().progress_client
+    await  seg_milvus_client.connect()
 
-    async with SegmentCaptionEmbeddingMilvusClient(
-        config_collection=milvus_config,
-        host=task_instance.config.host,
-        port=task_instance.config.port,
-        user=task_instance.config.user,#type:ignore
-        password=task_instance.config.password,#type:ignore
-        db_name=task_instance.config.db_name,
-        timeout=task_instance.config.time_out
-    ) as client:
 
-        print("Before milvus")
-        preprocessed = await task_instance.preprocess(cast(list[TextCapSegmentEmbedArtifact], text_segment_embeddings))
-        results = []
-        
-        async for result in task_instance.execute(preprocessed, client):
-            processed = await task_instance.postprocess(result)
-            results.append(processed)
-            
+    print("Before milvus")
+    preprocessed = await task_instance.preprocess(cast(list[TextCapSegmentEmbedArtifact], text_segment_embeddings))
+    results = []
+    
+    async for result in task_instance.execute(preprocessed, seg_milvus_client):
+        processed = await task_instance.postprocess(result)
+        results.append(processed)
+    
+    await seg_milvus_client.close()
     for res in results:
         progress_client.update_state_progress(
             video_id=res.related_video_id,
@@ -627,38 +576,17 @@ async def video_processing_flow(
             f"{len(segment_captions)} segment captions → {len(text_segment_embeddings)} segment embeddings, "
             f"{len(images)} images → ({len(image_captions)} image captions + {len(image_embeddings)} image embeddings) → {len(text_caption_embeddings)} text caption embeddings"
         )
+        
 
         image_embed_milvus_future = image_embedding_milvus_persist_task.submit(
-            image_embeddings=image_embeddings
+            image_caption_embeddings=(image_embeddings, text_caption_embeddings)
         )
         image_embed_milvus_result = image_embed_milvus_future.result()
-
-        text_caption_milvus_future = text_image_caption_milvus_persist_task.submit(
-            text_caption_embeddings=text_caption_embeddings
-        )
-        text_caption_milvus_result = text_caption_milvus_future.result()
-
 
         segment_caption_milvus_future = text_segment_caption_milvus_persist_task.submit(
             text_segment_embeddings=text_segment_embeddings
         )
         segment_caption_milvus_result = segment_caption_milvus_future.result()
-
-        # run_logger.info("Stage 5: Aggregate Results")
-        # final_manifest = await aggregate_results_task(
-        #     run_id=run_id,
-        #     videos=videos,
-        #     autoshots=autoshot_artifacts,
-        #     asrs=asr_artifacts,
-        #     images=images,
-        #     segment_captions=segment_captions,
-        #     image_captions=image_captions,
-        #     image_embeddings=image_embeddings,
-        #     text_caption_embeddings=text_caption_embeddings,
-        #     text_segment_embeddings=text_segment_embeddings,
-        # )
-
-        # return final_manifest
 
     except KeyboardInterrupt:
         AppState().progress_client.clear_video_progress_cache()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Optional, TypeVar, Type, Literal, ClassVar
+from typing import Any, Generic, TypeVar, Literal, cast 
 from urllib.parse import urljoin
 
 import httpx
@@ -19,7 +19,8 @@ from prefect_agent.shared.schema import ModelInfo, LoadModelRequest, UnloadModel
 from pymilvus import (
     AsyncMilvusClient,
     DataType,
-    FieldSchema,
+    Function,
+    FunctionType,
     CollectionSchema,
 )
 
@@ -43,11 +44,11 @@ class ClientConfig(BaseModel):
 class MilvusClientError(Exception):
     pass
 
-class MilvusCollectionConfig(BaseModel):
-    collection_name: str
+class MilvusIndexConfig(BaseModel):
+    type_config: Literal['sparse', 'dense']
     dimension: int
-    metric_type: Literal['L2', 'COSINE', 'IP'] = 'COSINE'
-    index_type: Literal['FLAT', 'IVF_FLAT', 'HNSW', 'AUTOINDEX'] = 'AUTOINDEX'
+    metric_type: Literal['L2', 'COSINE', 'IP', 'BM25'] = 'COSINE'
+    index_type: Literal['FLAT', 'IVF_FLAT', 'HNSW', 'AUTOINDEX', 'SPARSE_INVERTED_INDEX'] = 'AUTOINDEX'
     description: str = ""
 
     nlist: int = 128  
@@ -56,17 +57,17 @@ class MilvusCollectionConfig(BaseModel):
 
     @property
     def index_params(self)->dict:
-        index_params: dict[str, Any] = {
-            "field_name": "embedding",
-            "index_type": self.index_type,
-            "metric_type": self.metric_type,
-        }   
+        index_params: dict[str, Any] = {}   
         if self.index_type  == 'IVF_FLAT':
             index_params["params"] = {"nlist": self.nlist}
         elif self.index_type == 'HNSW':
             index_params['params'] = {
                 "M": self.m,
                 "efConstruction": self.ef_construction
+            }
+        elif self.index_type == 'SPARSE_INVERTED_INDEX':
+            index_params['params'] = {
+                "inverted_index_algo": "DAAT_MAXSCORE"
             }
         return index_params
     
@@ -340,25 +341,34 @@ class BaseServiceClient(ABC, Generic[TRequest, TResponse]):
 class BaseMilvusClient(ABC):
 
     def __init__(
-            self, 
-            config_collection: MilvusCollectionConfig, 
+            self,  
             host: str, 
             port: int, 
+            collection_name: str,
             user: str = "", 
             password: str = "", 
             db_name: str = 'default', 
-            timeout: float=30.0
+            timeout: float=30.0,
+            visual_index_config: MilvusIndexConfig | None = None,
+            caption_dense_index_config: MilvusIndexConfig | None = None,
+            caption_sparse_index_config: MilvusIndexConfig | None = None
         ):
+
+        assert visual_index_config or caption_dense_index_config, "At least 1 dense config must be pass in "
 
         self.host = host
         self.port = port
         self.user = user
-        self.config = config_collection
         self.password = password
         self.db_name = db_name
         self.timeout = timeout
         self._client: AsyncMilvusClient | None = None
-    
+        self.collection_name = collection_name
+
+        self.visual_index_config = visual_index_config
+        self.caption_dense_index_config = caption_dense_index_config
+        self.caption_sparse_index_config = caption_sparse_index_config
+
     async def connect(self) -> None:
         try:
             
@@ -403,20 +413,35 @@ class BaseMilvusClient(ABC):
     @abstractmethod
     def get_schema(self) -> CollectionSchema:
         """Define the collection schema"""
+        raise NotImplemented
+    
+    
+    @property
+    @abstractmethod
+    def visual_embedding_field(self) -> str | None:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def caption_embedding_field(self) -> str | None:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def caption_sparse_embedding_field(self) -> str | None:
         raise NotImplementedError
     
     @property
     @abstractmethod
-    def embedding_field(self) -> str:
+    def caption_text_field(self) -> str | None:
         raise NotImplementedError
-
 
     async def create_collection_if_not_exists(self) -> None:
         """
         Create both collections and index name
         """
-
-        has_collection = await self.client.has_collection(self.config.collection_name)
+        
+        has_collection = await self.client.has_collection(self.collection_name)
         if has_collection:
             logger.info(
                 'Milvus collection exists'
@@ -425,25 +450,33 @@ class BaseMilvusClient(ABC):
             
         schema = self.get_schema()
         await self.client.create_collection(
-            collection_name=self.config.collection_name,
+            collection_name=self.collection_name,
             schema=schema,
             timeout=10
         )
         index_params = self.client.prepare_index_params()
-        index_params.add_index(
-            field_name=self.embedding_field,
-            index_type=self.config.index_type,
-            metric_type=self.config.metric_type,
-            params=self.config.index_params
-        )
-        await self.client.create_index(index_params=index_params, collection_name=self.config.collection_name)
+
+        index_config_list = [
+            (self.visual_index_config, self.visual_embedding_field),
+            (self.caption_dense_index_config, self.caption_embedding_field),
+            (self.caption_sparse_index_config, self.caption_sparse_embedding_field)
+        ] 
+        for config, embedding_field in index_config_list:
+            if config and embedding_field:
+                index_params.add_index(
+                    field_name=embedding_field,
+                    index_type=config.index_type,
+                    metric=config.metric_type,
+                    params=config.index_params
+                ) 
+
+        await self.client.create_index(index_params=index_params, collection_name=self.collection_name)
        
     async def insert_vectors(self, data: list[dict[str, Any]]) -> list[str]:
-        config = self.config
         try:
             
             result = await self.client.insert(
-                collection_name=self.config.collection_name,
+                collection_name=self.collection_name,
                 data=data
             )
             logger.info("Milvus vector inserted")
@@ -451,7 +484,7 @@ class BaseMilvusClient(ABC):
         except Exception as e:
             logger.exception(
                 "Milvus insertion failed",
-                collection=self.config.collection_name,
+                collection=self.collection_name,
                 error=str(e)
             )
             raise MilvusClientError(f"Failed to insert vectors: {e}") from e
@@ -459,12 +492,12 @@ class BaseMilvusClient(ABC):
 
     async def get_collection_stats(self) -> dict[str, Any]:
         try:
-            stats = await self.client.get_collection_stats(self.config.collection_name)
+            stats = await self.client.get_collection_stats(self.collection_name)
             return stats
         except Exception as e:
             logger.exception(
                 "milvus_stats_failed",
-                collection=self.config.collection_name,
+                collection=self.collection_name,
                 error=str(e)
             )
             raise MilvusClientError(f"Failed to get stats: {e}") from e
@@ -474,7 +507,7 @@ class BaseMilvusClient(ABC):
         try:
             await self.ensure_collection_loaded()
             result = await self.client.query(
-                collection_name=self.config.collection_name,
+                collection_name=self.collection_name,
                 filter=filter_expr, 
                 output_fields=['id'],
                 limit=1
@@ -484,7 +517,7 @@ class BaseMilvusClient(ABC):
         except Exception as e:
             logger.exception(
                 "Milvus existence check failed",
-                collection=self.config.collection_name,
+                collection=self.collection_name,
                 error=str(e)
             )
             raise MilvusClientError(f"Failed to check existence: {e}") from e
@@ -492,7 +525,7 @@ class BaseMilvusClient(ABC):
 
     async def ensure_collection_loaded(self):
         try:
-            await self.client.load_collection(self.config.collection_name)
+            await self.client.load_collection(self.collection_name)
         except Exception as e:
             raise MilvusClientError(f"Failed to load collection: {e}") from e
 
@@ -501,14 +534,14 @@ class BaseMilvusClient(ABC):
         try:
             await self.ensure_collection_loaded()
             result = await self.client.delete(
-                collection_name=self.config.collection_name,
+                collection_name=self.collection_name,
                 filter=filter_expr
             )
             return result.get("delete_count", 0)
         except Exception as e:
             logger.exception(
                 "Milvus deletion failed",
-                collection=self.config.collection_name,
+                collection=self.collection_name,
                 error=str(e)
             )
             raise MilvusClientError(f"Failed to delete records: {e}") from e
@@ -516,6 +549,9 @@ class BaseMilvusClient(ABC):
     async def has_user_collection(self) -> bool:
         """Check if the user-scoped collection exists, swallowing errors to bool."""
         try:
-            return await self.client.has_collection(self.config.collection_name)
+            return await self.client.has_collection(self.collection_name)
         except Exception:
             return False
+
+
+
