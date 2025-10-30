@@ -39,10 +39,6 @@ from .agents import (
     WorkersPlan
 )
 
-
-
-
-
 async def _stream_event(handler: WorkflowHandler, ctx: Context[AgentState], agent_name: str) -> str:
     message_stream_list = []
     async for event in handler.stream_events():

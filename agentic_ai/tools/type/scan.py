@@ -48,7 +48,7 @@ async def get_video_from_segment(
 async def get_video_from_image(
     image_interface: ImageObjectInterface,
     postgres_client: PostgresClient
-):
+) -> VideoInterface:
     related_video_id = image_interface.related_video_id
     video_artifact_metadata = await postgres_client.get_artifact(artifact_id=related_video_id)
     if video_artifact_metadata is None:
@@ -70,7 +70,7 @@ async def get_asr_from_video(
     video:VideoInterface,
     postgres_client: PostgresClient,
     minio_client: StorageClient
-):
+)->str:
     asr_segments = await postgres_client.get_children_artifact(
         artifact_id=video.video_id,
         filter_artifact_type=[ASRArtifact.__name__]
@@ -106,7 +106,7 @@ async def get_all_segment_info_from_video_interface(
     video_interface: VideoInterface,
     postgres_client: PostgresClient,
     minio_client: StorageClient
-):
+)->list[SegmentObjectInterface]:
     child_artifacts = await postgres_client.get_children_artifact(artifact_id=video_interface.video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__])
     
     result: list[SegmentObjectInterface] = []
@@ -292,7 +292,7 @@ async def extract_frames_by_time_window(
     minio_client: StorageClient,
     agent_bucket: str,
     agent_object_folder: str
-):
+)->list[ImageObjectInterface]:
     video_artifact = await postgres_client.get_artifact(artifact_id=video_interface.video_id)
     if video_artifact is None:
         raise ValueError()

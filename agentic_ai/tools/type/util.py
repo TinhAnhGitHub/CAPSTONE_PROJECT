@@ -19,7 +19,6 @@ from .helper import extract_s3_minio_url, time_range_overlap, time_to_seconds
 from .registry import tool_registry
 
 
-
 @tool_registry.register(
     category="Utility/Time",
     tags=["timecode", "frame", "conversion"],
@@ -69,87 +68,6 @@ def timecode_to_frame(timecode: str, fps: float) -> int:
 
 
 
-
-@tool_registry.register(
-    category="Utility/Organization",
-    tags=["visual", "organize", "postprocess", "semantic"],
-    dependencies=[]
-)
-def organize_images(
-        list_images: Annotated[list[ImageObjectInterface], "List of ImageObjectInterface"], 
-        query:Annotated[str, "The query that you just search for"]) -> dict:
-    """
-    This function will return readable representation of ImageObjectInterface, which help you to better understand the results.
-    """
-    result_dict: dict[str, list[dict]] = defaultdict(list)
-    
-    for image in list_images:
-        result_dict[image.related_video_id].append({
-            "frame_index": image.frame_index,
-            "timestamp": image.timestamp,
-            "caption": image.caption_info,
-            "score": round(image.score, 4) if image.score else "No score",
-            "minio_path": image.minio_path,
-            "query_relation": f"Match for query: '{query}'"
-        })
-    
-    readable_result = {
-        "type": "visual_search_result",
-        "query": query,
-        "summary": f"Retrieved {len(list_images)} visually similar frames across {len(result_dict)} videos.",
-        "results": result_dict
-    }
-    
-    return readable_result
-
-
-@tool_registry.register(
-    category="Utility/Organization",
-    tags=["visual", "organize", "postprocess", "semantic"],
-    dependencies=[]
-)
-def organize_segments(
-    list_segments: Annotated[list["SegmentObjectInterface"], "List of SegmentObjectInterface"], 
-    query: Annotated[str, "The query that you just searched for"]
-) -> dict:
-    """
-    Organize retrieved SegmentObjectInterface objects into a structured,
-    descriptive, and interpretable representation grouped by their related video ID.
-
-    This representation helps downstream agents or evaluators understand
-    what parts of each video are most semantically relevant to the query.
-    """
-
-    result_dict: dict[str, list[dict]] = defaultdict(list)
-
-    for segment in list_segments:
-        result_dict[segment.related_video_id].append({
-            "start_frame_index": segment.start_frame_index,
-            "end_frame_index": segment.end_frame_index,
-            "start_time": segment.start_time,
-            "end_time": segment.end_time,
-            "caption": segment.caption_info,
-            "score": round(segment.score, 4) if segment.score else "No score",
-            "duration": f"{segment.start_time} → {segment.end_time}",
-            "query_relation": f"Segment semantically related to query: '{query}'"
-        })
-
-    for video_id in result_dict:
-        result_dict[video_id].sort(key=lambda x: x["score"], reverse=True)
-
-    readable_result = {
-        "type": "visual_segment_search_result",
-        "query": query,
-        "summary": (
-            f"Retrieved {len(list_segments)} relevant segments across "
-            f"{len(result_dict)} videos based on semantic similarity to the query."
-        ),
-        "results": result_dict
-    }
-
-    return readable_result
-
-
 @tool_registry.register(
     category="Utility/Time",
     tags=["time", "frame", "conversion", "video"],
@@ -179,7 +97,7 @@ def from_range_index_to_range_time(
     video: VideoInterface,
     start_frame_index: int,
     end_frame_index: int
-) -> Tuple[str, str]:
+) -> str:
     """
     Convert a frame range into a corresponding time range.
     Args:
@@ -189,7 +107,8 @@ def from_range_index_to_range_time(
     Returns:
         Tuple[str, str]: Start and end timestamps (ISO 8601 format).
     """
-    return frame_to_timecode(frame_index=start_frame_index, fps=video.fps),frame_to_timecode(frame_index=end_frame_index, fps=video.fps)
+    start,end = frame_to_timecode(frame_index=start_frame_index, fps=video.fps),frame_to_timecode(frame_index=end_frame_index, fps=video.fps)
+    return f"Result: ({start},{end})"
 
 
 @tool_registry.register(
@@ -222,7 +141,7 @@ def from_range_time_to_range_index(
     video: VideoInterface,
     start_time: str,
     end_time: str
-) -> Tuple[int, int]:
+) -> str:
     """
     Convert a time range into a corresponding frame index range.
     Args:
@@ -232,7 +151,9 @@ def from_range_time_to_range_index(
     Returns:
         Tuple[int, int]: Start and end frame indices.
     """
-    return timecode_to_frame(timecode=start_time, fps=video.fps), timecode_to_frame(timecode=end_time, fps=video.fps)
+    start,end = timecode_to_frame(frame_index=start_time, fps=video.fps),timecode_to_frame(frame_index=end_time, fps=video.fps)
+    return f"Result: ({start},{end})"
+
 
 @tool_registry.register(
     category="Utility/IO",
@@ -260,7 +181,7 @@ async def read_segment(
     segment_interface: SegmentObjectInterface, 
     minio_client: StorageClient, 
     postgres_client: PostgresClient
-) -> Tuple[str, bytes]:
+) -> Tuple[bytes, str]:
     """
     Fetch a video segment and return its extension and bytes.
     """
@@ -282,7 +203,8 @@ async def read_segment(
         lambda: minio_client.get_object(bucket=bucket_video, object_name=object_video_name)
     )
     video_bytes = cast(bytes, video_bytes)
-    return extension, video_bytes
+    mime_type = mimetypes.types_map.get(f".{extension}", "application/octet-stream")
+    return video_bytes, mime_type
      
     
 

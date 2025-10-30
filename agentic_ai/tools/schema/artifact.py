@@ -11,6 +11,9 @@ class VideoInterface(BaseModel):
     fps: float
     duration: str
 
+    def __str__(self) -> str:
+        return super().__str__()
+
 
 class SegmentObjectInterface(BaseModel):
     """
