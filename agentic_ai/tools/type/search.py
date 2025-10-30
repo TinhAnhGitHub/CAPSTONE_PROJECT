@@ -37,7 +37,7 @@ async def get_images_from_visual_query(
     #Runtime-Dependencies Injection
     visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for semantic retrieval (auto-provided)"],
     external_client: Annotated[ExternalEncodeClient, "External client (auto-provided)"],
-) ->  list[tuple[float, ImageObjectInterface]]:
+) ->  list[ImageObjectInterface]:
     """
     Retrieve visually similar images based on a **visual query**.
     This function performs a semantic search over a visual embedding index (e.g., Milvus)
@@ -72,7 +72,7 @@ async def get_images_from_visual_query(
         weight=[1.0]
     )
 
-    result: list[tuple[float, ImageObjectInterface]] = []
+    result: list[ImageObjectInterface] = []
     for resp in milvus_response:
         image = ImageObjectInterface(
             related_video_id=resp.related_video_id,
@@ -84,7 +84,7 @@ async def get_images_from_visual_query(
             reference_query_image=None,
             query=visual_query
         )
-        result.append((resp.score, image))
+        result.append(image)
     
 
     return result
@@ -114,7 +114,7 @@ async def get_images_from_caption_query(
     
     visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for caption-based embedding search (auto-provided)."],
     external_client: Annotated[ExternalEncodeClient, "External encoding client for generating caption embeddings (auto-provided)."],
-) -> list[tuple[float, ImageObjectInterface]]:
+) -> list[ImageObjectInterface]:
     """
     Retrieve images semantically related to a **caption-based query**.
 
@@ -169,8 +169,10 @@ async def get_images_from_caption_query(
             reference_query_image=None,
             query=caption_query
         )
-        result.append((resp.score,text_object))
+        result.append(text_object)
     return result
+
+
 
 @tool_registry.register(
     category='search',
@@ -193,7 +195,7 @@ async def get_segments_from_event_query(
     user_id: Annotated[str, "User identifier (auto-provided)."],
     segment_milvus_client: Annotated[SegmentCaptionImageMilvusClient, "Milvus client for segment-level caption retrieval (auto-provided)."],
     external_client: Annotated[ExternalEncodeClient, "External encoding client for generating text embeddings (auto-provided)."],
-) -> list[tuple[float, SegmentObjectInterface]]:
+) -> list[SegmentObjectInterface]:
     """
     Retrieve temporally localized video segments that semantically match a **natural-language event query**.
     This performs dense or hybrid (dense + sparse) embedding search over segment-level captions.
@@ -245,7 +247,7 @@ async def get_segments_from_event_query(
             score=resp.score,
             segment_caption_query=event_query
         )
-        result.append((resp.score, segment))
+        result.append(segment)
 
     return result
 
@@ -276,7 +278,7 @@ async def get_images_from_multimodal_query(
     user_id: Annotated[str, "User identifier (auto-provided)."],
     visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for multimodal image retrieval (auto-provided)."],
     external_client: Annotated[ExternalEncodeClient, "External encoding client for generating embeddings (auto-provided)."],
-) -> list[tuple[float, ImageObjectInterface]]:
+) -> list[ImageObjectInterface]:
     """
     Perform **multimodal image retrieval** using combined:
       - Visual embeddings (image encoder)
@@ -334,7 +336,7 @@ async def get_images_from_multimodal_query(
             query=[visual_query,caption_query],
             reference_query_image=None
         )
-        result.append((resp.score, img))
+        result.append(img)
     return result
 
 
@@ -355,7 +357,7 @@ async def find_similar_images_from_image(
     visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for multimodal image retrieval (auto-provided)."],
     minio_client:  StorageClient,
     external_client: Annotated[ExternalEncodeClient, "External encoding client for generating embeddings (auto-provided)."],
-):
+)-> list[ImageObjectInterface]:
 
     minio_path = reference_image.minio_path
     bucket_name, object_name = extract_s3_minio_url(minio_path)
@@ -389,7 +391,7 @@ async def find_similar_images_from_image(
         limit=top_k,
         weight=[1.0]
     )
-    result: list[tuple[float, ImageObjectInterface]] = []
+    result: list[ImageObjectInterface]= []
     for resp in milvus_response:
         image = ImageObjectInterface(
             related_video_id=resp.related_video_id,
@@ -401,7 +403,7 @@ async def find_similar_images_from_image(
             query=None,
             reference_query_image=reference_image
         )
-        result.append((resp.score, image))
+        result.append(image)
     
 
     return result
