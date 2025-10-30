@@ -42,3 +42,31 @@ CAPTION__ENHANCEMENT_PROMPT = PromptTemplate(
     Output: A list of retrieval-optimized caption.
     """
 )
+
+
+
+CAPTION_WITH_ASR_FOCUS_PROMPT = PromptTemplate(
+    """
+    You are an expert in multimodal understanding and visual captioning.
+    Your goal is to generate a **single, vivid, semantically rich caption** for an image, 
+    using both visual content and available contextual signals (ASR and focus prompt).
+
+    --- Context ---
+    Visual Input: (an image is provided separately)
+    Related ASR (speech transcript or scene narration): {related_asr}
+    Focus Prompt (user-specified perspective or intent): {focus_prompt}
+    ----------------
+
+    Guidelines:
+    - Combine **visual cues** (objects, relationships, actions, settings) with **audio context** (ASR) to improve precision.
+    - Follow the **focus prompt** closely — emphasize elements relevant to it.
+    - Be **concise** (one sentence) but **descriptive and informative**.
+    - Use **natural language** suitable for image retrieval or caption embedding.
+    - Avoid meta language (no “This image shows…” or “The photo depicts…”).
+    - Highlight distinctive or salient features, moods, or actions when relevant.
+    - Focus on the interaction of the characters, component in the image, and explain why it happen like that (via common sense, asr,...)
+
+    Output:
+    A single optimized caption that fuses image, ASR, and focus prompt information (succint). 
+    """
+)

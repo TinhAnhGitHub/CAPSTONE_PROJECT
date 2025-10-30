@@ -1,12 +1,15 @@
+from __future__ import annotations
 from pydantic import Field, BaseModel
+from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact
 
 
-class VideoObject(BaseModel):
+class VideoInterface(BaseModel):
     """
     This will be the interface of a video
     """
     video_id: str
     fps: float
+    duration: str
 
 
 class SegmentObjectInterface(BaseModel):
@@ -38,6 +41,7 @@ class SegmentObjectInterface(BaseModel):
         ),
     )
 
+
     def expr(self) -> str:
         """
         Structured, agent-readable summary of the segment object.
@@ -53,6 +57,8 @@ class SegmentObjectInterface(BaseModel):
             f"query='{self.segment_caption_query if self.segment_caption_query else 'N/A'}'"
             f")"
         )
+    
+    
 
 
 class ImageObjectInterface(BaseModel):
@@ -63,7 +69,7 @@ class ImageObjectInterface(BaseModel):
     related_video_id: str = Field(..., description="Identifier of the video that this image belongs to.")
     frame_index: int = Field(..., description="Frame index within the source video.")
     timestamp: str = Field(..., description="Timestamp of this frame in the video (e.g., '00:00:12.87').")
-    caption_info: str = Field(..., description="Descriptive caption summarizing the image content.")
+    caption_info: str | None= Field(None, description="Descriptive caption summarizing the image content.")
     minio_path: str = Field(..., description="Storage path or URL for this image (e.g., MinIO or S3).")
 
     score: float | None = Field(
@@ -82,6 +88,13 @@ class ImageObjectInterface(BaseModel):
             "Can be a single text query or a list for multimodal inputs (e.g., visual + textual). "
             "If `None`, the image was not semantically retrieved."
         ),
+    )
+    reference_query_image: ImageObjectInterface | None = Field(
+        None,
+        description=(
+            "If this image was retrieved using another image as the query, "
+            "this field holds that reference image's metadata."
+        )
     )
 
     def expr(self) -> str:

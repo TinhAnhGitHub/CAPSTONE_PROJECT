@@ -6,12 +6,14 @@ from agentic_ai.tools.clients.milvus.client import ImageMilvusClient, ImageFilte
 from agentic_ai.tools.clients.external.encode_client import ExternalEncodeClient
 from ingestion.prefect_agent.service_image_embedding.schema import ImageEmbeddingRequest
 from ingestion.prefect_agent.service_text_embedding.schema import TextEmbeddingRequest
+from agentic_ai.tools.clients.minio.client import StorageClient
+
 # from agentic_ai.tools.clients.postgre.client import PostgresClient
 # from ingestion.core.artifact.schema import ImageCaptionArtifact
 # from agentic_ai.tools.clients.minio.client import StorageClient
 
 from .registry import tool_registry
-
+from .helper import extract_s3_minio_url
 
 @tool_registry.register(
     category='search',
@@ -51,7 +53,7 @@ async def get_images_from_visual_query(
     )
 
     response = await external_client.encode_visual_text(request=embedding_request)
-    query_embedding = cast(list[list[float]], response.image_embeddings) 
+    query_embedding = cast(list[list[float]], response.text_embeddings) 
     
     filter_condition = ImageFilterCondition(
         related_video_id=list_video_id,
@@ -79,6 +81,7 @@ async def get_images_from_visual_query(
             caption_info=resp.image_caption,
             minio_path=resp.image_minio_url,
             score=resp.score,
+            reference_query_image=None,
             query=visual_query
         )
         result.append((resp.score, image))
@@ -163,6 +166,7 @@ async def get_images_from_caption_query(
             caption_info=resp.image_caption,
             minio_path=resp.image_minio_url,
             score=resp.score,
+            reference_query_image=None,
             query=caption_query
         )
         result.append((resp.score,text_object))
@@ -327,27 +331,77 @@ async def get_images_from_multimodal_query(
             caption_info=resp.image_caption,
             minio_path=resp.image_minio_url,
             score=resp.score,
-            query=[visual_query,caption_query]
+            query=[visual_query,caption_query],
+            reference_query_image=None
         )
         result.append((resp.score, img))
     return result
 
 
-
+@tool_registry.register(
+    category="search",
+    tags=["visual", "semantic", "image", "similarity"],
+    dependencies=[
+        "visual_milvus_client",
+        "external_client",
+        "minio_client",
+    ]
+)
 async def find_similar_images_from_image(
     reference_image: ImageObjectInterface,
     top_k: int,
     list_video_id: Annotated[list[str], "Restrict search to these videos (auto-provided)."],
     user_id: Annotated[str, "User identifier (auto-provided)."],
     visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for multimodal image retrieval (auto-provided)."],
+    minio_client:  StorageClient,
     external_client: Annotated[ExternalEncodeClient, "External encoding client for generating embeddings (auto-provided)."],
 ):
-    
-    
-    img_b64 = base64.encode()  
+
+    minio_path = reference_image.minio_path
+    bucket_name, object_name = extract_s3_minio_url(minio_path)
+    image_bytes = minio_client.get_object(bucket=bucket_name, object_name=object_name)
+    if image_bytes is None:
+        raise ValueError()
+
+    img_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
     embedding_request = ImageEmbeddingRequest(
-        text_input=[visual_query],
-        image_base64=None,
+        text_input=None,
+        image_base64=[img_b64],
         metadata={}
     )
 
+    response = await external_client.encode_visual_text(request=embedding_request)
+    query_embedding = cast(list[list[float]], response.image_embeddings)
+
+    filter_condition = ImageFilterCondition(
+        related_video_id=list_video_id,
+        user_bucket=user_id
+    )
+    request = visual_milvus_client.visual_dense_request(
+        data=query_embedding,
+        limit=top_k,
+        expr=filter_condition.to_expr()
+    )
+
+    milvus_response = await visual_milvus_client.search_combination(
+        requests=[request],
+        limit=top_k,
+        weight=[1.0]
+    )
+    result: list[tuple[float, ImageObjectInterface]] = []
+    for resp in milvus_response:
+        image = ImageObjectInterface(
+            related_video_id=resp.related_video_id,
+            frame_index=resp.frame_index,
+            timestamp=resp.timestamp,
+            caption_info=resp.image_caption,
+            minio_path=resp.image_minio_url,
+            score=resp.score,
+            query=None,
+            reference_query_image=reference_image
+        )
+        result.append((resp.score, image))
+    
+
+    return result

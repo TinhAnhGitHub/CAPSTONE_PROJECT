@@ -1,12 +1,18 @@
 """
 This file contains the tools for agents to simulate the human-behaviour to interfact with the video, scanning images...
 """
-from agentic_ai.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface
+from agentic_ai.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface, VideoInterface
+import asyncio
+import io
 from agentic_ai.tools.clients.postgre.client import PostgresClient
 from agentic_ai.tools.clients.minio.client import StorageClient
-from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact
+from ingestion.prefect_agent.service_asr.core.schema import  ASRInferenceResponse
+from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact, ASRArtifact
 from typing import Annotated, Literal, cast
-from .helper import extract_s3_minio_url
+import cv2
+
+
+from .helper import extract_s3_minio_url, create_tmp_file_from_minio_object, timecode_to_frame
 from .registry import tool_registry
 
 ##########################
@@ -14,14 +20,125 @@ from .registry import tool_registry
 ##########################
 
 
+@tool_registry.register(
+    category="Interaction/Video",
+    tags=["video", "metadata", "context"],
+    dependencies=["postgres_client"]
+)
+async def get_video_from_segment(
+    segment_interface: SegmentObjectInterface,
+    postgres_client: PostgresClient,
+) -> VideoInterface:
+    related_video_id = segment_interface.related_video_id
+    video_artifact_metadata = await postgres_client.get_artifact(artifact_id=related_video_id)
+    if video_artifact_metadata is None:
+        raise ValueError()
+    metadata = video_artifact_metadata.artifact_metadata
+    return VideoInterface(
+        video_id=related_video_id,
+        fps=metadata['fps'],
+        duration=metadata['duration']
+    )
 
 @tool_registry.register(
-    category='video/image/segment interaction',
-    tags=["interaction","segment"],
-    dependencies=[
-        "postgres_client",
-        "minio_client",
-    ]
+    category="Interaction/Video",
+    tags=["video", "metadata", "context"],
+    dependencies=["postgres_client"]
+)
+async def get_video_from_image(
+    image_interface: ImageObjectInterface,
+    postgres_client: PostgresClient
+):
+    related_video_id = image_interface.related_video_id
+    video_artifact_metadata = await postgres_client.get_artifact(artifact_id=related_video_id)
+    if video_artifact_metadata is None:
+        raise ValueError()
+    metadata = video_artifact_metadata.artifact_metadata
+    return VideoInterface(
+        video_id=related_video_id,
+        fps=metadata['fps'],
+        duration=metadata['duration']
+    )
+
+
+@tool_registry.register(
+    category="Interaction/ASR",
+    tags=["asr", "transcript", "multimodal", "video"],
+    dependencies=["postgres_client", "minio_client"]
+)
+async def get_asr_from_video(
+    video:VideoInterface,
+    postgres_client: PostgresClient,
+    minio_client: StorageClient
+):
+    asr_segments = await postgres_client.get_children_artifact(
+        artifact_id=video.video_id,
+        filter_artifact_type=[ASRArtifact.__name__]
+    )
+    asr_segment = asr_segments[0]
+
+    bucket, object_name = extract_s3_minio_url(asr_segment.minio_url)
+    json_dict = minio_client.read_json(bucket=bucket, object_name=object_name)
+    if json_dict is None:
+        raise ValueError()
+
+    asr_response = ASRInferenceResponse.model_validate(json_dict)
+    tokens = asr_response.result.tokens
+    context = []
+    for token in tokens:
+        context_token = f"""
+        Start time/index: {token.start}/{token.start_frame}
+        End time/index:   {token.end}/{token.end_frame}
+        ASR content:      {token.text}
+        """
+        context.append(context_token.strip())
+    return "\n\n".join(context)
+
+    
+
+
+@tool_registry.register(
+    category="Interaction/Segment",
+    tags=["segment", "metadata", "caption", "structure"],
+    dependencies=["postgres_client", "minio_client"]
+)
+async def get_all_segment_info_from_video_interface(
+    video_interface: VideoInterface,
+    postgres_client: PostgresClient,
+    minio_client: StorageClient
+):
+    child_artifacts = await postgres_client.get_children_artifact(artifact_id=video_interface.video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__])
+    
+    result: list[SegmentObjectInterface] = []
+    for artifact in child_artifacts:
+        minio_url = artifact.minio_url
+        bucket, object_name = extract_s3_minio_url(minio_url)
+
+        json_dict = minio_client.read_json(bucket=bucket, object_name=object_name)
+        if json_dict is None:
+            raise ValueError()
+
+        result.append(
+            SegmentObjectInterface(
+                related_video_id=video_interface.video_id,
+                start_frame_index=json_dict['start_frame'],
+                end_frame_index=json_dict['end_frame'],
+                start_time=json_dict['start_timestamp'],
+                end_time=json_dict['end_timestamp'],
+                caption_info=json_dict['caption'],
+                score=None,
+                segment_caption_query=None
+            )
+        )
+    return result
+
+
+
+
+@tool_registry.register(
+    category="Interaction/Segment",
+    tags=["segment", "navigation", "context", "video"],
+    dependencies=["postgres_client", "minio_client"]
 )
 async def get_segments(
     current_segment: SegmentObjectInterface,
@@ -95,12 +212,9 @@ async def get_segments(
 ##########################
 
 @tool_registry.register(
-    category='video/image/segment interaction',
-    tags=["intefaction", "image"],
-    dependencies=[
-        "postgres_client",
-        "minio_client",
-    ]
+    category="Interaction/Image",
+    tags=["image", "navigation", "context", "video"],
+    dependencies=["postgres_client", "minio_client"]
 )
 async def get_images(
     image: ImageObjectInterface,
@@ -141,6 +255,7 @@ async def get_images(
                         minio_path=image_metadata.minio_url,
                         timestamp=image_caption_artifact.time_stamp,
                         score=None,
+                        reference_query_image=None,
                         query=None
                     )
                 )
@@ -154,8 +269,184 @@ async def get_images(
                         minio_path=image_metadata.minio_url,
                         timestamp=image_caption_artifact.time_stamp,
                         score=None,
+                        reference_query_image=None,
                         query=None
                     )
                 )
     return filter_segments[:hop] if include_within_range else filter_segments[hop-1]
     
+
+
+@tool_registry.register(
+    category="Interaction/FrameExtraction",
+    tags=["video", "frame", "extract", "sampling"],
+    dependencies=["postgres_client", "minio_client"]
+)
+async def extract_frames_by_time_window(
+    video_interface: VideoInterface,
+    start_time: Annotated[str, "Start time in HH:MM:SS.sss format"],
+    end_time: Annotated[str, "End time in HH:MM:SS.sss format"],
+    fps_sample_rate: Annotated[int, ""],
+    
+    postgres_client: PostgresClient,
+    minio_client: StorageClient,
+    agent_bucket: str,
+    agent_object_folder: str
+):
+    video_artifact = await postgres_client.get_artifact(artifact_id=video_interface.video_id)
+    if video_artifact is None:
+        raise ValueError()
+
+    bucket, object_name = extract_s3_minio_url(video_artifact.minio_url)
+
+    video_object = minio_client.get_object(bucket=bucket, object_name=object_name)
+    if video_object is None:
+        raise ValueError()
+    
+    loop = asyncio.get_event_loop()
+    video_tmp_path = await loop.run_in_executor(
+        None,
+        lambda: create_tmp_file_from_minio_object(
+            file_bytes=video_object,
+            extension=video_artifact.artifact_metadata['extension']
+        )
+    )
+    fps = video_interface.fps
+    start_frame = timecode_to_frame(start_time, fps)
+    end_frame = timecode_to_frame(end_time, fps)
+
+    cap = cv2.VideoCapture(video_tmp_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open video file {video_tmp_path}")
+
+    frames_data = []
+    frame_index = start_frame
+
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+
+    while frame_index <= end_frame:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        timestamp_sec = frame_index / fps
+        
+        success, buffer = cv2.imencode('.webp', frame)
+        if not success:
+            frame_index += fps_sample_rate
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            continue
+
+        
+        image_bytes = io.BytesIO(buffer.tobytes())
+        timestamp_sec = frame_index / fps
+        timestamp_hms = f"{int(timestamp_sec // 3600):02}:{int((timestamp_sec % 3600) // 60):02}:{timestamp_sec % 60:06.3f}"
+
+        object_save_image_name = (
+            f"{agent_object_folder}/{video_interface.video_id}/frames/{frame_index}.webp"
+        )
+        s3_url = minio_client.upload_fileobj(
+            bucket=agent_bucket,
+            object_name=object_save_image_name,
+            content_type="image/webp",
+            file_obj=image_bytes
+        )
+
+
+        image_interface = ImageObjectInterface(
+            related_video_id=video_interface.video_id,
+            frame_index=frame_index,
+            caption_info=None,
+            minio_path=s3_url,
+            timestamp=timestamp_hms,
+            score=None,
+            reference_query_image=None,
+            query=None
+        )
+
+        frames_data.append(image_interface)
+        frame_index += fps_sample_rate
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+    cap.release()
+    return frames_data
+
+    
+
+@tool_registry.register(
+    category="Interaction/FrameExtraction",
+    tags=["video", "frame", "extract", "single"],
+    dependencies=["postgres_client", "minio_client"]
+)
+async def extract_frame_time(
+    video_interface: VideoInterface,
+    timestamp: Annotated[str, "Start time in HH:MM:SS.sss format"],
+    # lifespan dependency injection
+    postgres_client: PostgresClient,
+    minio_client: StorageClient,
+
+    # Agent Run injection
+    agent_bucket: str,
+    agent_object_folder: str
+) -> None | ImageObjectInterface:
+    video_artifact = await postgres_client.get_artifact(artifact_id=video_interface.video_id)
+    if video_artifact is None:
+        raise ValueError()
+
+    bucket, object_name = extract_s3_minio_url(video_artifact.minio_url)
+
+    video_object = minio_client.get_object(bucket=bucket, object_name=object_name)
+    if video_object is None:
+        raise ValueError()
+    
+    loop = asyncio.get_event_loop()
+    video_tmp_path = await loop.run_in_executor(
+        None,
+        lambda: create_tmp_file_from_minio_object(
+            file_bytes=video_object,
+            extension=video_artifact.artifact_metadata['extension']
+        )
+    )
+    fps = video_interface.fps
+    frame_index  = timecode_to_frame(time_str=timestamp, fps=fps)
+
+    cap = cv2.VideoCapture(video_tmp_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open video file {video_tmp_path}")
+        
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+
+    ret, frame = cap.read()
+    if not ret:
+        return None
+    
+    timestamp_sec = frame_index / fps
+    
+    success, buffer = cv2.imencode('.webp', frame)
+    if not success:
+        return None
+
+    
+    image_bytes = io.BytesIO(buffer.tobytes())
+    timestamp_sec = frame_index / fps
+    timestamp_hms = f"{int(timestamp_sec // 3600):02}:{int((timestamp_sec % 3600) // 60):02}:{timestamp_sec % 60:06.3f}"
+
+    object_save_image_name = (
+        f"{agent_object_folder}/{video_interface.video_id}/frames/{frame_index}.webp"
+    )
+    s3_url = minio_client.upload_fileobj(
+        bucket=agent_bucket,
+        object_name=object_save_image_name,
+        content_type="image/webp",
+        file_obj=image_bytes
+    )
+
+
+    return ImageObjectInterface(
+        related_video_id=video_interface.video_id,
+        frame_index=frame_index,
+        caption_info=None,
+        minio_path=s3_url,
+        timestamp=timestamp_hms,
+        score=None,
+        reference_query_image=None,
+        query=None
+    )

@@ -3,11 +3,10 @@ This file holds basic utilities to help agents recognize and convert between
 video frames, timestamps, and durations.
 """
 import asyncio
-from datetime import datetime
 import base64
 import mimetypes
 from typing import Tuple, cast
-from agentic_ai.tools.schema.artifact import VideoObject, ImageObjectInterface, SegmentObjectInterface
+from agentic_ai.tools.schema.artifact import VideoInterface, ImageObjectInterface, SegmentObjectInterface
 from typing import Annotated
 from agentic_ai.tools.clients.postgre.client import PostgresClient
 from ingestion.core.artifact.schema import ASRArtifact
@@ -15,16 +14,16 @@ from agentic_ai.tools.clients.minio.client import StorageClient
 from collections import defaultdict
 from ingestion.prefect_agent.service_asr.core.schema import  ASRInferenceResponse
 import re
-from .helper import extract_s3_minio_url
+from .helper import extract_s3_minio_url, time_range_overlap, time_to_seconds
 
 from .registry import tool_registry
 
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
+    category="Utility/Time",
+    tags=["timecode", "frame", "conversion"],
+    dependencies=[]
 )
 def frame_to_timecode(frame_index: int, fps: float) -> str:
     if fps <= 0:
@@ -40,9 +39,9 @@ def frame_to_timecode(frame_index: int, fps: float) -> str:
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
+    category="Utility/Time",
+    tags=["timecode", "frame", "conversion"],
+    dependencies=[]
 )
 def timecode_to_frame(timecode: str, fps: float) -> int:
     """
@@ -72,9 +71,9 @@ def timecode_to_frame(timecode: str, fps: float) -> int:
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
+    category="Utility/Organization",
+    tags=["visual", "organize", "postprocess", "semantic"],
+    dependencies=[]
 )
 def organize_images(
         list_images: Annotated[list[ImageObjectInterface], "List of ImageObjectInterface"], 
@@ -105,9 +104,9 @@ def organize_images(
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
+    category="Utility/Organization",
+    tags=["visual", "organize", "postprocess", "semantic"],
+    dependencies=[]
 )
 def organize_segments(
     list_segments: Annotated[list["SegmentObjectInterface"], "List of SegmentObjectInterface"], 
@@ -152,12 +151,12 @@ def organize_segments(
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
+    category="Utility/Time",
+    tags=["time", "frame", "conversion", "video"],
+    dependencies=[]
 )
 def from_index_to_time(
-    video: VideoObject,
+    video: VideoInterface,
     frame_index: int
 ) -> str:
     """
@@ -172,19 +171,19 @@ def from_index_to_time(
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
+    category="Utility/Time",
+    tags=["time", "frame", "conversion", "video"],
+    dependencies=[]
 )
 def from_range_index_to_range_time(
-    video: VideoObject,
+    video: VideoInterface,
     start_frame_index: int,
     end_frame_index: int
 ) -> Tuple[str, str]:
     """
     Convert a frame range into a corresponding time range.
     Args:
-        video (VideoObject): The reference video object.
+        video (VideoInterface): The reference video object.
         start_frame_index (int): The first frame index in the range.
         end_frame_index (int): The last frame index in the range.
     Returns:
@@ -194,18 +193,18 @@ def from_range_index_to_range_time(
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
+    category="Utility/Time",
+    tags=["time", "frame", "conversion", "video"],
+    dependencies=[]
 )
 def from_time_to_index(
-    video: VideoObject,
+    video: VideoInterface,
     time: str
 ) -> int:
     """
     Return the frame index corresponding to a given timestamp.
     Args:
-        video (VideoObject): The reference video object.
+        video (VideoInterface): The reference video object.
         time (str): Timestamp in ISO 8601 format (e.g., '2025-10-24T12:34:56.789Z').
     Returns:
         int: Frame index closest to the given time.
@@ -215,19 +214,19 @@ def from_time_to_index(
 
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=None
-) 
+    category="Utility/Time",
+    tags=["time", "frame", "conversion", "video"],
+    dependencies=[]
+)
 def from_range_time_to_range_index(
-    video: VideoObject,
+    video: VideoInterface,
     start_time: str,
     end_time: str
 ) -> Tuple[int, int]:
     """
     Convert a time range into a corresponding frame index range.
     Args:
-        video (VideoObject): The reference video object.
+        video (VideoInterface): The reference video object.
         start_time (str): Start timestamp in ISO 8601 format.
         end_time (str): End timestamp in ISO 8601 format.
     Returns:
@@ -235,12 +234,11 @@ def from_range_time_to_range_index(
     """
     return timecode_to_frame(timecode=start_time, fps=video.fps), timecode_to_frame(timecode=end_time, fps=video.fps)
 
-
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=['minio_client']
-) 
+    category="Utility/IO",
+    tags=["minio", "image", "read", "binary"],
+    dependencies=["minio_client"]
+)
 def read_image(image_interface: ImageObjectInterface, minio_client: StorageClient) -> tuple[str, str]:
     """
     Read image, return base64 and mime/type
@@ -254,10 +252,10 @@ def read_image(image_interface: ImageObjectInterface, minio_client: StorageClien
     return base64_str, mime_type
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=['minio_client', 'postgres_client']
-) 
+    category="Utility/IO",
+    tags=["minio", "postgres", "segment", "read", "video"],
+    dependencies=["minio_client", "postgres_client"]
+)
 async def read_segment(
     segment_interface: SegmentObjectInterface, 
     minio_client: StorageClient, 
@@ -289,11 +287,11 @@ async def read_segment(
     
 
 @tool_registry.register(
-    category='Utility',
-    tags=["enhance", "visual"],
-    dependencies=['minio_client', 'postgres_client']
-) 
-async def get_related_asr(
+    category="Utility/ASR",
+    tags=["asr", "context", "multimodal", "postgres", "minio"],
+    dependencies=["postgres_client", "minio_client"]
+)
+async def get_related_asr_from_image(
     image_object_interface: Annotated[ImageObjectInterface, "Image or segment to contextualize with ASR."],
     window_seconds: Annotated[
         float,
@@ -309,7 +307,7 @@ async def get_related_asr(
         artifact_id=parent_video_id,
         filter_artifact_type=[ASRArtifact.__name__]
     )  
-    # should return 1
+    
     video_asr_artifact = video_asr_artifacts[0]
     bucket_name, object_name = extract_s3_minio_url(video_asr_artifact.minio_url)
     minio_object = cast(dict, minio_client.read_json(bucket=bucket_name, object_name=object_name))
@@ -319,26 +317,6 @@ async def get_related_asr(
 
     timestamp = image_object_interface.timestamp
 
-    def time_to_seconds(time_str: str) -> float:
-        t = datetime.strptime(time_str, "%H:%M:%S.%f")
-        return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond / 1e6
-
-    def time_range_overlap(
-        start_input: str,
-        end_input:str,
-        start_range: str,
-        end_range:str,
-        iou=0.1,
-    ):
-        """
-        Return True if the iou between the range of input and "range" exceed 0.2, or the input is inside the range
-        """
-        s1, e1 = time_to_seconds(start_input), time_to_seconds(end_input)
-        s2, e2 = time_to_seconds(start_range), time_to_seconds(end_range)
-        inter = max(0, min(e1, e2) - max(s1, s2))
-        union = max(e1, e2) - min(s1, s2)
-        return (inter / union) >= iou or (s1 >= s2 and e1 <= e2)
-
     ts_center = time_to_seconds(timestamp)
     window_start = ts_center - window_seconds
     window_end = ts_center + window_seconds
@@ -346,8 +324,8 @@ async def get_related_asr(
     snippet_tokens = [
         t for t in asr_tokens
         if time_range_overlap(
-            start_input=f"{timestamp}",
-            end_input=f"{timestamp}",
+            start_input=f"{window_start}",
+            end_input=f"{window_end}",
             start_range=t.start,
             end_range=t.end,
             iou=0.0
@@ -380,72 +358,83 @@ async def get_related_asr(
 
     return return_snippet
 
-    
-    
-    
 
 
+@tool_registry.register(
+    category="Utility/ASR",
+    tags=["asr", "context", "multimodal", "postgres", "minio"],
+    dependencies=["postgres_client", "minio_client"]
+)
+async def get_related_asr_from_segment(
+    segment_interface: SegmentObjectInterface,
+    window_seconds: Annotated[
+        float,
+        "Time window around artifact (± seconds for transcript snippet)."
+        "If 10, then the return "
+    ],
+    postgres_client: Annotated[PostgresClient, "Auto-provided."],
+    minio_client: Annotated[StorageClient, "Auto-provided."],
+):
+    parent_video_id = segment_interface.related_video_id
+    video_asr_artifacts = await postgres_client.get_children_artifact(
+        artifact_id=parent_video_id,
+        filter_artifact_type=[ASRArtifact.__name__]
+    ) 
 
+    video_asr_artifact = video_asr_artifacts[0]
+    bucket_name, object_name = extract_s3_minio_url(video_asr_artifact.minio_url)
+    minio_object = cast(dict, minio_client.read_json(bucket=bucket_name, object_name=object_name))
+    asr_object = ASRInferenceResponse.model_validate(minio_object)
+    asr_tokens = asr_object.result.tokens
 
+    segment_start_time = time_to_seconds(segment_interface.start_time)
+    segment_end_time = time_to_seconds(segment_interface.end_time)
+    window_start = segment_start_time - window_seconds
+    window_end = segment_end_time + window_seconds
 
+    snippet_tokens = [
+        t for t in asr_tokens
+        if time_range_overlap(
+            start_input=f"{window_start}",
+            end_input=f"{window_end}",
+            start_range=t.start,
+            end_range=t.end,
+            iou=0.0
+        )
+    ]
 
-# async def link_artifacts_by_lineage(
-#     start_artifact_id: Annotated[str, "Starting artifact ID (e.g., image artifact_id)."],
-#     depth: Annotated[int, "Lineage traversal depth (default: 2).", default=2],
-#     filter_types: Annotated[list[str], "Artifact types to include (e.g., ['ImageArtifact', 'ASRArtifact']).", default=[]],
-#     postgre_client: Annotated[PostgresClient, "Auto-provided."],
-# ) -> list[ArtifactMetadata]:
-    
+    snippet = """
+    ASR transcript context around the segment:
 
+    ▶ Segment range: {segment_start_time} → {segment_end_time}
+    ▶ Frame range: {segment_start_frame} → {segment_end_frame}
+    ▶ Context window: ±{window_seconds} seconds
 
+    --------------------- TRANSCRIPT CONTEXT ---------------------
+    {context}
+    --------------------------------------------------------------
 
-
-async def find_similar_moments_from_image(
-    reference: ImageObjectInterface | SegmentObjectInterface,
-    similarity_threshold: float = 0.8,
-    search_scope: Annotated[Literal["same_video", "all_videos"], "Where to search"],
-    **clients
-) -> list[tuple[float, ImageObjectInterface | SegmentObjectInterface]]:
+    Note: Some ASR lines may include adjacent context beyond the target segment.
+    Focus on lines semantically aligned with the segment’s content.
     """
-    Find moments visually/semantically similar to a reference.
-    Useful for finding repeated actions, similar scenes, or callbacks.
-    """
-    
 
+    context = []
+    for token in snippet_tokens:
+        context_token = f"""
+        Start time/index: {token.start}/{token.start_frame}
+        End time/index:   {token.end}/{token.end_frame}
+        ASR content:      {token.text}
+        """
+        context.append(context_token.strip())
 
+    return_snippet = snippet.format(
+        segment_start_time=segment_interface.start_time,
+        segment_end_time=segment_interface.end_time,
+        segment_start_frame=segment_interface.start_frame_index,
+        segment_end_frame=segment_interface.end_frame_index,
+        window_seconds=window_seconds,
+        context="\n\n".join(context)
+    )
 
+    return return_snippet
 
-
-
-# async def explore_window_events(
-#     focal_artifact: Annotated[
-#         ImageObjectInterface | SegmentObjectInterface,
-#         "Central image/segment to expand from."
-#     ],
-#     window_seconds: Annotated[float, "± Time window (seconds) for context.", default=30.0],
-#     include_segments: Annotated[bool, "Fetch segments too (for hybrid view).", default=True],
-#     llm_prompt_template: Annotated[str, "Custom prompt for LLM event generation.", default="Summarize events around {focal}: {artifacts_list}"],
-#     postgre_client: Annotated[PostgresClient, "Auto-provided."],
-#     minio_client: Annotated[StorageClient, "Auto-provided."],
-#     # Note: For real LLM, inject ExternalEncodeClient or call Grok API; here, placeholder concat
-# ) -> Dict[str, Any]:
-#     """
-#     Simple agent tool: Fetch window → LLM for events.
-    
-#     Chains fetch → list format → LLM summary (placeholder: simple join; replace with ExternalEncodeClient.encode_text for real LLM).
-#     """
-
-
-
-
-
-# async def rerank_window_artifacts_by(
-#     artifacts: Annotated[List[Union[ImageObjectInterface, SegmentObjectInterface]], "Artifacts from window fetch."],
-#     relevance_query: Annotated[str, "Query to rerank by (e.g., 'action scene')."],
-#     top_k: Annotated[int, "Keep top N after rerank.", default=5],
-#     external_client: Annotated[ExternalEncodeClient, "For query embedding."],
-# ) -> List[Union[ImageObjectInterface, SegmentObjectInterface]]:
-#     """
-#     Rerank artifacts by cosine sim to query embedding (textual/caption focus). Rerank by LLM
-#     """
-   
