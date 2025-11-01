@@ -22,17 +22,17 @@ class ImageCaptionSettings(BaseModel):
 
 
 class ImageCaptionLLMTask(BaseTask[
-    list[ImageArtifact], ImageCaptionArtifact,ImageCaptionSettings,
+    list[ImageArtifact], ImageCaptionArtifact,
 ]):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config: ImageCaptionSettings,
+        **kwargs,
     ):
         super().__init__(
             name=ImageCaptionLLMTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
 
     async def preprocess(self, input_data: list[ImageArtifact]) -> list[ImageCaptionArtifact]:

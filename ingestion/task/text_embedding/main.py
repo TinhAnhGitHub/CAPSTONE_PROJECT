@@ -21,17 +21,17 @@ class TextEmbeddingSettings(BaseModel):
 
 
 class TextImageCaptionEmbeddingTask(BaseTask[
-    list[ImageCaptionArtifact], TextCaptionEmbeddingArtifact, TextEmbeddingSettings
+    list[ImageCaptionArtifact], TextCaptionEmbeddingArtifact
 ]):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config: TextEmbeddingSettings,
+        **kwargs,
     ):
         super().__init__(
             name=TextImageCaptionEmbeddingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
 
     async def preprocess(
@@ -51,7 +51,8 @@ class TextImageCaptionEmbeddingTask(BaseTask[
                 caption_id=img_artifact.artifact_id,
                 artifact_type=TextCaptionEmbeddingArtifact.__name__,
                 related_video_id=img_artifact.related_video_id,
-                image_minio_url=img_artifact.artifact_id
+                image_minio_url=img_artifact.artifact_id,
+                image_id=img_artifact.artifact_id
             )
             result.append(text_embed_art)
         return result
@@ -69,6 +70,7 @@ class TextImageCaptionEmbeddingTask(BaseTask[
         batch: list[TextCaptionEmbeddingArtifact] = []
         batches: list[list[TextCaptionEmbeddingArtifact]]  = []
 
+        bs = cast(int, self.kwargs.get('batch_size'))
         for artifact in input_data:
             exists = await artifact.accept_check_exist(self.visitor) 
             if exists:
@@ -76,7 +78,7 @@ class TextImageCaptionEmbeddingTask(BaseTask[
                 continue
             
             batch.append(artifact)
-            if len(batch) == self.config.batch_size:
+            if len(batch) == bs:
                 batches.append(batch[:])
                 batch.clear()
                 
@@ -127,18 +129,18 @@ class TextImageCaptionEmbeddingTask(BaseTask[
 
 class TextCaptionSegmentEmbeddingTask(
     BaseTask[
-        list[SegmentCaptionArtifact], TextCapSegmentEmbedArtifact,TextEmbeddingSettings
+        list[SegmentCaptionArtifact], TextCapSegmentEmbedArtifact
     ]
 ):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config: TextEmbeddingSettings,
+        **kwargs,
     ):
         super().__init__(
             name=TextCaptionSegmentEmbeddingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
 
     async def preprocess(
@@ -174,7 +176,7 @@ class TextCaptionSegmentEmbeddingTask(
 
         batch: list[TextCapSegmentEmbedArtifact] = []
         batches: list[list[TextCapSegmentEmbedArtifact]]  = []
-
+        bs = cast(int, self.kwargs.get('batch_size'))
         for artifact in input_data:
             exists = await artifact.accept_check_exist(self.visitor) 
             if exists:
@@ -182,7 +184,7 @@ class TextCaptionSegmentEmbeddingTask(
                 continue
             
             batch.append(artifact)
-            if len(batch) == self.config.batch_size:
+            if len(batch) == bs:
                 batches.append(batch[:])
                 batch.clear()
                 

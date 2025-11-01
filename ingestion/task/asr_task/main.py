@@ -9,22 +9,17 @@ from prefect_agent.service_asr.core.schema import ASRInferenceRequest, ASRInfere
 from core.clients.base import BaseMilvusClient, BaseServiceClient
 
 
-class ASRSettings(BaseModel):
-    model_name: str
-    device: Literal['cuda', 'cpu']
 
-
-
-class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings]):
+class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact]):
     def __init__(
         self, 
         artifact_visitor: ArtifactPersistentVisitor,
-        config: ASRSettings,
+        **kwargs
     ):
         super().__init__(
             name=ASRProcessingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
         self.name = 'asr'
 

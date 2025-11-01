@@ -55,7 +55,8 @@ class MilvusSettings(BaseSettings):
     user: str | None = Field(default=None, description="Milvus username (optional)")
     password: str | None = Field(default=None, description="Milvus password (optional)")
     db_name: str = Field(default="default", description="Milvus database name")
-
+    time_out: float = 30.0
+    
     @computed_field
     @property
     def address(self) -> str:

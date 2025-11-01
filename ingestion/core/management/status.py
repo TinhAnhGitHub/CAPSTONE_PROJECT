@@ -10,12 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from task.common.util import parse_s3_url
 from core.pipeline.tracker import ArtifactTracker, ArtifactSchema
 from core.storage import StorageClient
-
 from core.artifact.schema import VideoArtifact, AutoshotArtifact, ASRArtifact, ImageArtifact, SegmentCaptionArtifact, ImageCaptionArtifact, ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact, TextCapSegmentEmbedArtifact , BaseArtifact
 from core.clients.milvus_client import ImageMilvusClient,  SegmentCaptionEmbeddingMilvusClient
-
-
-       
 
 
 

@@ -1,5 +1,5 @@
 import json
-from typing import AsyncIterator
+from typing import AsyncIterator, cast
 from core.pipeline.base_task import BaseTask
 from core.clients.base import BaseServiceClient, BaseMilvusClient
 from core.artifact.persist import ArtifactPersistentVisitor 
@@ -23,21 +23,18 @@ def frame_to_timecode(frame_index: int, fps: float) -> str:
 
     return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}"
 
-class ImageProcessingSettings(BaseModel):
-    num_img_per_segment: int
 
-class ImageProcessingTask(BaseTask[list[AutoshotArtifact], ImageArtifact, ImageProcessingSettings]):
+class ImageProcessingTask(BaseTask[list[AutoshotArtifact], ImageArtifact]):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config: ImageProcessingSettings,
+        **kwargs,
     ):
         super().__init__(
             name=ImageProcessingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
-
 
     async def preprocess(self, input_data: list[AutoshotArtifact]) -> dict[str, list[ImageArtifact]]:
 
@@ -52,7 +49,9 @@ class ImageProcessingTask(BaseTask[list[AutoshotArtifact], ImageArtifact, ImageP
             run_logger.debug(f'{segments=}')
             for i, (start,end) in enumerate(segments):
                 
-                indices = get_segment_frame_indices(start=start,end=end,n=self.config.num_img_per_segment)
+                num_img_per_segment = cast(int, self.kwargs.get('num_img_per_segment'))
+                indices = get_segment_frame_indices(start=start,end=end,n=num_img_per_segment)
+
                 list_images = []
                 for idx in indices:
 

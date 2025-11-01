@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncIterator, cast
 from tqdm.asyncio import tqdm
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -32,18 +32,18 @@ class ImageEmbeddingMilvusTask(
         tuple[
             list[ImageEmbeddingArtifact],
             list[TextCaptionEmbeddingArtifact]
-        ], tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact], MilvusIndexSettings
+        ], tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]
     ]
 ):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config_client: MilvusIndexSettings,
+        **kwargs
     ):
         super().__init__(
             name=ImageEmbeddingMilvusTask.__name__,
             visitor=artifact_visitor,
-            config=config_client
+            kwargs=kwargs
         )
         
     
@@ -85,6 +85,7 @@ class ImageEmbeddingMilvusTask(
         batch_artifacts: list[tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]] = []
 
         
+        ingest_batch_size = cast(int, self.kwargs.get('ingest_batch_size'))
         
 
         for image_artifact, text_artifact in tqdm(input_data, desc='Preparing batch...'):
@@ -132,7 +133,7 @@ class ImageEmbeddingMilvusTask(
             batch.append(record)
             batch_artifacts.append((image_artifact, text_artifact))
 
-            if len(batch) >= self.config.ingest_batch_size:
+            if len(batch) >= ingest_batch_size:
                 
                 ids = await client.insert_vectors(batch)
                 logger.info(
@@ -161,18 +162,18 @@ class ImageEmbeddingMilvusTask(
 
 class TextSegmentCaptionMilvusTask(
     BaseTask[
-        list[TextCapSegmentEmbedArtifact], TextCapSegmentEmbedArtifact, MilvusIndexSettings
+        list[TextCapSegmentEmbedArtifact], TextCapSegmentEmbedArtifact
     ]
 ):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config_client: MilvusIndexSettings,
+        **kwargs,
     ):
         super().__init__(
             name=TextSegmentCaptionMilvusTask.__name__,
             visitor=artifact_visitor,
-            config=config_client
+            kwargs=kwargs
         )
 
     async def preprocess(self, input_data: list[TextCapSegmentEmbedArtifact]) -> list[TextCapSegmentEmbedArtifact]:
@@ -190,6 +191,7 @@ class TextSegmentCaptionMilvusTask(
         
         batch: list[dict[str, Any]] = []
         batch_artifacts: list[TextCapSegmentEmbedArtifact] = []
+        ingest_batch_size = cast(int, self.kwargs.get('ingest_batch_size'))
 
         for artifact in input_data:
             exists = await client.exists(  # type: ignore[attr-defined]
@@ -235,7 +237,7 @@ class TextSegmentCaptionMilvusTask(
             batch.append(record)
             batch_artifacts.append(artifact)
 
-            if len(batch) >= self.config.ingest_batch_size:
+            if len(batch) >= ingest_batch_size:
             
                 ids = await client.insert_vectors(batch)
                 logger.info(

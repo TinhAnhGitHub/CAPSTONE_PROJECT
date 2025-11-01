@@ -17,17 +17,17 @@ class AutoshotSettings(BaseModel):
     device: Literal['cuda', 'cpu']
     
 
-class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact, AutoshotSettings]):
+class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
     
     def __init__(
         self, 
         artifact_visitor: ArtifactPersistentVisitor,
-        config: AutoshotSettings,
+        **kwargs
     ):
         super().__init__(
             name=AutoshotProcessingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
         self.name = 'autoshot'
     

@@ -4,148 +4,68 @@ from datetime import timedelta
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-class VideoIngestionTaskConfig(BaseSettings):
-    name: str
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
-    cache_enabled: bool = False
-    cache_expiration: timedelta | None = None
-    persist_result: bool = False
-    timeout_seconds: int | None = None
-    user_bucket: str = "user-videos"
-    limit_tag: str = Field(..., description="Concurrency tag name")
-    occupy_slots: int = Field(default=1, ge=1, description="Number of slots to occupy")
-    retries: int = Field(default=2, ge=0)
-    retry_delay_seconds: int | list[int] = Field(default=10)
 
+class ConsulClientConfig(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="INGESTION",
+        env_prefix="CONSUL_",
         case_sensitive=False,
         validate_assignment=True,
         extra="ignore",
     )
-
+    timeout_seconds: float
+    max_retries: int
+    retry_min_wait: float
+    retry_max_wait: float
+    consul_host: str
+    consul_port: int
 
 class AutoshotTaskConfig(BaseSettings):
-    model_name: str = "autoshot"
-    device: Literal['cuda', 'cpu'] = 'cuda'
-    user_bucket: str
-    name: str
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
-    cache_enabled: bool = False
-    cache_expiration: timedelta | None = None
-    persist_result: bool = False
-    timeout_seconds: int | None = None
-    limit_tag: str = Field(..., description="Concurrency tag name")
-    occupy_slots: int = Field(default=1, ge=1, description="Number of slots to occupy")
-    retries: int = Field(default=2, ge=0)
-    retry_delay_seconds: int | list[int] = Field(default=10)
-
     model_config = SettingsConfigDict(
-        env_prefix="AUTOSHOT",
+        env_prefix="AUTOSHOT_",
         case_sensitive=False,
         validate_assignment=True,
         extra="ignore",
     )
+    model_name: str
+    device: str
 
 class ASRTaskConfig(BaseSettings):
-    """Configuration for ASR processing task."""
-    model_name: str = "chunkformer"
-    device: Literal["cuda", "cpu"] = "cuda"
-    user_bucket: str 
-    
-
-    name: str
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
-    cache_enabled: bool = False
-    cache_expiration: timedelta | None = None
-    persist_result: bool = False
-    timeout_seconds: int | None = None
-    limit_tag: str = Field(..., description="Concurrency tag name")
-    occupy_slots: int = Field(default=1, ge=1, description="Number of slots to occupy")
-    retries: int = Field(default=2, ge=0)
-    retry_delay_seconds: int | list[int] = Field(default=10)
-
     model_config = SettingsConfigDict(
-        env_prefix="ASR",
+        env_prefix="ASR_",
         case_sensitive=False,
         validate_assignment=True,
         extra="ignore",
     )
-
+    model_name: str
+    device: str
 
 class ImageProcessingTaskConfig(BaseSettings):
     """Configuration for image extraction task."""
     num_img_per_segment: int = Field(default=3, ge=1)
-    user_bucket: str 
-
-    name: str
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
-    cache_enabled: bool = False
-    cache_expiration: timedelta | None = None
-    persist_result: bool = False
-    timeout_seconds: int | None = None
-    limit_tag: str = Field(..., description="Concurrency tag name")
-    occupy_slots: int = Field(default=1, ge=1, description="Number of slots to occupy")
-    retries: int = Field(default=2, ge=0)
-    retry_delay_seconds: int | list[int] = Field(default=10)
-
     model_config = SettingsConfigDict(
-        env_prefix="IMAGE",
+        env_prefix="IMAGE_",
         case_sensitive=False,
         validate_assignment=True,
         extra="ignore",
     )
 
 class LLMTaskConfig(BaseSettings):
-    model_name: str = "gemini_api"
-    device: Literal["cuda", "cpu"] = "cuda"
     image_per_segments: int = Field(default=5, ge=1)
-
-    name: str
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
-    cache_enabled: bool = False
-    cache_expiration: timedelta | None = None
-    persist_result: bool = False
-    timeout_seconds: int | None = None
-    limit_tag: str = Field(..., description="Concurrency tag name")
-    occupy_slots: int = Field(default=1, ge=1, description="Number of slots to occupy")
-    retries: int = Field(default=2, ge=0)
-    retry_delay_seconds: int | list[int] = Field(default=10)
-
+    model_name:str
+    device: str
     model_config = SettingsConfigDict(
-        env_prefix="LLM",
+        env_prefix="LLM_",
         case_sensitive=False,
         validate_assignment=True,
         extra="ignore",
     )
 
-
-
-
-class EmbeddingTaskConfig(BaseSettings):
-    model_name: str = "open_clip"
-    device: Literal["cuda", "cpu"] = "cuda"
+class ImageEmbeddingTaskConfig(BaseSettings):
     batch_size: int = Field(default=32, ge=1)
-
-    name: str
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
-    cache_enabled: bool = False
-    cache_expiration: timedelta | None = None
-    persist_result: bool = False
-    timeout_seconds: int | None = None
-    limit_tag: str = Field(..., description="Concurrency tag name")
-    occupy_slots: int = Field(default=1, ge=1, description="Number of slots to occupy")
-    retries: int = Field(default=2, ge=0)
-    retry_delay_seconds: int | list[int] = Field(default=10)
-
+    model_name:str
+    device: str
     model_config = SettingsConfigDict(
-        env_prefix="EMBEDDING",
+        env_prefix="IMAGE_EMBEDDING_",
         case_sensitive=False,
         validate_assignment=True,
         extra="ignore",
@@ -153,53 +73,28 @@ class EmbeddingTaskConfig(BaseSettings):
 
 
 
-class MilvusTaskConfig(BaseSettings):
-    """Configuration for Milvus persistence tasks."""
-    host: str 
-    port: str
-    user: str 
-    password: str 
-    db_name: str 
-    time_out: float = 30.0
-    ingest_batch_size: int = Field(default=100, ge=1)
-
-    name: str
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
-    cache_enabled: bool = False
-    cache_expiration: timedelta | None = None
-    persist_result: bool = False
-    timeout_seconds: int | None = None
-    limit_tag: str = Field(..., description="Concurrency tag name")
-    occupy_slots: int = Field(default=1, ge=1, description="Number of slots to occupy")
-    retries: int = Field(default=2, ge=0)
-    retry_delay_seconds: int | list[int] = Field(default=10)
-
+class TextEmbeddingTaskConfig(BaseSettings):
+    batch_size: int = Field(default=32, ge=1)
+    model_name:str
+    device: str
     model_config = SettingsConfigDict(
-        env_prefix="INGESTION",
+        env_prefix="TEXT_EMBEDDING_",
         case_sensitive=False,
         validate_assignment=True,
         extra="ignore",
     )
 
-PrefectConfig = VideoIngestionTaskConfig | AutoshotTaskConfig |ASRTaskConfig | ImageProcessingTaskConfig |LLMTaskConfig |EmbeddingTaskConfig |MilvusTaskConfig
 
-def get_task_decorator_kwargs(config: PrefectConfig) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {
-        "name": config.name,
-        "description": config.description,
-        "tags": config.tags,
-        "retries": config.retries,
-        "retry_delay_seconds": config.retry_delay_seconds,
-        "persist_result": config.persist_result,
-    }
-    
-    if config.timeout_seconds:
-        kwargs["timeout_seconds"] = config.timeout_seconds
-    
-    if config.cache_enabled and config.cache_expiration:
-        from prefect.cache_policies import INPUTS, TASK_SOURCE
-        kwargs["cache_policy"] = INPUTS + TASK_SOURCE
-        kwargs["cache_expiration"] = config.cache_expiration
-    
-    return kwargs
+
+
+
+
+
+
+tautoshot_conf = AutoshotTaskConfig()  # type: ignore
+tasr_conf = ASRTaskConfig()            # type: ignore
+timage_processing_conf = ImageProcessingTaskConfig()  # type: ignore
+tllm_conf = LLMTaskConfig()            # type: ignore
+t_i_embed_conf = ImageEmbeddingTaskConfig()  # type: ignore
+t_t_embed_conf = TextEmbeddingTaskConfig()   # type: ignore
+consule_conf = ConsulClientConfig() #type:ignore

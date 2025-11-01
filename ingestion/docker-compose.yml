@@ -103,16 +103,33 @@ services:
       PREFECT_REDIS_MESSAGING_DB: 0
     command: prefect server services start
 
-  
-  prefect-worker:
+  prefect-setup:
     image: prefecthq/prefect:3-latest
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
     depends_on:
       prefect-server:
         condition: service_started
+    command: >
+      sh -c "
+        prefect work-pool create --type process gpu-process-pool || true &&
+        prefect concurrency-limit create gpu-heavy 1 || prefect concurrency-limit update gpu-heavy 1 &&
+        prefect concurrency-limit create llm-service 1 || prefect concurrency-limit update llm-service 1 &&
+        prefect concurrency-limit create embedding-service 2 || prefect concurrency-limit update embedding-service 2
+      "
+    restart: "no"
+  
+  prefect-worker:
+    image: prefecthq/prefect:3-latest
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
-    command: prefect worker start --pool local-pool
-  
+    command: prefect worker start --pool gpu-process-pool --install-policy always
+    volumes:
+      - ./${LOCAL_DATA}/prefect_worker:/opt/prefect/app              
+    working_dir: /opt/prefect/app
+    depends_on:
+      prefect-setup:
+        condition: service_completed_successfully
 
   consul:
       image: hashicorp/consul:latest
@@ -310,6 +327,8 @@ services:
       minio:
         condition: service_started
       consul:
+        condition: service_started
+      prefect-worker:                      
         condition: service_started
     environment:
       MINIO_HOST: minio

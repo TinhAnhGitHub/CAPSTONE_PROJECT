@@ -44,21 +44,18 @@ def encode_image_base64(
 
 
 class ImageEmbeddingTask(BaseTask[
-    list[ImageArtifact], ImageEmbeddingArtifact, ImageEmbeddingSettings
+    list[ImageArtifact], ImageEmbeddingArtifact
 ]):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config: ImageEmbeddingSettings,
+        **kwargs,
     ):
         super().__init__(
             name=ImageEmbeddingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
-    
-    
-    
 
     async def preprocess(self, input_data: list[ImageArtifact]) -> list[ImageEmbeddingArtifact]:        
         result = []
@@ -87,7 +84,8 @@ class ImageEmbeddingTask(BaseTask[
         assert isinstance(client, BaseServiceClient)
         batch: list[ImageEmbeddingArtifact] = []
         batches: list[list[ImageEmbeddingArtifact]] = []
-
+        
+        bs = cast(int,self.kwargs.get('batch_size'))
         while input_data:
             artifact = input_data.pop(0)
 
@@ -97,8 +95,8 @@ class ImageEmbeddingTask(BaseTask[
                 continue
 
             batch.append(artifact)
-
-            if len(batch) == self.config.batch_size:
+            
+            if len(batch) == bs:
                 batches.append(batch[:])
                 batch.clear()
         

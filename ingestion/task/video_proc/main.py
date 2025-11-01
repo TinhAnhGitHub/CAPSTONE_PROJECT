@@ -27,19 +27,17 @@ class VideoInput(BaseModel):
 def extract_extension(s3_link:str) ->str:
     return s3_link.split('.')[-1]
 
-class VideoIngestionTask(BaseTask[VideoInput, VideoArtifact, VideoIngestionSettings]):
+class VideoIngestionTask(BaseTask[VideoInput, VideoArtifact]):
     def __init__(
         self, 
         artifact_visitor: ArtifactPersistentVisitor,
-        config: VideoIngestionSettings
+        **kwargs,
     ):
         super().__init__(
             name=VideoIngestionTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
-        
-
     async def preprocess(
         self, input_data: VideoInput
     ) -> VideoInput:
@@ -51,8 +49,6 @@ class VideoIngestionTask(BaseTask[VideoInput, VideoArtifact, VideoIngestionSetti
         client: BaseServiceClient | None | BaseMilvusClient
     ) -> AsyncIterator[tuple[VideoArtifact, dict, bool]]:
         user_bucket_name = input_data.user_id
-
-
 
         for video_info in input_data.files:
 
@@ -70,7 +66,6 @@ class VideoIngestionTask(BaseTask[VideoInput, VideoArtifact, VideoIngestionSetti
                 'extension': video_extension
             }
             os.remove(video_tmp_path)
-
 
             try:
                 video_artifact = VideoArtifact(
@@ -92,11 +87,9 @@ class VideoIngestionTask(BaseTask[VideoInput, VideoArtifact, VideoIngestionSetti
                 logger.exception(f" Failed to process video {video_s3_path}: {e}")
                 continue
 
-    async def postprocess(self, output_data: tuple[VideoArtifact, dict, None]) -> VideoArtifact:
+    async def postprocess(self, output_data: tuple[VideoArtifact, dict, bool]) -> VideoArtifact:
         artifact, metadata, data = output_data
         if data:
             return artifact
         await artifact.accept_upload(self.visitor,metadata)
         return artifact
-
-

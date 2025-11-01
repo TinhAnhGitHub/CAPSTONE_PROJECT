@@ -41,17 +41,17 @@ def frame_to_timecode(frame_index: int, fps: float) -> str:
 
 
 class SegmentCaptionLLMTask(BaseTask[
-    ShotASRInput, SegmentCaptionArtifact,LLMCaptionSettings,
+    ShotASRInput, SegmentCaptionArtifact,
 ]):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config: LLMCaptionSettings,
+        **kwargs,
     ):
         super().__init__(
             name=SegmentCaptionLLMTask.__name__,
             visitor=artifact_visitor,
-            config=config
+            kwargs=kwargs
         )
     
     async def preprocess(self, input_data: ShotASRInput) -> list[SegmentCaptionArtifact]:
@@ -122,7 +122,8 @@ class SegmentCaptionLLMTask(BaseTask[
             )
             local_video_path = await fetch_object_from_s3(artifact.related_video_minio_url, self.visitor.minio_client, suffix=artifact.related_video_extension)
 
-            image_encode = extract_images(local_video_path, artifact.start_frame, artifact.end_frame, self.config.image_per_segments)
+            image_per_segments = cast(int, self.kwargs.get('image_per_segments'))
+            image_encode = extract_images(local_video_path, artifact.start_frame, artifact.end_frame, image_per_segments)
 
             request = LLMRequest(
                 prompt=prompt,

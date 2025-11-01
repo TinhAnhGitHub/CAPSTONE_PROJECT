@@ -24,6 +24,8 @@ from pymilvus import (
     CollectionSchema,
 )
 
+from core.config.milvus_index_config import MilvusIndexBaseConfig
+
 
 class ClientError(Exception):
     """Base exception for client errors"""
@@ -43,34 +45,6 @@ class ClientConfig(BaseModel):
 
 class MilvusClientError(Exception):
     pass
-
-class MilvusIndexConfig(BaseModel):
-    type_config: Literal['sparse', 'dense']
-    dimension: int
-    metric_type: Literal['L2', 'COSINE', 'IP', 'BM25'] = 'COSINE'
-    index_type: Literal['FLAT', 'IVF_FLAT', 'HNSW', 'AUTOINDEX', 'SPARSE_INVERTED_INDEX'] = 'AUTOINDEX'
-    description: str = ""
-
-    nlist: int = 128  
-    m: int = 16 
-    ef_construction: int = 200
-
-    @property
-    def index_params(self)->dict:
-        index_params: dict[str, Any] = {}   
-        if self.index_type  == 'IVF_FLAT':
-            index_params["params"] = {"nlist": self.nlist}
-        elif self.index_type == 'HNSW':
-            index_params['params'] = {
-                "M": self.m,
-                "efConstruction": self.ef_construction
-            }
-        elif self.index_type == 'SPARSE_INVERTED_INDEX':
-            index_params['params'] = {
-                "inverted_index_algo": "DAAT_MAXSCORE"
-            }
-        return index_params
-    
 
 
 
@@ -349,9 +323,9 @@ class BaseMilvusClient(ABC):
             password: str = "", 
             db_name: str = 'default', 
             timeout: float=30.0,
-            visual_index_config: MilvusIndexConfig | None = None,
-            caption_dense_index_config: MilvusIndexConfig | None = None,
-            caption_sparse_index_config: MilvusIndexConfig | None = None
+            visual_index_config: MilvusIndexBaseConfig | None = None,
+            caption_dense_index_config: MilvusIndexBaseConfig | None = None,
+            caption_sparse_index_config: MilvusIndexBaseConfig | None = None
         ):
 
         assert visual_index_config or caption_dense_index_config, "At least 1 dense config must be pass in "

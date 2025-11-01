@@ -111,12 +111,12 @@ class OpenCLIPImageEmbedding(BaseModelHandler[ImageEmbeddingRequest, ImageEmbedd
             raise RuntimeError("Model not loaded")
 
         with torch.no_grad():
-            if image_batch:
+            if image_batch is not None:
                 image_features = self.model.encode_image(image_batch) #type:ignore
                 image_features = torch.nn.functional.normalize(image_features, dim=-1)
                 image_embeddings = image_features.cpu().numpy().astype(np.float32)
 
-            if text_batch:
+            if text_batch is not None:
                 text_features = self.model.encode_text(text_batch) #type:ignore
                 text_features = torch.nn.functional.normalize(text_features, dim=-1)
                 text_embeddings = text_features.cpu().numpy().astype(np.float32)
@@ -129,8 +129,8 @@ class OpenCLIPImageEmbedding(BaseModelHandler[ImageEmbeddingRequest, ImageEmbedd
         original_input_data: ImageEmbeddingRequest,
     ) -> ImageEmbeddingResponse:
         image_embeddings, text_embeddings = output_data
-        image_embeddings = image_embeddings.tolist() if image_embeddings else image_embeddings
-        text_embeddings = text_embeddings.tolist() if text_embeddings else text_embeddings
+        image_embeddings = image_embeddings.tolist() if image_embeddings is not None else image_embeddings
+        text_embeddings = text_embeddings.tolist() if text_embeddings is not None else text_embeddings
 
         return ImageEmbeddingResponse(
             image_embeddings=image_embeddings, #type:ignore

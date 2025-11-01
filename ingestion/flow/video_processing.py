@@ -1,12 +1,14 @@
 from __future__ import annotations
 from typing import Any, cast
-from pathlib import Path
-from fastapi import UploadFile
-
+import asyncio
 from datetime import datetime
+from collections import defaultdict
 from core.management.progress import ProcessingStage
 from prefect import flow, task
 from prefect.futures import PrefectFuture
+from prefect.artifacts import acreate_markdown_artifact
+from prefect.context import get_run_context
+from prefect.logging import get_run_logger
 from prefect.cache_policies import INPUTS, TASK_SOURCE, NO_CACHE
 from datetime import timedelta
 
@@ -33,25 +35,42 @@ from core.clients.asr_client import ASRClient
 from core.clients.llm_client import LLMClient
 from core.clients.image_embed_client import ImageEmbeddingClient
 from core.clients.text_embed_client import TextEmbeddingClient
-
-from core.clients.milvus_client import ImageMilvusClient, SegmentCaptionEmbeddingMilvusClient
 from core.lifespan import AppState
-from core.clients.progress_client import ProcessingStage
 
-
-from core.clients.milvus_client import ImageMilvusClient, SegmentCaptionEmbeddingMilvusClient
-
+#type stating
+from task.milvus_persist_task.main import (
+    ImageEmbeddingMilvusTask,
+)
+from core.management.progress import HTTPProgressTracker
+from task.video_proc.main import VideoIngestionTask
+from task.asr_task.main import ASRProcessingTask
+from task.autoshot_task.main import AutoshotProcessingTask
+from task.image_processing.main import ImageProcessingTask
+from task.llm_segment_caption.main import SegmentCaptionLLMTask
+from task.llm_image_caption.main import ImageCaptionLLMTask
+from task.text_embedding.main import (
+    TextImageCaptionEmbeddingTask,
+    TextCaptionSegmentEmbeddingTask,
+)
+from task.image_embedding.main import ImageEmbeddingTask
 from task.milvus_persist_task.main import (
     ImageEmbeddingMilvusTask,
     TextSegmentCaptionMilvusTask,
-    MilvusIndexSettings
 )
+
+
+
+GPU_TASK_TAG = 'gpu-heavy'
+LLM_TASK_TAG = 'llm-service'
+EMBED_TASK_TAG = 'embedding-service'
+PERSIST_TASK_TAG = "milvus-persist"
+
+
 
 @task(
     name='Video registry',
     description="This task will take uploaded videos, and persist into the tracker + minio S3",
-    cache_policy=NO_CACHE,
-    
+    tags=["video-ingest"],
 )
 async def entry_video_ingestion(
     video_uploads: VideoInput,
@@ -61,14 +80,16 @@ async def entry_video_ingestion(
 
     preprocessed_input = await task_instance.preprocess(input_data=video_uploads)
     video_artifacts = []
+
+    for upload in video_uploads:
+        await progress_client.start_video(
+            video_id=upload[0]
+        )
     async for result in task_instance.execute(preprocessed_input, None):
         processed = await task_instance.postprocess(result)
         video_artifacts.append(processed)        
-    
-    for video_artifact in video_artifacts:
-        response = await progress_client.start_video(video_id=video_artifact.artifact_id)
+        response = await progress_client.start_video(video_id=processed.artifact_id)
         print(response)
-        
     return video_artifacts
 
 
@@ -78,7 +99,7 @@ async def entry_video_ingestion(
     cache_policy=INPUTS + TASK_SOURCE,
     cache_expiration=timedelta(days=30),
     persist_result=True,
-    
+    tags=[GPU_TASK_TAG],
 )
 async def autoshot_task(
     videos: list[VideoArtifact],
@@ -87,40 +108,46 @@ async def autoshot_task(
     client_config =  AppState().base_client_config
     progress_client = AppState().progress_client
 
+    
+
     async with AutoshotClient(
         config=client_config
     ) as client:
         await client.load_model(
-            model_name=task_instance.config.model_name,
-            device=task_instance.config.device,
+            model_name=task_instance.kwargs.get('model_name'), #type:ignore
+            device=task_instance.kwargs.get('device'), #type:ignore
         )
         preprocessed = await task_instance.preprocess(videos)
-        run_logger.info(f"Len of preprocessed: {len(preprocessed)}")
-        run_logger.info(f"Preprocessed data: {preprocessed[0]}")
 
+        video_id2total_items = defaultdict(int)
+        for item in preprocessed:
+            video_id2total_items[item.related_video_id] += 1
+            
+        video_id2current_items = defaultdict(int)
         results = []
         async for result in task_instance.execute(preprocessed, client):
             processed = await task_instance.postprocess(result)
             results.append(processed)
+            video_id2current_items[processed.related_video_id] += 1
+            video_id = processed.related_video_id
+
+            await progress_client.update_stage_progress(
+                video_id=video_id,
+                stage=ProcessingStage.AUTOSHOT_SEGMENTATION,
+                total_items=video_id2total_items[video_id],
+                completed_items=video_id2current_items[video_id],
+                details={}
+            )
         
         await client.unload_model()
     
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.AUTOSHOT_SEGMENTATION
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
-    return results
 
 
 @task(
     name="ASR Processing",
     description="Given a list of videos, extracting the corresponding ASR",
     persist_result=True,
+    tags=[GPU_TASK_TAG],
     
 )
 async def asr_task(
@@ -132,59 +159,68 @@ async def asr_task(
     
     async with ASRClient(config=client_config) as client:
         await client.load_model(
-            model_name=task_instance.config.model_name,
-            device=task_instance.config.device,
+            model_name=task_instance.kwargs.get('model_name'), #type:ignore
+            device=task_instance.kwargs.get('device'), #type:ignore
         )
         preprocessed = await task_instance.preprocess(videos)
+        video_id2total_items = defaultdict(int)
+        for item in preprocessed:
+            video_id2total_items[item.related_video_id] += 1
+            
+        video_id2current_items = defaultdict(int)
         results = []
         async for result in task_instance.execute(preprocessed, client):
-            postprocessed_result = await task_instance.postprocess(result)
-            results.append(postprocessed_result)
-        
+            processed = await task_instance.postprocess(result)
+            results.append(processed)
+            video_id2current_items[processed.related_video_id] += 1
+            video_id = processed.related_video_id
 
-
+            await progress_client.update_stage_progress(
+                video_id=video_id,
+                stage=ProcessingStage.ASR_TRANSCRIPTION,
+                total_items=video_id2total_items[video_id],
+                completed_items=video_id2current_items[video_id],
+                details={}
+            )
         await client.unload_model()
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.ASR_TRANSCRIPTION
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
-    
     return results
+
 
 
 @task(
     name='Image Extraction',
     description="Extract frames from video segments",
-    
+    tags=["image-processing"],
 )
 async def image_processing_task(
     autoshots: list[AutoshotArtifact],
 )-> list[ImageArtifact]:
+    
     task_instance = AppState().image_processing_task
     preprocessed = await task_instance.preprocess(autoshots)
     progress_client = AppState().progress_client
 
+    video_id2total_items = defaultdict(int)
+    unique_video_id = list({x.related_video_id for v in preprocessed.values() for x in v})
+    # preprocessed return each video -> list of images. So the total items would be 1 -> no smaller percentage progress
+    for video_id in unique_video_id:
+        video_id2total_items[video_id] += 1
 
     results = []
+    video_id2current_items = defaultdict(int)
     async for result in task_instance.execute(preprocessed, None):
         processed = await task_instance.postprocess(result)
         results.append(processed)
-    
+        video_id2current_items[processed.related_video_id] += 1
+        video_id = processed.related_video_id
 
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.IMAGE_EXTRACTION
+        await progress_client.update_stage_progress(
+            video_id=video_id,
+            stage=ProcessingStage.IMAGE_EXTRACTION,
+            total_items=video_id2total_items[video_id],
+            completed_items=video_id2current_items[video_id],
+            details={}
         )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
     
     return results
 
@@ -192,7 +228,7 @@ async def image_processing_task(
 @task(
     name='Segmentation Caption Generation',
     description="Generate captions for video segments using LLM",
-    
+    tags=[LLM_TASK_TAG],
 )
 async def segment_caption_task(
     autoshots: list[AutoshotArtifact],
@@ -209,33 +245,39 @@ async def segment_caption_task(
     )
     async with LLMClient(config=client_config)  as client:
         await client.load_model(
-            model_name=task_instance.config.model_name,
-            device=task_instance.config.device,
+            model_name=task_instance.kwargs.get('model_name'), #type:ignore
+            device=task_instance.kwargs.get('device'), #type:ignore
         )
-        preprocessed_data = await task_instance.preprocess(input_data)
+        preprocessed = await task_instance.preprocess(input_data)
+        video_id2total_items = defaultdict(int)
+        for item in preprocessed:
+            video_id2total_items[item.related_video_id] += 1
+
+        video_id2current_items = defaultdict(int)
         results = []
-        async for result in task_instance.execute(preprocessed_data, client):
+        async for result in task_instance.execute(preprocessed, client):
             processed = await task_instance.postprocess(result)
             results.append(processed)
+            video_id2current_items[processed.related_video_id] += 1
+            video_id = processed.related_video_id
+
+            await progress_client.update_stage_progress(
+                video_id=video_id,
+                stage=ProcessingStage.SEGMENT_CAPTIONING,
+                total_items=video_id2total_items[video_id],
+                completed_items=video_id2current_items[video_id],
+                details={}
+            )
         
         await client.unload_model()
 
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.SEGMENT_CAPTIONING
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
     return results
 
 
 @task(
     name='Image Caption Generation',
     description='Generate captions for individual images using LLM',
-    
+    tags=[LLM_TASK_TAG],
 )
 async def image_caption_task(
     images: list[ImageArtifact] | PrefectFuture,
@@ -245,32 +287,36 @@ async def image_caption_task(
     progress_client = AppState().progress_client
     async with LLMClient(config=client_config) as client:
         await client.load_model(
-            model_name=task_instance.config.model_name,
-            device=task_instance.config.device,
+           model_name=task_instance.kwargs.get('model_name'), #type:ignore
+            device=task_instance.kwargs.get('device'), #type:ignore
         )
         preprocessed = await task_instance.preprocess(cast(list[ImageArtifact],images))
+        video_id2total_items = defaultdict(int)
+        for item in preprocessed:
+            video_id2total_items[item.related_video_id] += 1
+        video_id2current_items = defaultdict(int)
         results = []
         async for result in task_instance.execute(preprocessed, client):
-            postprocessed = await task_instance.postprocess(result)
-            results.append(postprocessed)
+            processed = await task_instance.postprocess(result)
+            results.append(processed)
+            video_id2current_items[processed.related_video_id] += 1
+            video_id = processed.related_video_id
+
+            await progress_client.update_stage_progress(
+                video_id=video_id,
+                stage=ProcessingStage.IMAGE_CAPTIONING,
+                total_items=video_id2total_items[video_id],
+                completed_items=video_id2current_items[video_id],
+                details={}
+            )
         await client.unload_model()
-    
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.IMAGE_CAPTIONING
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
     return results  
 
 
 @task(
     name='Image Embedding generation',
     description='Generate embeddings for images',
-    
+    tags=[EMBED_TASK_TAG],
 )
 async def image_embedding_task(
     images: list[ImageArtifact] | PrefectFuture,
@@ -281,32 +327,37 @@ async def image_embedding_task(
 
     async with ImageEmbeddingClient(config=client_config) as client:
         await client.load_model(
-            model_name=task_instance.config.model_name,
-            device=task_instance.config.device,
+            model_name=task_instance.kwargs.get('model_name'), #type:ignore
+            device=task_instance.kwargs.get('device'), #type:ignore
         )
         preprocessed = await task_instance.preprocess(cast(list[ImageArtifact],images))
+        video_id2total_items = defaultdict(int)
+        for item in preprocessed:
+            video_id2total_items[item.related_video_id] += 1
+        video_id2current_items = defaultdict(int)
         results = []
         async for result in task_instance.execute(preprocessed, client):
-            postprocessed = await task_instance.postprocess(result)
-            results.append(postprocessed)
+            processed = await task_instance.postprocess(result)
+            results.append(processed)
+            video_id2current_items[processed.related_video_id] += 1
+            video_id = processed.related_video_id
+
+            await progress_client.update_stage_progress(
+                video_id=video_id,
+                stage=ProcessingStage.IMAGE_EMBEDDING,
+                total_items=video_id2total_items[video_id],
+                completed_items=video_id2current_items[video_id],
+                details={}
+            )
         await client.unload_model()
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.IMAGE_EMBEDDING
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
-    return results #type:ignore
+    return results 
 
 
 
 @task(
     name="segment_caption_embedding",
     description="Generate embeddings for image captions",
-    
+    tags=[EMBED_TASK_TAG],
 )
 async def  segment_text_caption_embedding_task(
     segment_captions: list[SegmentCaptionArtifact] | PrefectFuture,
@@ -317,35 +368,38 @@ async def  segment_text_caption_embedding_task(
 
     async with TextEmbeddingClient(config=client_config) as client:
         await client.load_model(
-            model_name=task_instance.config.model_name,
-            device=task_instance.config.device,
+           model_name=task_instance.kwargs.get('model_name'), #type:ignore
+            device=task_instance.kwargs.get('device'), #type:ignore
         )
         preprocessed = await task_instance.preprocess(segment_captions) #type:ignore
+        video_id2total_items = defaultdict(int)
+        for item in preprocessed:
+            video_id2total_items[item.related_video_id] += 1
+
+        video_id2current_items = defaultdict(int)
         results = []
         async for result in task_instance.execute(preprocessed, client):
             processed = await task_instance.postprocess(result)
             results.append(processed)
+            video_id2current_items[processed.related_video_id] += 1
+            video_id = processed.related_video_id
+
+            await progress_client.update_stage_progress(
+                video_id=video_id,
+                stage=ProcessingStage.TEXT_CAP_SEGMENT_EMBEDDING,
+                total_items=video_id2total_items[video_id],
+                completed_items=video_id2current_items[video_id],
+                details={}
+            )
         await client.unload_model()
-    
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.TEXT_CAP_SEGMENT_EMBEDDING
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
-    
-    return results  #type:ignore
+    return results  
 
 
 
 @task(
     name='text caption embedding',
     description="Generate embedding from text",
-    retries=0,
-    
+    tags=[EMBED_TASK_TAG],
 )
 async def text_image_caption_embedding_task(
     captions: list[ImageCaptionArtifact] |PrefectFuture,
@@ -356,24 +410,30 @@ async def text_image_caption_embedding_task(
 
     async with TextEmbeddingClient(config=client_config) as client:
         await client.load_model(
-            model_name=task_instance.config.model_name,
-            device=task_instance.config.device,
+            model_name=task_instance.kwargs.get('model_name'), #type:ignore
+            device=task_instance.kwargs.get('device'), #type:ignore
         )
         preprocessed = await task_instance.preprocess(cast(list[ImageCaptionArtifact], captions))
+        video_id2total_items = defaultdict(int)
+        for item in preprocessed:
+            video_id2total_items[item.related_video_id] += 1
+
+        video_id2current_items = defaultdict(int)
         results = []
         async for result in task_instance.execute(preprocessed, client):
             processed = await task_instance.postprocess(result)
             results.append(processed)
+            video_id2current_items[processed.related_video_id] += 1
+            video_id = processed.related_video_id
+
+            await progress_client.update_stage_progress(
+                video_id=video_id,
+                stage=ProcessingStage.TEXT_CAP_IMAGE_EMBEDDING,
+                total_items=video_id2total_items[video_id],
+                completed_items=video_id2current_items[video_id],
+                details={}
+            )
         await client.unload_model()
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.TEXT_CAP_IMAGE_EMBEDDING
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
     return results  #type:ignore
 
 
@@ -381,42 +441,46 @@ async def text_image_caption_embedding_task(
 @task(
     name='Image embedding Milvus Persist',
     description='Persist image embedding into milvus',
-    
+    tags=[PERSIST_TASK_TAG],
 )
 async def image_embedding_milvus_persist_task(
     image_caption_embeddings: tuple[list[ImageEmbeddingArtifact], list[TextCaptionEmbeddingArtifact]] | PrefectFuture,
 ):
-    task_instance =  cast(ImageEmbeddingMilvusTask, AppState().image_embedding_milvus_task)
+    task_instance =   AppState().image_embedding_milvus_task
 
-    image_milvus_client = cast(ImageMilvusClient,AppState().image_milvus_client)
+    image_milvus_client = AppState().image_milvus_client
     progress_client = AppState().progress_client
-    
     await image_milvus_client.connect()
 
     preprocessed = await task_instance.preprocess(cast(tuple[list[ImageEmbeddingArtifact], list[TextCaptionEmbeddingArtifact]], image_caption_embeddings))
 
+    video_id2total_items = defaultdict(int)
+    for item in preprocessed:
+        video_id2total_items[item[0].related_video_id] += 1
+
+    video_id2current_items = defaultdict(int)
     results = []
     async for result in task_instance.execute(preprocessed, image_milvus_client):
         processed = await task_instance.postprocess(result)
         results.append(processed)
-    
+        video_id2current_items[processed[0].related_video_id] += 1
+        video_id = processed[0].related_video_id
+
+        await progress_client.update_stage_progress(
+            video_id=video_id,
+            stage=ProcessingStage.IMAGE_MILVUS,
+            total_items=video_id2total_items[video_id],
+            completed_items=video_id2current_items[video_id],
+            details={}
+        )
     await image_milvus_client.close()
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.IMAGE_MILVUS
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
     
     return results
 
 @task(
     name='Text Segment Caption Milvus Persist',
     description='Persist segment caption embeddings into Milvus vector database',
-    
+    tags=[PERSIST_TASK_TAG],
 )
 async def text_segment_caption_milvus_persist_task(
     text_segment_embeddings: list[TextCapSegmentEmbedArtifact] | PrefectFuture,
@@ -425,26 +489,30 @@ async def text_segment_caption_milvus_persist_task(
     seg_milvus_client =  AppState().seg_milvus_client
     progress_client = AppState().progress_client
     await  seg_milvus_client.connect()
-
-
-    print("Before milvus")
+    
     preprocessed = await task_instance.preprocess(cast(list[TextCapSegmentEmbedArtifact], text_segment_embeddings))
     results = []
+    video_id2total_items = defaultdict(int)
+    for item in preprocessed:
+        video_id2total_items[item.related_video_id] += 1
     
+    video_id2current_items = defaultdict(int)
+    results = []
     async for result in task_instance.execute(preprocessed, seg_milvus_client):
         processed = await task_instance.postprocess(result)
         results.append(processed)
+        video_id2current_items[processed.related_video_id] += 1
+        video_id = processed.related_video_id
+
+        await progress_client.update_stage_progress(
+            video_id=video_id,
+            stage=ProcessingStage.TEXT_CAP_SEGMENT_MILVUS,
+            total_items=video_id2total_items[video_id],
+            completed_items=video_id2current_items[video_id],
+            details={}
+        )
     
-    await seg_milvus_client.close()
-    for res in results:
-        progress_client.update_state_progress(
-            video_id=res.related_video_id,
-            stage=ProcessingStage.TEXT_CAP_SEGMENT_MILVUS
-        )
-        response = await progress_client.stream_progress(
-            video_id=res.related_video_id
-        )
-        print(response)
+    await  seg_milvus_client.close()
     return results
 
 
@@ -466,6 +534,9 @@ async def aggregate_results_task(
     text_caption_embeddings: list[TextCaptionEmbeddingArtifact],
     text_segment_embeddings: list[TextCapSegmentEmbedArtifact],
 ):
+    run_logger = get_run_logger()
+    
+
     manifest = {
         "run_id": run_id,
         "completed_at": datetime.now().isoformat(),
@@ -479,8 +550,26 @@ async def aggregate_results_task(
             "image_embeddings": len(image_embeddings),
             "text_caption_embeddings": len(text_caption_embeddings),
             "text_segment_embeddings": len(text_segment_embeddings),
-        }
+        },
     }
+    summary_table = "\n".join(
+        f"| {key.replace('_', ' ').title()} | {value} |"
+        for key, value in manifest["summary"].items()
+    )
+    summary_markdown = (
+        f"# Video Processing Summary\n\n"
+        f"* **Run ID:** `{run_id}`\n"
+        f"* **Completed at:** {manifest['completed_at']}\n\n"
+        "| Artifact | Count |\n| --- | ---: |\n"
+        f"{summary_table}\n"
+    )
+
+    await acreate_markdown_artifact(
+        key=f"video-processing/{run_id}",
+        description="Aggregated metrics for the video processing run",
+        markdown=summary_markdown,
+    )
+
     
     run_logger.info(f"Pipeline completed successfully: {manifest['summary']}")
     return manifest
@@ -490,27 +579,23 @@ async def aggregate_results_task(
     name="complete-video-processing-pipeline",
     description="End-to-end video processing with parallel task execution",
     persist_result=True,
-    log_prints=True
+    log_prints=False
 )
 async def video_processing_flow(
     video_files: list[tuple[str,str]],
     user_id: str,
-    run_id: str,
+    run_id:str,
 )-> dict[str, Any] | None:
     
-    run_logger.info(f"Starting video processing flow for run_id={run_id}\n")    
-    
-    
+    run_logger = get_run_logger()
+    context = get_run_context()
+    flow_run_id = context.flow_run.id if context else "unknown" #type:ignore
+    run_logger.info(f"Starting video processing flow for run_id={run_id}")
 
     try:
-        run_logger.info("Stage 1: Video Ingestion - Register the videos")
         video_input = VideoInput(files=video_files, user_id=user_id)
-        video_futures = entry_video_ingestion.submit(
-            video_uploads=video_input,
-        )
-        videos = video_futures.result()
-        run_logger.info(f"Ingested {len(videos)} videos")  #type:ignore
-
+        videos = entry_video_ingestion.submit(video_uploads=video_input)
+        run_logger.info(f"Ingested {len(videos)} videos") #type:ignore
 
         
         run_logger.info("Stage 2: Parallel Autoshot and Processing")
@@ -522,6 +607,8 @@ async def video_processing_flow(
         asr_future = asr_task.submit(
             videos=videos #type:ignore
         )
+
+        video_result = cast(list[VideoArtifact], videos.result())
 
         autoshot_artifacts =  cast(list[AutoshotArtifact], autoshot_future.result())
         asr_artifacts  =  cast(list[ASRArtifact], asr_future.result())
@@ -587,7 +674,25 @@ async def video_processing_flow(
             text_segment_embeddings=text_segment_embeddings
         )
         segment_caption_milvus_result = segment_caption_milvus_future.result()
+        
 
+        run_logger.info("Stage 5: Aggregating results")
+        manifest_future = aggregate_results_task.submit(
+            run_id=str(flow_run_id),
+            videos=video_result, 
+            autoshots=autoshot_artifacts,
+            asrs=asr_artifacts,
+            images=images,
+            segment_captions=segment_captions,
+            image_captions=image_captions,
+            image_embeddings=image_embeddings,
+            text_caption_embeddings=text_caption_embeddings,
+            text_segment_embeddings=text_segment_embeddings,
+        )
+        manifest = cast(dict, manifest_future.result())
+
+        run_logger.info(f"Pipeline completed successfully for flow_run_id={flow_run_id} | run_id={run_id}")
+        return manifest
     except KeyboardInterrupt:
         AppState().progress_client.clear_video_progress_cache()
 
