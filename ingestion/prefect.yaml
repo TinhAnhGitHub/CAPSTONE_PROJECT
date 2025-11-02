@@ -4,18 +4,17 @@ project:
   name: ingestion-video-processing
 
 deployments:
-  - name: primary-gpu
+  - name: ingestion-test
     version: 1.0.0
     description: GPU-enabled video processing pipeline triggered by the upload API (Docker Compose local deployment)
     entrypoint: flow/video_processing.py:video_processing_flow
     tags:
       - gpu
       - ingestion
-      - local
-    concurrency_limit: 1
+    concurrency_limit: 10
     
     work_pool:
-      name: gpu-process-pool
+      name: local-pool
       work_queue_name: default
       job_variables:
         env:

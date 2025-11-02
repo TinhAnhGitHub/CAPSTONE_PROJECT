@@ -6,17 +6,12 @@ from core.artifact.schema import AutoshotArtifact, VideoArtifact
 from prefect_agent.service_autoshot.schema import AutoShotRequest, AutoShotResponse
 from pydantic import BaseModel
 from core.clients.base import BaseServiceClient, BaseMilvusClient
-from core.config.logging import run_logger
-
-
-
-
+from prefect.logging import get_run_logger
 
 class AutoshotSettings(BaseModel):
     model_name: str
     device: Literal['cuda', 'cpu']
     
-
 class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
     
     def __init__(
@@ -27,7 +22,7 @@ class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
         super().__init__(
             name=AutoshotProcessingTask.__name__,
             visitor=artifact_visitor,
-            kwargs=kwargs
+             **kwargs
         )
         self.name = 'autoshot'
     
@@ -57,28 +52,40 @@ class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
 
         assert client is not None, "The execution required client service"
         assert isinstance(client, BaseServiceClient)
-        
+        logger = get_run_logger()
+        logger.info("Starting autoshot execution for %d artifacts", len(input_data))
+
         for artifact in input_data:
             exist = await artifact.accept_check_exist(self.visitor)
-            run_logger.debug(f"Artifact: {artifact.model_dump(mode='json')} exists: {exist}")
-            
             if exist:
+                logger.debug(
+                    "Autoshot artifact already exists for video %s; skipping inference",
+                    artifact.related_video_id,
+                )
+            
                 yield artifact, None
                 continue
             
-            run_logger.debug(f"Calling request to autoshot with s3 minio: {artifact.related_video_minio_url}")
+            logger.info(
+                "Submitting autoshot request for video %s at %s",
+                artifact.related_video_id,
+                artifact.related_video_minio_url,
+            )
             request = AutoShotRequest(
                 s3_minio_url=artifact.related_video_minio_url,
                 metadata={}
             )
-            run_logger.debug(f"Request: {request.model_dump(mode='json')}")
             response = await client.make_request(
                 method='POST',
                 endpoint=client.inference_endpoint,
                 request_data=request,
             )
-            run_logger.debug(f"Response: {response}")
             parsed = AutoShotResponse.model_validate(response)
+            logger.info(
+                "Received autoshot response for video %s with %d scenes",
+                artifact.related_video_id,
+                len(parsed.scenes),
+            )
             yield artifact, parsed.scenes
             
         

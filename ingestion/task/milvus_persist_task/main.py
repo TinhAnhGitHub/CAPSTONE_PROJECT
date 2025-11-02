@@ -1,30 +1,20 @@
 from __future__ import annotations
+
+import json
 from typing import Any, AsyncIterator, cast
-from tqdm.asyncio import tqdm
-from loguru import logger
-from pydantic import BaseModel, Field
-import io
-from  core.pipeline.base_task import BaseTask
+
+from core.artifact.persist import ArtifactPersistentVisitor
 from core.artifact.schema import (
-    ImageEmbeddingArtifact, 
-    TextCapSegmentEmbedArtifact, 
+    ImageEmbeddingArtifact,
+    TextCapSegmentEmbedArtifact,
     TextCaptionEmbeddingArtifact,
 )
-from core.artifact.persist import ArtifactPersistentVisitor
-from task.common.util import fetch_object_from_s3_bytes, fetch_object_from_s3
 from core.clients.base import BaseMilvusClient, BaseServiceClient
-import json
-from core.config.logging import run_logger
-
-class MilvusIndexSettings(BaseModel):
-    host: str
-    port: int
-    user: str | None
-    password:str | None
-    db_name: str
-    time_out: float
-    ingest_batch_size: int
-
+from core.pipeline.base_task import BaseTask
+from prefect.logging import get_run_logger
+from pydantic import BaseModel
+from task.common.util import cleanup_temp_file, fetch_object_from_s3, fetch_object_from_s3_bytes
+from tqdm.asyncio import tqdm
 
 
 class ImageEmbeddingMilvusTask(
@@ -43,10 +33,8 @@ class ImageEmbeddingMilvusTask(
         super().__init__(
             name=ImageEmbeddingMilvusTask.__name__,
             visitor=artifact_visitor,
-            kwargs=kwargs
+             **kwargs
         )
-        
-    
 
     async def preprocess(
         self, 
@@ -67,9 +55,6 @@ class ImageEmbeddingMilvusTask(
             )
         return result
 
-
-
-
     async def execute(
         self, 
         input_data: list[tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]], 
@@ -80,11 +65,16 @@ class ImageEmbeddingMilvusTask(
         assert client is not None, "Client required"
         assert isinstance(client, BaseMilvusClient), "Client must be from MilvusClient"
         await client.create_collection_if_not_exists()
+        logger = get_run_logger()
+        logger.info(
+            "Starting Milvus insertion for %d image/text embedding pairs",
+            len(input_data),
+        )
 
         batch: list[dict[str, Any]] = []
         batch_artifacts: list[tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]] = []
 
-        
+
         ingest_batch_size = cast(int, self.kwargs.get('ingest_batch_size'))
         
 
@@ -98,20 +88,26 @@ class ImageEmbeddingMilvusTask(
 
             if exists:
                 logger.debug(
-                    f"Skipping duplicate: {image_artifact.related_video_id}"
+                    "Image embedding %s already persisted; skipping",
+                    image_artifact.image_id,
                 )
+                yield image_artifact, text_artifact
                 continue
             
             image_embedding_bytes = await fetch_object_from_s3_bytes(image_artifact.minio_url_path, self.visitor.minio_client)
             text_caption_embedding_bytes = await fetch_object_from_s3_bytes(
-                image_artifact.minio_url_path, self.visitor.minio_client
+                text_artifact.minio_url_path, self.visitor.minio_client
             )
             caption_dict_path = await fetch_object_from_s3(
-                text_artifact.image_caption_minio_url, 
-                self.visitor.minio_client, 
+                text_artifact.image_caption_minio_url,
+                self.visitor.minio_client,
                 suffix='.json'
             )
-            caption_data = json.load(open(caption_dict_path, 'r', encoding='utf-8'))
+            try:
+                with open(caption_dict_path, 'r', encoding='utf-8') as caption_file:
+                    caption_data = json.load(caption_file)
+            finally:
+                cleanup_temp_file(caption_dict_path)
             
             caption_text = caption_data['caption']
             image_embedding = json.loads(image_embedding_bytes.decode('utf-8'))
@@ -129,15 +125,15 @@ class ImageEmbeddingMilvusTask(
                 'image_caption':  caption_text
             }
 
-
             batch.append(record)
             batch_artifacts.append((image_artifact, text_artifact))
-
             if len(batch) >= ingest_batch_size:
                 
                 ids = await client.insert_vectors(batch)
                 logger.info(
-                    f"Inserted batch of {len(ids)} vectors into {client.collection_name}"
+                    "Inserted batch of %d vectors into %s",
+                    len(ids),
+                    client.collection_name,
                 )
                 for art in batch_artifacts:
                     yield art
@@ -145,16 +141,17 @@ class ImageEmbeddingMilvusTask(
                 batch_artifacts.clear()
 
         if batch:
-            try:
-                print("Inserting vectors")
-                ids = await client.insert_vectors(batch)
-                logger.info(
-                    f"Inserted final batch of {len(ids)} vectors into {client.collection_name}"
-                )
-                for art in batch_artifacts:
-                    yield art
-            except Exception as e:
-                logger.exception("Final batch insert failed", error=str(e))
+            
+            logger.debug("Inserting remaining %d vectors", len(batch))
+            ids = await client.insert_vectors(batch)
+            logger.info(
+                "Inserted final batch of %d vectors into %s",
+                len(ids),
+                client.collection_name,
+            )
+            for art in batch_artifacts:
+                yield art
+
 
     async def postprocess(self, output_data: tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]) -> tuple[ImageEmbeddingArtifact, TextCaptionEmbeddingArtifact]:
         return output_data
@@ -173,7 +170,7 @@ class TextSegmentCaptionMilvusTask(
         super().__init__(
             name=TextSegmentCaptionMilvusTask.__name__,
             visitor=artifact_visitor,
-            kwargs=kwargs
+             **kwargs
         )
 
     async def preprocess(self, input_data: list[TextCapSegmentEmbedArtifact]) -> list[TextCapSegmentEmbedArtifact]:
@@ -188,6 +185,11 @@ class TextSegmentCaptionMilvusTask(
         assert client is not None, "Client required"
         assert isinstance(client, BaseMilvusClient), "Client must be from MilvusClient"
         await client.create_collection_if_not_exists()
+        logger = get_run_logger()
+        logger.info(
+            "Starting Milvus insertion for %d segment caption embeddings",
+            len(input_data),
+        )
         
         batch: list[dict[str, Any]] = []
         batch_artifacts: list[TextCapSegmentEmbedArtifact] = []
@@ -202,9 +204,10 @@ class TextSegmentCaptionMilvusTask(
 
             if exists:
                 logger.debug(
-                    f"Skipping duplicate segment caption: {artifact.related_video_id} "
-                    f"(frames {artifact.start_frame}-{artifact.end_frame})"
+                    "Segment caption embedding %s already persisted; skipping",
+                    artifact.artifact_id,
                 )
+                yield artifact
                 continue
             
             embedding_bytes = await fetch_object_from_s3_bytes(artifact.minio_url_path, self.visitor.minio_client)
@@ -213,11 +216,15 @@ class TextSegmentCaptionMilvusTask(
 
             
             caption_dict_path = await fetch_object_from_s3(
-                artifact.related_segment_caption_url, 
-                self.visitor.minio_client, 
+                artifact.related_segment_caption_url,
+                self.visitor.minio_client,
                 suffix='.json'
             )
-            caption_data = json.load(open(caption_dict_path, 'r', encoding='utf-8'))
+            try:
+                with open(caption_dict_path, 'r', encoding='utf-8') as caption_file:
+                    caption_data = json.load(caption_file)
+            finally:
+                cleanup_temp_file(caption_dict_path)
             caption_text = caption_data.get('caption', '')
 
 
@@ -226,7 +233,7 @@ class TextSegmentCaptionMilvusTask(
                 "start_frame": artifact.start_frame,
                 "end_frame": artifact.end_frame,
                 "start_time": artifact.start_time,
-                "end_time": artifact.end_frame,
+                "end_time": artifact.end_time,
                 'related_video_id': artifact.related_video_id,
                 "segment_caption": caption_text,
                 "segment_caption_minio_url": artifact.related_segment_caption_url,
@@ -241,7 +248,9 @@ class TextSegmentCaptionMilvusTask(
             
                 ids = await client.insert_vectors(batch)
                 logger.info(
-                    f"Inserted batch of {len(ids)} segment caption vectors into {client.collection_name}"
+                    "Inserted batch of %d segment caption vectors into %s",
+                    len(ids),
+                    client.collection_name,
                 )
                 for art in batch_artifacts:
                     yield art
@@ -250,15 +259,15 @@ class TextSegmentCaptionMilvusTask(
                 batch_artifacts.clear()
 
         if batch:
-            try:
-                ids = await client.insert_vectors(batch)
-                logger.info(
-                    f"Inserted final batch of {len(ids)} segment caption vectors into {client.collection_name}"
-                )
-                for art in batch_artifacts:
-                    yield art
-            except Exception as e:
-                logger.exception("Final batch insert failed", error=str(e))
+            ids = await client.insert_vectors(batch)
+            logger.info(
+                "Inserted final batch of %d segment caption vectors into %s",
+                len(ids),
+                client.collection_name,
+            )
+            for art in batch_artifacts:
+                yield art
+            
 
     async def postprocess(self, output_data: TextCapSegmentEmbedArtifact) -> TextCapSegmentEmbedArtifact:
         return output_data

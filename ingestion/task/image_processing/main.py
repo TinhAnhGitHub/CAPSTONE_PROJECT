@@ -1,15 +1,17 @@
-import json
-from typing import AsyncIterator, cast
-from core.pipeline.base_task import BaseTask
-from core.clients.base import BaseServiceClient, BaseMilvusClient
-from core.artifact.persist import ArtifactPersistentVisitor 
-from core.artifact.schema import AutoshotArtifact, ImageArtifact
-from io import BytesIO
-from pydantic import BaseModel
 import asyncio
+import json
+from io import BytesIO
+from typing import AsyncIterator, cast
+from tqdm import tqdm
+from core.artifact.persist import ArtifactPersistentVisitor
+from core.artifact.schema import AutoshotArtifact, ImageArtifact
+from core.clients.base import BaseMilvusClient, BaseServiceClient
+from core.pipeline.base_task import BaseTask
+from prefect.logging import get_run_logger
+from pydantic import BaseModel
+
 from .util import get_segment_frame_indices, read_frame
-from task.common.util import fetch_object_from_s3 
-from core.config.logging import run_logger
+from task.common.util import cleanup_temp_file, fetch_object_from_s3
 
 
 def frame_to_timecode(frame_index: int, fps: float) -> str:
@@ -33,20 +35,23 @@ class ImageProcessingTask(BaseTask[list[AutoshotArtifact], ImageArtifact]):
         super().__init__(
             name=ImageProcessingTask.__name__,
             visitor=artifact_visitor,
-            kwargs=kwargs
+             **kwargs
         )
 
     async def preprocess(self, input_data: list[AutoshotArtifact]) -> dict[str, list[ImageArtifact]]:
-
+        logger = get_run_logger()
         result: dict[str, list[ImageArtifact]] = {}
         
 
         for shot_artifact in input_data:
             shot_art_url = shot_artifact.minio_url_path
             segments_path = await fetch_object_from_s3(shot_art_url, self.visitor.minio_client, suffix='.json')
-            with open(segments_path, 'r', encoding='utf-8') as f:
-                segments = json.load(f)['segments']
-            run_logger.debug(f'{segments=}')
+            try:
+                with open(segments_path, 'r', encoding='utf-8') as f:
+                    segments = json.load(f)['segments']
+            finally:
+                cleanup_temp_file(segments_path)
+            logger.debug("Loaded %d segments for autoshot artifact %s", len(segments), shot_artifact.artifact_id)
             for i, (start,end) in enumerate(segments):
                 
                 num_img_per_segment = cast(int, self.kwargs.get('num_img_per_segment'))
@@ -70,38 +75,50 @@ class ImageProcessingTask(BaseTask[list[AutoshotArtifact], ImageArtifact]):
                         timestamp=time_stamp,
                         related_video_fps=shot_artifact.related_video_fps,
                     ) 
-                    # exist =  await image_artifact.accept_check_exist(self.visitor)
-                    # if exist:
-                    #     continue
 
                     list_images.append(image_artifact)
                 if shot_artifact.related_video_minio_url not in result:
                     result[shot_artifact.related_video_minio_url] = []
                 result[shot_artifact.related_video_minio_url].extend(list_images)
-                run_logger.debug(f"Video: {shot_artifact.related_video_minio_url}, Images so far: {len(result[shot_artifact.related_video_minio_url])}")
+                logger.debug(
+                    "Prepared %d images for video %s (segment %d)",
+                    len(list_images),
+                    shot_artifact.related_video_minio_url,
+                    i,
+                )
         return result
 
     async def execute(self, input_data: dict[str, list[ImageArtifact]], client: BaseServiceClient | None| BaseMilvusClient ) -> AsyncIterator[tuple[ImageArtifact, bytes | None]]:
-        run_logger.debug(f"{input_data}")
+        logger = get_run_logger()
+        logger.debug("Executing image extraction for %d videos", len(input_data))
         for video_minio_path, img_artifacts in input_data.items():
             if not img_artifacts:  
                 continue
             
             not_process_images = []
 
-            for artifact in img_artifacts:
+            for artifact in tqdm(img_artifacts, desc=f"Image processing for video {video_minio_path}... "):
                 exist =  await artifact.accept_check_exist(self.visitor)
                 if exist:
                     yield artifact, None
                     continue
-                else:
-                    not_process_images.append(artifact)
-            
-            local_video = await fetch_object_from_s3(video_minio_path, self.visitor.minio_client, suffix=img_artifacts[0].related_video_extension) # group image comes from 1 video -> same video extension
-            tasks = [read_frame(local_video, artifact.frame_index) for artifact in not_process_images ]
-            frames = await asyncio.gather(*tasks)
-            for artifact, frame_byte in zip(img_artifacts, frames):
-                yield artifact, frame_byte
+                not_process_images.append(artifact)
+
+            if not not_process_images:
+                continue
+
+            local_video = await fetch_object_from_s3(
+                video_minio_path,
+                self.visitor.minio_client,
+                suffix=img_artifacts[0].related_video_extension,  # group image comes from 1 video -> same video extension
+            )
+            try:
+                tasks = [read_frame(local_video, artifact.frame_index) for artifact in not_process_images]
+                frames = await asyncio.gather(*tasks)
+                for artifact, frame_byte in zip(not_process_images, frames):
+                    yield artifact, frame_byte
+            finally:
+                cleanup_temp_file(local_video)
             
     async def postprocess(self, output_data: tuple[ImageArtifact, bytes | None]) -> ImageArtifact:
         artifact, image = output_data

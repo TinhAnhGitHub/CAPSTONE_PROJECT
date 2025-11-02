@@ -1,17 +1,24 @@
 from __future__ import annotations
-from typing import Literal, cast, AsyncIterator, BinaryIO
-from core.pipeline.base_task import BaseTask
-from core.artifact.schema import TextCaptionEmbeddingArtifact, ImageCaptionArtifact, TextCapSegmentEmbedArtifact, SegmentCaptionArtifact
-from core.artifact.persist import ArtifactPersistentVisitor
-from core.clients.text_embed_client import  TextEmbeddingRequest, TextEmbeddingResponse
-from task.common.util import fetch_object_from_s3
-import asyncio
-import json
-from core.clients.base import BaseServiceClient, BaseMilvusClient
-from pydantic import BaseModel
-import io
 
-from core.config.logging import run_logger
+import asyncio
+import io
+import json
+from typing import AsyncIterator, BinaryIO, Literal, cast
+
+from core.artifact.persist import ArtifactPersistentVisitor
+from core.artifact.schema import (
+    ImageCaptionArtifact,
+    SegmentCaptionArtifact,
+    TextCapSegmentEmbedArtifact,
+    TextCaptionEmbeddingArtifact,
+)
+from core.clients.base import BaseMilvusClient, BaseServiceClient
+from core.clients.text_embed_client import TextEmbeddingRequest, TextEmbeddingResponse
+from core.pipeline.base_task import BaseTask
+from prefect.logging import get_run_logger
+from pydantic import BaseModel
+
+from task.common.util import cleanup_temp_file, fetch_object_from_s3
 
 class TextEmbeddingSettings(BaseModel):
     model_name: str
@@ -31,7 +38,7 @@ class TextImageCaptionEmbeddingTask(BaseTask[
         super().__init__(
             name=TextImageCaptionEmbeddingTask.__name__,
             visitor=artifact_visitor,
-            kwargs=kwargs
+             **kwargs
         )
 
     async def preprocess(
@@ -52,7 +59,7 @@ class TextImageCaptionEmbeddingTask(BaseTask[
                 artifact_type=TextCaptionEmbeddingArtifact.__name__,
                 related_video_id=img_artifact.related_video_id,
                 image_minio_url=img_artifact.artifact_id,
-                image_id=img_artifact.artifact_id
+                image_id=img_artifact.image_id
             )
             result.append(text_embed_art)
         return result
@@ -63,6 +70,8 @@ class TextImageCaptionEmbeddingTask(BaseTask[
         input_data: list[TextCaptionEmbeddingArtifact],
         client: BaseServiceClient | None | BaseMilvusClient
     ) -> AsyncIterator[tuple[TextCaptionEmbeddingArtifact, BinaryIO | None]]:
+        logger = get_run_logger()
+        logger.info("Starting text image caption embedding for %d artifacts", len(input_data))
         assert client is not None, "The execution required client service"
         assert isinstance(client, BaseServiceClient)
 
@@ -86,22 +95,31 @@ class TextImageCaptionEmbeddingTask(BaseTask[
             batches.append(batch[:])
 
         for batch in batches:
-            caption_dict_path = await asyncio.gather(
+            caption_dict_paths = await asyncio.gather(
                 *[
-                    fetch_object_from_s3(artifact.image_caption_minio_url, self.visitor.minio_client, suffix='.json') for artifact in batch
+                    fetch_object_from_s3(
+                        artifact.image_caption_minio_url,
+                        self.visitor.minio_client,
+                        suffix='.json',
+                    )
+                    for artifact in batch
                 ]
             )
 
-            caption_str = [
-                json.load(open(item_path, 'r', encoding='utf-8'))['caption'] for item_path in caption_dict_path
-            ]
+            caption_str: list[str] = []
+            try:
+                for item_path in caption_dict_paths:
+                    with open(item_path, 'r', encoding='utf-8') as fp:
+                        caption_str.append(json.load(fp)['caption'])
+            finally:
+                for item_path in caption_dict_paths:
+                    cleanup_temp_file(item_path)
 
             request = TextEmbeddingRequest(
                 texts=caption_str,
                 metadata={}
             )
-
-            
+            logger.debug("Submitting text embedding request for batch of %d captions", len(caption_str))
 
             response = await client.make_request(
                 method='POST',
@@ -115,6 +133,7 @@ class TextImageCaptionEmbeddingTask(BaseTask[
             for artifact, embedding in zip(batch, embedding_captions):
                 buffer = io.BytesIO(json.dumps(embedding).encode("utf-8"))
                 buffer.seek(0)
+                logger.debug("Generated embedding for caption artifact %s", artifact.caption_id)
                 yield artifact, buffer
     
     async def postprocess(self, output_data: tuple[TextCaptionEmbeddingArtifact, BinaryIO | None]):
@@ -140,7 +159,7 @@ class TextCaptionSegmentEmbeddingTask(
         super().__init__(
             name=TextCaptionSegmentEmbeddingTask.__name__,
             visitor=artifact_visitor,
-            kwargs=kwargs
+             **kwargs
         )
 
     async def preprocess(
@@ -169,7 +188,8 @@ class TextCaptionSegmentEmbeddingTask(
         input_data: list[TextCapSegmentEmbedArtifact],
         client: BaseServiceClient | None | BaseMilvusClient
     ) -> AsyncIterator[tuple[TextCapSegmentEmbedArtifact, BinaryIO | None]]:
-        
+        logger = get_run_logger()
+        logger.info("Starting text segment caption embedding for %d artifacts", len(input_data))
         assert client is not None, "The execution required client service"
         assert isinstance(client, BaseServiceClient)
 
@@ -192,34 +212,50 @@ class TextCaptionSegmentEmbeddingTask(
             batches.append(batch[:])
 
         for batch in batches:
-            caption_dict_path = await asyncio.gather(
+            caption_dict_paths = await asyncio.gather(
                 *[
-                    fetch_object_from_s3(artifact.related_segment_caption_url, self.visitor.minio_client, suffix='.json') for artifact in batch
+                    fetch_object_from_s3(
+                        artifact.related_segment_caption_url,
+                        self.visitor.minio_client,
+                        suffix='.json',
+                    )
+                    for artifact in batch
                 ]
             )
 
-            caption_str = [
-                json.load(open(item_path, 'r', encoding='utf-8'))['caption'] for item_path in caption_dict_path
-            ]
+            caption_str: list[str] = []
+            try:
+                for item_path in caption_dict_paths:
+                    with open(item_path, 'r', encoding='utf-8') as fp:
+                        caption_str.append(json.load(fp)['caption'])
+            finally:
+                for item_path in caption_dict_paths:
+                    cleanup_temp_file(item_path)
 
             request = TextEmbeddingRequest(
                 texts=caption_str,
                 metadata={}
             )
-            run_logger.debug(f"Request text embed: {request=}")
-            run_logger.debug(f"Len caption: {len(caption_str)=}")
+            logger.debug(
+                "Submitting segment embedding request with %d captions", 
+                len(caption_str)
+            )
             response = await client.make_request(
                 method='POST',
                 endpoint=client.inference_endpoint,
                 request_data=request
             )
-            run_logger.debug(f"response text embed: {response=}")
+            logger.debug("Received embedding response for batch of size %d", len(caption_str))
             parsed = TextEmbeddingResponse.model_validate(response)
             embedding_captions = parsed.embeddings
 
             for artifact, embedding in zip(batch, embedding_captions):
                 buffer = io.BytesIO(json.dumps(embedding).encode("utf-8"))
                 buffer.seek(0)
+                logger.debug(
+                    "Generated segment embedding for artifact %s", 
+                    artifact.segment_cap_id,
+                )
                 yield artifact, buffer
 
     async def postprocess(self, output_data: tuple[TextCapSegmentEmbedArtifact, BinaryIO | None]):
@@ -228,4 +264,3 @@ class TextCaptionSegmentEmbeddingTask(
             return artifact
         await artifact.accept_upload(self.visitor, data)
         return artifact
-

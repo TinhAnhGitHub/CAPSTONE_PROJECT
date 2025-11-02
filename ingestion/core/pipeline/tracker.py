@@ -103,6 +103,7 @@ class ArtifactTracker:
                 task_name=metadata.task_name,
                 created_at=metadata.created_at,
                 user_id=metadata.user_id,
+                artifact_metadata=metadata.artifact_metadata,
             )
             session.add(artifact)
             await session.flush()

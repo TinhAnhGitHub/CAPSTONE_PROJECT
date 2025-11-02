@@ -30,12 +30,12 @@ class ArtifactPersistentVisitor:
 
     async def _check_exist(self, artifact: "BaseArtifact", bucket_name: str, check_minio:bool=True) -> bool:
         try:
-            object_key = artifact.object_key
             artifact_id = artifact.artifact_id
             metadata = await self.tracker.get_artifact(artifact_id)
             if not metadata:
                 return False
 
+            object_key = artifact.object_key
             if check_minio:
                 object_returned = self.minio_client.get_object(
                     bucket=bucket_name,
@@ -61,9 +61,9 @@ class ArtifactPersistentVisitor:
             created_at=datetime.now(),
             artifact_metadata=upload_file
         )
+        print(f"{artifact_metadata=}")
 
         
-        print(artifact_metadata.model_dump(mode='json'))
         await self.tracker.save_artifact(artifact_metadata)
 
     async def visit_segments(self, artifact: "AutoshotArtifact", upload_file: list):

@@ -1,4 +1,4 @@
-find prefect_agent \
+find core task api flow \
   -type f \
   -not -path "*/__pycache__/*" \
   -not -path "*/logs/*" \

@@ -1,13 +1,14 @@
 from typing import Dict, Any, Optional
-from pydantic import Field, BaseModel
+from pydantic import BaseModel
 from datetime import datetime
 from enum import Enum
-from asyncio import Lock
-import uuid
+from threading import Lock
+import logging
 import httpx
-from task import *
+from task import VideoIngestionTask, AutoshotProcessingTask, ASRProcessingTask, ImageProcessingTask, SegmentCaptionLLMTask, ImageCaptionLLMTask, ImageEmbeddingMilvusTask, ImageEmbeddingTask, TextSegmentCaptionMilvusTask, TextCaptionSegmentEmbeddingTask, TextImageCaptionEmbeddingTask
 
 
+logger = logging.getLogger(__name__)
 
 
 class ProcessingStage(str, Enum):
@@ -61,17 +62,29 @@ class HTTPProgressTracker:
         self.endpoint = endpoint
     
     async def _trigger_http(self, video_id:str):
-        async with self._lock:
+        with self._lock:
+            progress = self._progress.get(video_id)
+            if not progress:
+                return None
+            payload = progress.model_dump(mode='json')
+        try:
             async with httpx.AsyncClient(base_url=self.base_url) as client:
                 response = await client.post(
                     self.endpoint.format(video_id=video_id),
-                    json=self._progress[video_id].model_dump(mode='json')
+                    json=payload
                 )
                 response.raise_for_status()
             return response.json()
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "Failed to send progress update for %s: %s",
+                video_id,
+                exc,
+            )
+            return None
 
     async def start_video(self, video_id: str) -> None:
-        async with self._lock:
+        with self._lock:
             self._progress[video_id] = VideoProgress(
                 run_id=video_id,
                 stages={stage: StageProgress(stage=stage) for stage in ProcessingStage},
@@ -88,7 +101,8 @@ class HTTPProgressTracker:
         completed_items: int,
         details: dict[str, Any] | None=None
     ):
-        async with self._lock:
+        
+        with self._lock:
             if video_id not in self._progress:
                 return  
 
@@ -109,20 +123,28 @@ class HTTPProgressTracker:
             
             
             completed_stages = sum(1 for s in run_progress.stages.values() if s.percentage >= 100)
-            run_progress.overall_percentage = (completed_stages / len(ProcessingStage)) * 100 + stage_progress.percentage / len(ProcessingStage)
+
+
+            run_progress.overall_percentage = (
+                (completed_stages / len(ProcessingStage)) * 100
+                + (stage_progress.percentage / len(ProcessingStage))
+            )
+            run_progress.overall_percentage = min(run_progress.overall_percentage, 100.0)
+            
+
             run_progress.current_stage = stage
 
         await self._trigger_http(video_id)
         
     async def complete_stage(self, video_id: str, stage: ProcessingStage) -> None:
-        async with self._lock:
+        with self._lock:
             if video_id in self._progress and stage in self._progress[video_id].stages: #type:ignore
                 self._progress[video_id].stages[stage].end_time = datetime.now() #type:ignore
         
         await self._trigger_http(video_id)
         
     async def complete_run(self, video_id: str, status: RunStatus = RunStatus.COMPLETED, error: Optional[str] = None) -> None:
-        async with self._lock:
+        with self._lock:
             if video_id in self._progress:
                 self._progress[video_id].status = status
                 self._progress[video_id].end_time = datetime.now()
@@ -132,7 +154,7 @@ class HTTPProgressTracker:
         await self._trigger_http(video_id)
     
     async def remove_video_id(self, video_id: str) -> None:
-        async with self._lock:
+        with self._lock:
             self._progress.pop(video_id, None)
     
 
@@ -141,5 +163,4 @@ class HTTPProgressTracker:
 
 
             
-
 

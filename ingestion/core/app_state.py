@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 
 
 class AppState:
-    """Singleton app-level state container for all core dependencies."""
     _instance: AppState | None = None
 
     def __new__(cls):

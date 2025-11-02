@@ -42,6 +42,7 @@ class VideoArtifact(BaseArtifact):
     artifact_type: str 
     task_name: str
     video_id: str
+    object_name:str
     video_minio_url: str
     video_extension: str
     user_bucket: str
@@ -58,11 +59,11 @@ class VideoArtifact(BaseArtifact):
 
     @property
     def object_key(self):
-        raise NotImplementedError("Video artifact does not have this property")
+        return self.object_name
     
     @property
     def minio_url_path(self):
-        raise NotImplementedError("Video artifact does not have this property")
+        return self.video_minio_url
 
     @property
     def artifact_id(self) -> str:
@@ -168,7 +169,7 @@ class ImageArtifact(BaseArtifact):
 
     @property
     def object_key(self) -> str:
-        return f"images/{self.related_video_id}/{self.frame_index:08d}{self.extension}"
+        return f"images/{self.related_video_id}/{self.frame_index:08d}_{self.timestamp}{self.extension}"
 
     @property
     def minio_url_path(self)->str:
@@ -177,7 +178,7 @@ class ImageArtifact(BaseArtifact):
     @property
     def artifact_id(self) -> str:
         checksum = self.metadata.get("checksum_md5", "")
-        base_string = f"{self.related_video_id}:{self.frame_index}:{self.content_type}:{checksum}:{self.user_bucket}"
+        base_string = f"{self.related_video_id}:{self.frame_index}:{self.content_type}:{checksum}:{self.timestamp}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
 
 class SegmentCaptionArtifact(BaseArtifact):
@@ -211,7 +212,7 @@ class SegmentCaptionArtifact(BaseArtifact):
     
     @property
     def object_key(self) -> str:
-        return f"caption/segment/{self.related_video_id}/{self.start_frame}_{self.end_frame}.json"
+        return f"caption/segment/{self.related_video_id}/{self.start_frame}_{self.end_frame}_{self.start_timestamp}_{self.end_timestamp}.json"
 
     @property
     def minio_url_path(self)->str:
@@ -219,7 +220,7 @@ class SegmentCaptionArtifact(BaseArtifact):
 
     @property
     def artifact_id(self) -> str:
-        base_string = f"{self.related_video_id}:{self.start_frame}:{self.end_frame}:{self.related_asr}:{self.user_bucket}"
+        base_string = f"{self.related_video_id}:{self.start_frame}:{self.end_frame}:{self.start_timestamp}:{self.end_timestamp}:{self.related_asr}:{self.user_bucket}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
     
 class ImageCaptionArtifact(BaseArtifact):
@@ -247,7 +248,7 @@ class ImageCaptionArtifact(BaseArtifact):
 
     @property
     def object_key(self) -> str:
-        return f"caption/image/{self.related_video_id}/{self.frame_index:08d}.json"
+        return f"caption/image/{self.related_video_id}/{self.frame_index:08d}_{self.time_stamp}.json"
 
     @property
     def minio_url_path(self)->str:
@@ -255,7 +256,7 @@ class ImageCaptionArtifact(BaseArtifact):
 
     @property
     def artifact_id(self) -> str:
-        base_string = f"{self.image_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}"
+        base_string = f"{self.image_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}:image_caption:{self.time_stamp}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
     
 class ImageEmbeddingArtifact(BaseArtifact):
@@ -282,7 +283,7 @@ class ImageEmbeddingArtifact(BaseArtifact):
 
     @property
     def object_key(self) -> str:
-        return f"embedding/image/{self.related_video_id}/{self.frame_index:08d}.npy"
+        return f"embedding/image/{self.related_video_id}/{self.frame_index:08d}_{self.time_stamp}.npy"
 
     @property
     def minio_url_path(self)->str:
@@ -290,7 +291,7 @@ class ImageEmbeddingArtifact(BaseArtifact):
 
     @property
     def artifact_id(self) -> str:
-        base_string = f"{self.image_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}"
+        base_string = f"{self.image_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}:{self.time_stamp}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
 
 class TextCaptionEmbeddingArtifact(BaseArtifact):
@@ -318,7 +319,7 @@ class TextCaptionEmbeddingArtifact(BaseArtifact):
 
     @property
     def object_key(self) -> str:
-        return f"embedding/image_caption/{self.related_video_id}/{self.frame_index:08d}.npy"
+        return f"embedding/image_caption/{self.related_video_id}/{self.frame_index:08d}_{self.time_stamp}.npy"
 
     @property
     def minio_url_path(self)->str:
@@ -326,7 +327,7 @@ class TextCaptionEmbeddingArtifact(BaseArtifact):
     
     @property
     def artifact_id(self) -> str:
-        base_string = f"{self.caption_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}"
+        base_string = f"{self.caption_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}:{self.time_stamp}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
     
 class TextCapSegmentEmbedArtifact(BaseArtifact):
@@ -356,7 +357,7 @@ class TextCapSegmentEmbedArtifact(BaseArtifact):
 
     @property
     def object_key(self) -> str:
-        return f"embedding/caption_segment/{self.related_video_id}/{self.start_frame}_{self.end_frame}.npy"
+        return f"embedding/caption_segment/{self.related_video_id}/{self.start_frame}_{self.end_frame}_{self.start_time}_{self.end_time}.npy"
 
     @property
     def minio_url_path(self)->str:

@@ -5,6 +5,7 @@ Contain the configuration related to the persistent Storage
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field,  computed_field
+
 class MinioSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
@@ -26,10 +27,6 @@ class MinioSettings(BaseSettings):
     def endpoint(self) -> str:
         scheme = "https" if self.secure else "http"
         return f"{scheme}://{self.host}:{self.port}"
-    
-
-
-
 
 class PostgreSettings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -39,8 +36,6 @@ class PostgreSettings(BaseSettings):
         extra='ignore'
     )
     database_url: str
-
-
 
 class MilvusSettings(BaseSettings):
     model_config = SettingsConfigDict(

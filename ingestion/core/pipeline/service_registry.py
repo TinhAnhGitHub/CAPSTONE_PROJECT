@@ -102,7 +102,6 @@ class ConsulServiceRegistry:
         return "unknown"
 
     async def get_healthy_service(self, service_name: str) -> Optional[ServiceInfo]:
-        print(f"{service_name=}")
         services = await self.discover_service(service_name)
         healthy = [s for s in services]
         return healthy[0] if healthy else None

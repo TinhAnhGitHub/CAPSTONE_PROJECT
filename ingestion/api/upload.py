@@ -7,6 +7,7 @@ from fastapi import (
     status,
     HTTPException
 )
+from core.lifespan import DEPLOY_IDENTIFIER
 from pydantic import BaseModel, Field
 from loguru import logger
 # from flow.video_processing import video_processing_flow
@@ -16,7 +17,6 @@ from prefect.deployments import run_deployment
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 
-VIDEO_PROCESSING_DEPLOYMENT = cast(str, os.getenv('VIDEO_PROCESSING_DEPLOYMENT'))
 
 class UploadResponse(BaseModel):
     """Response after successful upload."""
@@ -50,23 +50,25 @@ async def upload_videos(
     run_id = str(uuid4())
     try:
         flow_run: FlowRun = await run_deployment( #type:ignore
-            name=VIDEO_PROCESSING_DEPLOYMENT,
+            name=DEPLOY_IDENTIFIER,
             parameters={
                 "video_files": request.videos,
                 "user_id": request.user_id,
                 "run_id": run_id,
             },
+            flow_run_name=run_id,
+            idempotency_key=run_id,
             timeout=0
         )
         logger.info(
-            f"Triggered Prefect deployment '{VIDEO_PROCESSING_DEPLOYMENT}' "
+            f"Triggered Prefect deployment '{DEPLOY_IDENTIFIER}' "
             f"with flow_run_id={flow_run.id}, run_id={run_id}"
         )
     except ObjectNotFound as exc:
-        logger.exception(f"Deployment '{VIDEO_PROCESSING_DEPLOYMENT}' not found")
+        logger.exception(f"Deployment '{DEPLOY_IDENTIFIER}' not found")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Prefect deployment '{VIDEO_PROCESSING_DEPLOYMENT}' is not registered. "
+            detail=f"Prefect deployment '{DEPLOY_IDENTIFIER}' is not registered. "
                    f"Please run 'prefect deploy --name primary-gpu' first.",
         ) from exc
     except Exception as exc:
@@ -84,5 +86,5 @@ async def upload_videos(
         status=flow_run.state.type.value if flow_run.state else "SCHEDULED",
         message="Video processing deployment submitted successfully",
         tracking_url=f"/api/management/videos/{run_id}/status",
-        deployment_name=VIDEO_PROCESSING_DEPLOYMENT,
+        deployment_name=DEPLOY_IDENTIFIER,
     )

@@ -59,7 +59,8 @@ class ImageMilvusClient(BaseMilvusClient):
             ),
             FieldSchema(
                 name='timestamp',
-                dtype=DataType.VARCHAR
+                dtype=DataType.VARCHAR,
+                max_length=512,
             )
         ]
 
@@ -84,24 +85,24 @@ class ImageMilvusClient(BaseMilvusClient):
             fields.append(
                 FieldSchema(
                     name=self.caption_sparse_embedding_field,
-                    dtype=DataType.VARCHAR,
-                    max_length=4096,
-                    enable_analyzer=True
+                    dtype=DataType.SPARSE_FLOAT_VECTOR,
                 )
             )
             fields.append(
                 FieldSchema(
                     name=self.caption_text_field,
                     dtype=DataType.VARCHAR,
-                    max_length=4096
+                    max_length=60_000,
+                    enable_analyzer=True,
                 )
             )
             function = Function(
                 name="text_bm25_emb",
-                input_field_names=cast(str, self.caption_text_field),
-                output_field_names=cast(str, self.caption_sparse_embedding_field),
+                input_field_names=[self.caption_text_field],  
+                output_field_names=[self.caption_sparse_embedding_field],  
                 function_type=FunctionType.BM25
             )
+            
 
         return CollectionSchema(
             fields=fields,
@@ -167,10 +168,12 @@ class SegmentCaptionEmbeddingMilvusClient(BaseMilvusClient):
             FieldSchema(
                 name="start_time",
                 dtype=DataType.VARCHAR,
+                max_length=256,
             ),
             FieldSchema(
                 name="end_time",
                 dtype=DataType.VARCHAR,
+                max_length=256,
             ),
             FieldSchema(
                 name="segment_caption_minio_url",
@@ -197,9 +200,8 @@ class SegmentCaptionEmbeddingMilvusClient(BaseMilvusClient):
             fields.append(
                 FieldSchema(
                     name=self.caption_sparse_embedding_field,
-                    dtype=DataType.VARCHAR,
-                    max_length=4096,
-                    enable_analyzer=True,
+                    dtype=DataType.SPARSE_FLOAT_VECTOR,
+                    
                 )
             )
             fields.append(
@@ -207,6 +209,7 @@ class SegmentCaptionEmbeddingMilvusClient(BaseMilvusClient):
                     name=self.caption_text_field,
                     dtype=DataType.VARCHAR,
                     max_length=10_000,
+                    enable_analyzer=True,
                 )
             )
             function = Function(

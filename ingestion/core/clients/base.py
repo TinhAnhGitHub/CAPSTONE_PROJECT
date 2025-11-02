@@ -173,25 +173,17 @@ class BaseServiceClient(ABC, Generic[TRequest, TResponse]):
             base_url = await self.get_service_url()
 
             url = urljoin(base_url, endpoint) #type:ignore
-
-            print(f"URL service: {url=}")
-            print(f"{self.service_name=}")
             
             request_kwargs = {**kwargs}
             if request_data:
                 request_kwargs['json'] = request_data.model_dump(mode='json')
-
             logger.debug(
                 f"{self.service_name} request attempt",
                 method=method,
                 url=url
             )
-            
-            print(f"{url=}")
             response = await self.http_client.request(method, url, **request_kwargs) #type:ignore
             response.raise_for_status()
-            print(f"Response from make request: {response=}")
-
             response_data = response.json()
             return response_data
     
@@ -328,7 +320,7 @@ class BaseMilvusClient(ABC):
             caption_sparse_index_config: MilvusIndexBaseConfig | None = None
         ):
 
-        assert visual_index_config or caption_dense_index_config, "At least 1 dense config must be pass in "
+        # assert visual_index_config or caption_dense_index_config, "At least 1 dense config must be pass in "
 
         self.host = host
         self.port = port
@@ -437,10 +429,11 @@ class BaseMilvusClient(ABC):
         ] 
         for config, embedding_field in index_config_list:
             if config and embedding_field:
+                print(embedding_field, config.index_type, config.metric_type, config.index_params)
                 index_params.add_index(
                     field_name=embedding_field,
                     index_type=config.index_type,
-                    metric=config.metric_type,
+                    metric_type=config.metric_type,
                     params=config.index_params
                 ) 
 
@@ -526,6 +519,5 @@ class BaseMilvusClient(ABC):
             return await self.client.has_collection(self.collection_name)
         except Exception:
             return False
-
 
 

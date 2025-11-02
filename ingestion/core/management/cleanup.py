@@ -1,11 +1,8 @@
 from typing import Any
-from urllib.parse import urlparse
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import select, delete
 from loguru import logger
-from core.clients.base import BaseMilvusClient, MilvusIndexConfig
-from core.clients import milvus_client as _milvus_clients  
+from core.clients.base import BaseMilvusClient  
 from core.pipeline.tracker import ArtifactTracker, ArtifactSchema, ArtifactLineageSchema
 from core.storage import StorageClient, StorageError
 from task.common.util import parse_s3_url

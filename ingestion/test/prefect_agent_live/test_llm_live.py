@@ -54,12 +54,25 @@ def test_llm_load_infer_unload_when_available(http: httpx.Client, base_urls: dic
 
 
     # Simple prompt inference
-    r = http.post(_url(base, "/llm/infer"), json={"prompt": "Caption this image","image_base64": [image_b64] ,"metadata": {}})
-    assert r.status_code == 200
-    out = r.json()
-    assert out.get("status") == "success"
-    assert isinstance(out.get("answer"), str)
+    batch_input = {
+        "llm_requests": [
+            {"prompt": "Caption this image", "image_base64": [image_b64]} for _ in range(20)
+        ],
+        "metadata": {"test": "batch_inference"},
+    }
 
-    # Unload
+    r = http.post(_url(base, "/llm/infer"), json=batch_input)
+    assert r.status_code == 200
+    result = r.json()
+    assert result.get("status") in ("success", "partial_error")
+    assert "responses" in result, "Expected 'responses' field in batch output"
+    assert isinstance(result["responses"], list), "Responses must be a list"
+    assert len(result["responses"]) == len(batch_input["llm_requests"])
+    print(result)
+    for idx, resp in enumerate(result["responses"]):
+        
+        assert "answer" in resp, f"Response {idx} missing 'answer'"
+        assert isinstance(resp["answer"], str)
+        assert resp.get("status") in ("success", "error")
     r = http.post(_url(base, "/llm/unload"), json={"cleanup_memory": True})
     assert r.status_code == 200

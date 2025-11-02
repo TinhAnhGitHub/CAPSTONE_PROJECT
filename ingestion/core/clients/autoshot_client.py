@@ -9,7 +9,9 @@ class AutoshotCLientError(ClientError):
 class AutoshotClient(BaseServiceClient[AutoShotRequest, AutoShotResponse]):
     @property
     def service_name(self) -> str:
-        return "autoshot-service"
+        # Must match the service name registered in Consul
+        # See: prefect_agent/service_autoshot/.env -> SERVICE_NAME=service-autoshot
+        return "service-autoshot"
     
     @property
     def inference_endpoint(self) -> str:
