@@ -39,9 +39,9 @@ class ChunkformerASRHandler(BaseModelHandler[ASRInferenceRequest, ASRInferenceRe
     async def load_model_impl(self, device: Literal["cpu", "cuda"]) -> None:
         if self._processor is not None:
             return
-        logger.info("loading_chunkformer_model", path=self._service_config.chunkformer_model_path, device=device)
+        logger.info("loading_chunkformer_model", path=self._service_config.model_name, device=device)
         self._processor = ASRProcessor(
-            model_checkpoint=self._service_config.chunkformer_model_path,
+            model_name=self._service_config.model_name,
             device=device,
         )
         self._current_device = device

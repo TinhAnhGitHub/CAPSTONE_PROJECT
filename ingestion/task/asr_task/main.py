@@ -17,7 +17,6 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact]):
             visitor=artifact_visitor,
              **kwargs
         )
-        self.name = 'asr'
 
     async def preprocess(self, input_data: list[VideoArtifact]) -> list[ASRArtifact]:
         """
@@ -32,7 +31,6 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact]):
                 related_video_id=video_art.artifact_id,
                 related_video_minio_url=video_art.minio_url_path,
                 related_video_extension=video_art.video_extension,
-                task_name=self.name,
                 user_bucket=video_art.user_bucket,
                 related_video_fps=video_art.fps,
                 artifact_type=ASRArtifact.__name__

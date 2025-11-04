@@ -9,7 +9,7 @@ from core.clients.base import ClientConfig
 from core.config.storage import minio_settings, postgre_settings, milvus_settings
 from core.config.task_config import consule_conf
 from core.config.milvus_index_config import image_caption_dense_conf, image_visual_dense_conf, image_caption_sparse_conf, segment_caption_dense_conf, segment_caption_sparse_conf
-
+from core.app_state import AppState
 from core.config.logging import run_logger
 import asyncio
 from prefect.client.orchestration import get_client
@@ -71,7 +71,7 @@ async def ensure_prefect_deployment_exists() -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await ensure_prefect_deployment_exists()
 
-
+    state = AppState()
     from core.storage import StorageClient
     from core.pipeline.tracker import ArtifactTracker
     from core.artifact.persist import ArtifactPersistentVisitor
@@ -161,7 +161,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.video_status = video_status
     app.state.base_client_config=base_client_config
 
-    # state.base_client_config = base_client_config
+    state.base_client_config = base_client_config
     # state.video_ingestion_task = video_ingestion_task
     # state.autoshot_task = autoshot_task
     # state.asr_task = asr_task

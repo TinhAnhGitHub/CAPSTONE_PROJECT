@@ -57,7 +57,6 @@ class ArtifactPersistentVisitor:
             minio_url=artifact.video_minio_url,
             user_id=artifact.user_bucket,
             parent_artifact_id=None,
-            task_name=artifact.task_name,
             created_at=datetime.now(),
             artifact_metadata=upload_file
         )
@@ -85,14 +84,10 @@ class ArtifactPersistentVisitor:
             minio_url=minio_url,
             user_id=artifact.user_bucket,
             parent_artifact_id=artifact.related_video_id,
-            task_name=artifact.task_name,
             created_at=datetime.now(),
             artifact_metadata={}
         )
         await self.tracker.save_artifact(artifact_metadata)
-
-    
-
 
     async def visit_asr(self, artifact: "ASRArtifact", upload_file: dict):
         object_key = artifact.object_key
@@ -108,7 +103,6 @@ class ArtifactPersistentVisitor:
             minio_url=minio_url,
             user_id=artifact.user_bucket,
             parent_artifact_id=artifact.related_video_id,
-            task_name=artifact.task_name,
             created_at=datetime.now(),
             artifact_metadata={}
         )
@@ -131,7 +125,6 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
             parent_artifact_id=artifact.autoshot_artifact_id,
-            task_name='image processing',
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -153,7 +146,7 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
             parent_artifact_id=artifact.autoshot_artifact_id,
-            task_name='Segment caption',
+            lineage_parents=artifact.lineage_parents,
             user_id=artifact.user_bucket,
             artifact_metadata={}
             
@@ -179,7 +172,6 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
             parent_artifact_id=artifact.image_id,
-            task_name='image caption',
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -207,7 +199,6 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
             parent_artifact_id=artifact.image_id,
-            task_name='image embedding',
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -229,7 +220,6 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
             parent_artifact_id=artifact.caption_id,
-            task_name='image embedding',
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -251,7 +241,6 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
             parent_artifact_id=artifact.segment_cap_id,
-            task_name='image embedding',
             user_id=artifact.user_bucket,
             artifact_metadata={}            
         )

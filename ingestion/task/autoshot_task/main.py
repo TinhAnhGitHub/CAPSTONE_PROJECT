@@ -24,7 +24,6 @@ class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
             visitor=artifact_visitor,
              **kwargs
         )
-        self.name = 'autoshot'
     
     async def preprocess(self, input_data: list[VideoArtifact]) -> list[AutoshotArtifact]:
         """
@@ -38,7 +37,6 @@ class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
                 related_video_id=video_art.artifact_id,
                 related_video_minio_url=video_art.minio_url_path,
                 related_video_extension=video_art.video_extension,
-                task_name=self.name,
                 user_bucket=video_art.user_bucket,
                 artifact_type=AutoshotArtifact.__name__,
                 related_video_fps=video_art.fps
@@ -49,7 +47,6 @@ class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
     
 
     async def execute(self, input_data: list[AutoshotArtifact], client: BaseServiceClient | None | BaseMilvusClient) -> AsyncIterator[tuple[AutoshotArtifact ,list[tuple[int,int]] | None]]:
-
         assert client is not None, "The execution required client service"
         assert isinstance(client, BaseServiceClient)
         logger = get_run_logger()

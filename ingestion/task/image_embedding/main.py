@@ -6,7 +6,7 @@ from tqdm import tqdm
 import io
 import json
 from pathlib import Path
-from typing import AsyncIterator, BinaryIO, cast
+from typing import AsyncIterator, BinaryIO, cast, Literal
 from urllib.parse import urlparse
 
 from core.artifact.persist import ArtifactPersistentVisitor
@@ -15,6 +15,13 @@ from core.clients.base import BaseMilvusClient, BaseServiceClient
 from core.clients.image_embed_client import ImageEmbeddingRequest, ImageEmbeddingResponse
 from core.pipeline.base_task import BaseTask
 from task.common.util import cleanup_temp_file, fetch_object_from_s3
+
+from pydantic import BaseModel
+
+class ImageEmbeddingSettings(BaseModel):
+    model_name: str
+    device: Literal['cuda', 'cpu'] 
+    batch_size: int
 
 
 def parse_s3_url(s3_url: str) -> tuple[str, str]:

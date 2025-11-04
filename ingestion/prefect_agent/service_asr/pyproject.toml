@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.13.0",
+    "chunkformer>=1.2.1",
     "colorama>=0.4.6",
     "fastapi>=0.118.2",
     "ffmpeg-python>=0.2.0",

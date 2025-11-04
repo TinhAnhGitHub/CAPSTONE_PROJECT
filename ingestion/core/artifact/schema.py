@@ -36,15 +36,12 @@ class BaseArtifact(ABC, BaseModel):
         raise NotImplementedError
 
 class VideoArtifact(BaseArtifact):
-    """
-    This will hold the video artifact, This artifact is special, does not follow the BaseArtifact semantic conventional
-    """
     artifact_type: str 
-    task_name: str
     video_id: str
-    object_name:str
     video_minio_url: str
     video_extension: str
+    
+    object_name:str
     user_bucket: str
     fps: float
 
@@ -79,7 +76,6 @@ class AutoshotArtifact(BaseArtifact):
     related_video_extension: str
     related_video_fps: float
 
-    task_name: str
     user_bucket: str
 
     def __post_init__(self):
@@ -98,7 +94,7 @@ class AutoshotArtifact(BaseArtifact):
 
     @property
     def artifact_id(self) -> str:
-        base_string = f"{self.related_video_id}:{self.related_video_id}:{self.task_name}"
+        base_string = f"{self.related_video_id}:{self.related_video_id}:AutoshotArtifact"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
     
     @property
@@ -107,13 +103,12 @@ class AutoshotArtifact(BaseArtifact):
 
 class ASRArtifact(BaseArtifact):
     artifact_type: str  
+
     related_video_id: str = Field(..., description="Which video id does this autoshot artifact belong to")
     related_video_minio_url: str
     related_video_extension: str
     related_video_fps: float
 
-
-    task_name: str
     user_bucket: str
 
     
@@ -132,7 +127,7 @@ class ASRArtifact(BaseArtifact):
 
     @property
     def artifact_id(self) -> str:
-        base_string = f"{self.related_video_id}:{self.related_video_id}:{self.task_name}:{self.user_bucket}"
+        base_string = f"{self.related_video_id}:{self.related_video_id}:AutoshotArtifact:{self.user_bucket}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
 
     @property
@@ -148,7 +143,6 @@ class ImageArtifact(BaseArtifact):
     related_video_extension: str
     related_video_fps: float
     timestamp: str
-    
 
 
     autoshot_artifact_id: str
@@ -185,6 +179,7 @@ class SegmentCaptionArtifact(BaseArtifact):
     
     artifact_type: str
     autoshot_artifact_id: str
+    asr_artifact_id: str
     
     related_video_extension: str
     related_video_id: str
@@ -222,6 +217,10 @@ class SegmentCaptionArtifact(BaseArtifact):
     def artifact_id(self) -> str:
         base_string = f"{self.related_video_id}:{self.start_frame}:{self.end_frame}:{self.start_timestamp}:{self.end_timestamp}:{self.related_asr}:{self.user_bucket}"
         return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
+
+    @property
+    def lineage_parents(self) -> list[str]:
+        return [pid for pid in (self.autoshot_artifact_id, self.asr_artifact_id) if pid]
     
 class ImageCaptionArtifact(BaseArtifact):
     artifact_type: str

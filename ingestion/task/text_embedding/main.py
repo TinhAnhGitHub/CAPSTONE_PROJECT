@@ -47,7 +47,6 @@ class TextImageCaptionEmbeddingTask(BaseTask[
     ) -> list[TextCaptionEmbeddingArtifact]:
         result = []
         for img_artifact in input_data:
-            fps = img_artifact.related_video_fps
             timestamp = img_artifact.time_stamp
             text_embed_art = TextCaptionEmbeddingArtifact(
                 time_stamp=timestamp,
@@ -58,7 +57,7 @@ class TextImageCaptionEmbeddingTask(BaseTask[
                 caption_id=img_artifact.artifact_id,
                 artifact_type=TextCaptionEmbeddingArtifact.__name__,
                 related_video_id=img_artifact.related_video_id,
-                image_minio_url=img_artifact.artifact_id,
+                image_minio_url=img_artifact.image_minio_url,
                 image_id=img_artifact.image_id
             )
             result.append(text_embed_art)

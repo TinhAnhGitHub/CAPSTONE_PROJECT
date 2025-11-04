@@ -45,7 +45,7 @@ class ImageCaptionLLMTask(BaseTask[
                 image_minio_url=img_artifact.minio_url_path,
                 extension=img_artifact.extension,
                 image_id=img_artifact.artifact_id,
-                artifact_type=ImageArtifact.__name__,
+                artifact_type=ImageCaptionArtifact.__name__,
                 related_video_id=img_artifact.related_video_id
             )
             result.append(img_cap_artifact)

@@ -18,11 +18,9 @@ class BaseTask(Generic[InputTask, OuputTask], ABC):
     """
     def __init__(
         self,
-        name: str,
         visitor: ArtifactPersistentVisitor,  
         **kwargs
     ):
-        self.name = name
         self.visitor = visitor
         self.kwargs = kwargs
     

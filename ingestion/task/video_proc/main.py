@@ -7,7 +7,7 @@ from core.pipeline.base_task import BaseTask
 from core.artifact.persist import  ArtifactPersistentVisitor
 from core.artifact.schema import VideoArtifact
 from core.clients.base import BaseServiceClient, BaseMilvusClient
-from .util import get_video_fps
+from .util import get_video_fps, get_video_duration_cv2
 from prefect.logging import get_run_logger
 
 
@@ -24,7 +24,6 @@ class VideoIngestionTask(BaseTask[VideoInput, VideoArtifact]):
         **kwargs,
     ):
         super().__init__(
-            name=VideoIngestionTask.__name__,
             visitor=artifact_visitor,
              **kwargs
         )
@@ -56,14 +55,15 @@ class VideoIngestionTask(BaseTask[VideoInput, VideoArtifact]):
             )
             logger.debug("Downloaded video %s to temporary path %s", video_id, video_tmp_path)
             fps = get_video_fps(video_tmp_path)
+            duraion = get_video_duration_cv2(path=video_tmp_path)
             metadata = {
                 'fps': fps,
-                'extension': video_extension
+                'extension': video_extension,
+                'duraion': duraion
             }
             os.remove(video_tmp_path)
             video_artifact = VideoArtifact(
                 artifact_type=VideoArtifact.__name__,
-                task_name=self.name,
                 video_id=video_id,
                 video_extension=video_extension,
                 video_minio_url=video_s3_path,

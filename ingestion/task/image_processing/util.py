@@ -27,7 +27,7 @@ def _read_frame_sequential(video_path: str, frame_index: int) -> tuple[bool, np.
             ok, frame = cap.read()
             if not ok:
                 return False, None
-        return True, frame
+        return True, frame #type:ignore
     finally:
         cap.release()
 

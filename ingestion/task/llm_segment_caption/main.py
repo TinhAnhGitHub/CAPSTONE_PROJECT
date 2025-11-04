@@ -94,6 +94,7 @@ class SegmentCaptionLLMTask(BaseTask[
 
 
                 artifact = SegmentCaptionArtifact(
+                    
                     start_frame=start_frame,
                     end_frame=end_frame,
                     start_timestamp=start_time_stamp,
@@ -104,6 +105,7 @@ class SegmentCaptionLLMTask(BaseTask[
                     user_bucket=asr.user_bucket,
                     related_video_extension=shot.related_video_extension,
                     autoshot_artifact_id=shot.artifact_id,
+                    asr_artifact_id=asr.artifact_id,
                     artifact_type=SegmentCaptionArtifact.__name__,
                     related_video_id=shot.related_video_id
                 )
