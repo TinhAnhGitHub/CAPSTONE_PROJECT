@@ -1,11 +1,30 @@
 import ast
+import nest_asyncio
 import contextlib
 import io
+import asyncio
 import textwrap
 import dataclasses
 import traceback
-from typing import Callable, Any, Iterable, Mapping, Sequence
+from typing import Callable, Any, Iterable, Mapping, Sequence, Coroutine
 from llama_index.core.agent import CodeActAgent
+import sys
+
+
+class TeeIO(io.StringIO):
+    def __init__(self, original_stream):
+        super().__init__()
+        self._original = original_stream
+
+    def write(self, s):
+        self._original.write(s)
+        self._original.flush()
+        return super().write(s)
+
+    def flush(self):
+        self._original.flush()
+        return super().flush()
+    
 
 _SAFE_BUILTINS: dict[str, Any] =  {
     
@@ -36,6 +55,8 @@ _SAFE_BUILTINS: dict[str, Any] =  {
     'object': object, 'slice': slice,
     'staticmethod': staticmethod, 'classmethod': classmethod,
     'property': property,
+    ''
+    'print': print
 }
 
 
@@ -115,8 +136,8 @@ class SandboxCodeExecutor:
     
     
     def execute(self, code: str) -> ExecutionResult:
-        stdout_buf = io.StringIO()
-        stderr_buf = io.StringIO()
+        stdout_buf = TeeIO(sys.stdout)
+        stderr_buf = TeeIO(sys.stderr)
 
         global_ctx = self._globals if self._persist_state else dict(self._base_globals)
         local_ctx = self._locals if self._persist_state else {}
@@ -128,6 +149,30 @@ class SandboxCodeExecutor:
         try:
             with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
                 tree = ast.parse(stripped)
+                
+                has_await = any(
+                    isinstance(node, ast.Await) for node in ast.walk(tree)
+                )
+                if has_await:
+                    wrapped_code = f"async def __sandbox_async__():\n{textwrap.indent(stripped, '    ')}"
+                    exec(compile(wrapped_code, "<sandbox>", "exec"), global_ctx, local_ctx)
+                    coro = local_ctx["__sandbox_async__"]()
+
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+
+                    if loop and loop.is_running():
+                        nest_asyncio.apply()
+                        return_value = asyncio.ensure_future(coro)
+                        return_value = loop.run_until_complete(asyncio.gather(return_value))[0]
+                    else:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        return_value = loop.run_until_complete(coro)
+                        loop.close()
+                
                 last_expr = (
                     tree.body[-1] if tree.body  and isinstance(tree.body[-1], ast.Expr) else None
                 )
@@ -165,7 +210,7 @@ def build_worker_executor(
     tools_bindings: dict[str, Callable[..., Any]],
     extra_globals: dict[str, Any] | None = None,
     allowed_modules: Sequence[str] | None = None
-)-> Callable[[str], Any]:
+)-> Callable[[str], Coroutine[Any, Any, str]]:
     shared_bindings = {}
     for name, fn in tools_bindings.items():
         shared_bindings[name] = fn
