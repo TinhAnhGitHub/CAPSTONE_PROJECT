@@ -15,14 +15,14 @@ def time_to_seconds(time_str: str) -> float:
         return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond / 1e6
 
 def time_range_overlap(
-        start_input: str,
-        end_input:str,
-        start_range: str,
-        end_range:str,
+        start_input: float,
+        end_input:float,
+        start_range: float,
+        end_range:float,
         iou:float,
     ):
-        s1, e1 = time_to_seconds(start_input), time_to_seconds(end_input)
-        s2, e2 = time_to_seconds(start_range), time_to_seconds(end_range)
+        s1, e1 = start_input, end_input
+        s2, e2 = start_range, end_range
         inter = max(0, min(e1, e2) - max(s1, s2))
         union = max(e1, e2) - min(s1, s2)
         return (inter / union) >= iou or (s1 >= s2 and e1 <= e2)
@@ -51,3 +51,13 @@ def create_tmp_file_from_minio_object(
     with open(tmp_path, 'wb') as f:
         f.write(file_bytes)
     return tmp_path
+
+def parse_time_safe(time_str: str):
+    """Parse both HH:MM:SS and HH:MM:SS.sss safely."""
+    try:
+        return datetime.strptime(time_str, "%H:%M:%S.%f")
+    except ValueError:
+        return datetime.strptime(time_str, "%H:%M:%S")
+
+
+

@@ -21,14 +21,13 @@ from .helper import extract_s3_minio_url
     dependencies=[
         "visual_milvus_client",
         "external_client",
-        "minio_client",
     ]
 )
 async def get_images_from_visual_query(
     visual_query: Annotated[
         str,
         "A visually descriptive natural-language query (e.g., 'a red sports car on a wet street at night'). "
-        "Avoid non-visual elements such as names, numbers, or abstract concepts."
+        "Avoid non-visual elements such as names, numbers, or abstract concepts. The query must be in English"
     ],
     top_k: Annotated[int, "Number of top-matching images to retrieve based on similarity score."],
     # Runtime-Agent run Injection
@@ -54,24 +53,20 @@ async def get_images_from_visual_query(
 
     response = await external_client.encode_visual_text(request=embedding_request)
     query_embedding = cast(list[list[float]], response.text_embeddings) 
-    
     filter_condition = ImageFilterCondition(
         related_video_id=list_video_id,
         user_bucket=user_id
     )
-
     request = visual_milvus_client.visual_dense_request(
         data=query_embedding,
         limit=top_k,
         expr=filter_condition.to_expr()
     )
-
     milvus_response = await visual_milvus_client.search_combination(
         requests=[request],
         limit=top_k,
         weight=[1.0]
     )
-
     result: list[ImageObjectInterface] = []
     for resp in milvus_response:
         image = ImageObjectInterface(
@@ -81,11 +76,10 @@ async def get_images_from_visual_query(
             caption_info=resp.image_caption,
             minio_path=resp.image_minio_url,
             score=resp.score,
-            reference_query_image=None,
-            query=visual_query
+            # reference_query_image=None,
+            query=[visual_query]
         )
         result.append(image)
-    
 
     return result
 
@@ -96,20 +90,20 @@ async def get_images_from_visual_query(
     dependencies=[
         "visual_milvus_client",
         "external_client",
-        "minio_client",
     ]
 )
 async def get_images_from_caption_query(
     caption_query: Annotated[
         str,
-        "A descriptive text query that semantically aligns with image captions (e.g., 'a person surfing during sunset'). "
+        "A descriptive text query that semantically aligns with image captions."
         "Use this for retrieving images based on caption embeddings rather than raw visual content."
+        "The caption query must be in Vietnamese."
     ],
     top_k_each_request: Annotated[int, "Number of top-matching images to retrieve based on caption embedding similarity."],
     top_k_final:Annotated[int, "Number of top-matching images to retrieve based on caption embedding similarity."],
-    weights: Annotated[tuple[float,float] | None, "If enable, will use the sparse BM25 for hybrid search"],
+    weights: Annotated[list[float] | None, "If provided, expects two weights [dense, sparse] for hybrid search."],
     
-    list_video_id: Annotated[list[str], "List of video IDs to restrict the search domain (auto-provided)."],
+    list_video_id: Annotated[list[str], "List of video IửodDs to restrict the search domain (auto-provided)."],
     user_id: Annotated[str, "User identifier for context or permissions (auto-provided)."],
     
     visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for caption-based embedding search (auto-provided)."],
@@ -142,7 +136,9 @@ async def get_images_from_caption_query(
         )
     ]
     
-    if weights:
+    if weights is not None:
+        if len(weights) != 2:
+            raise ValueError("weights must contain exactly two elements: [dense_weight, sparse_weight]")
         reqs.append(
             visual_milvus_client.caption_sparse_request(
                 data=[caption_query],
@@ -154,7 +150,7 @@ async def get_images_from_caption_query(
     milvus_response = await visual_milvus_client.search_combination(
         requests=reqs,
         limit=top_k_final,
-        weight=list(weights) if weights else [1.0]
+        weight=list(weights) if weights is not None else [1.0]
     )
 
     result = []
@@ -166,8 +162,8 @@ async def get_images_from_caption_query(
             caption_info=resp.image_caption,
             minio_path=resp.image_minio_url,
             score=resp.score,
-            reference_query_image=None,
-            query=caption_query
+            # reference_query_image=None,
+            query=[caption_query]
         )
         result.append(text_object)
     return result
@@ -185,11 +181,11 @@ async def get_images_from_caption_query(
 async def get_segments_from_event_query(
     event_query: Annotated[
         str,
-        "An event-level query (e.g., 'a person starts running', 'a car accident occurs', 'a soccer player scores a goal')."
+        "An event-level query. The event-query must be in Vietnamese."
     ],
     top_k_each_request: Annotated[int, "Number of top results per subquery (dense/sparse)."],
     top_k_final: Annotated[int, "Final number of results to return after hybrid ranking."],
-    weights: Annotated[tuple[float, float] | None, "Weights for hybrid dense/sparse reranking. If None, dense-only search."],
+    weights: Annotated[list[float] | None, "If provided, expects two weights [dense, sparse] for hybrid reranking."],
 
     list_video_id: Annotated[list[str], "Video IDs to constrain the search domain (auto-provided)."],
     user_id: Annotated[str, "User identifier (auto-provided)."],
@@ -220,7 +216,9 @@ async def get_segments_from_event_query(
             expr=filter_condition.to_expr()
         )
     ]
-    if weights:
+    if weights is not None:
+        if len(weights) != 2:
+            raise ValueError("weights must contain exactly two elements: [dense_weight, sparse_weight]")
         reqs.append(
             segment_milvus_client.sparse_request(
                 data=[event_query],
@@ -232,7 +230,7 @@ async def get_segments_from_event_query(
     milvus_response = await segment_milvus_client.search_combination(
         requests=reqs,
         limit=top_k_final,
-        weight=list(weights) if weights else [1.0]
+        weight=list(weights) if weights is not None else [1.0]
     )
 
     result = []
@@ -272,7 +270,7 @@ async def get_images_from_multimodal_query(
     ],
     top_k_each_request: Annotated[int, "Top results from each modality before reranking."],
     top_k_final: Annotated[int, "Final number of multimodal results to return."],
-    weights: Annotated[tuple[float, float, float], "Weights for [visual, caption_dense, caption_sparse] reranking."],
+    weights: Annotated[list[float], "Expects three weights [visual, caption_dense, caption_sparse] for reranking."],
 
     list_video_id: Annotated[list[str], "Restrict search to these videos (auto-provided)."],
     user_id: Annotated[str, "User identifier (auto-provided)."],
@@ -292,7 +290,7 @@ async def get_images_from_multimodal_query(
     visual_resp = await external_client.encode_visual_text(request=visual_embed_req)
     text_resp = await external_client.encode_text(request=text_embed_req)
 
-    visual_emb = cast(list[list[float]], visual_resp.image_embeddings)
+    visual_emb = cast(list[list[float]], visual_resp.text_embeddings)
     caption_emb = cast(list[list[float]], text_resp.embeddings)
 
     filter_condition = ImageFilterCondition(
@@ -318,6 +316,9 @@ async def get_images_from_multimodal_query(
         ),
     ]
 
+    if len(weights) != 3:
+        raise ValueError("weights must contain exactly three elements: [visual_weight, caption_dense_weight, caption_sparse_weight]")
+
     milvus_response = await visual_milvus_client.search_combination(
         requests=reqs,
         limit=top_k_final,
@@ -334,7 +335,7 @@ async def get_images_from_multimodal_query(
             minio_path=resp.image_minio_url,
             score=resp.score,
             query=[visual_query,caption_query],
-            reference_query_image=None
+            # reference_query_image=None
         )
         result.append(img)
     return result
@@ -401,7 +402,7 @@ async def find_similar_images_from_image(
             minio_path=resp.image_minio_url,
             score=resp.score,
             query=None,
-            reference_query_image=reference_image
+            # reference_query_image=reference_image
         )
         result.append(image)
     

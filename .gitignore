@@ -3,9 +3,12 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+
+**.spec-workflow/
+**service_data/
 # C extensions
 *.so
-
+**.spec
 # Distribution / packaging
 .Python
 build/

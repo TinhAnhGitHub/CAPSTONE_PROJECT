@@ -1,5 +1,5 @@
 from .base import BaseMilvusClient
-from .schema import ImageFilterCondition, ImageMilvusResponse, SegmentCaptionMilvusResponse, SegmentCaptionFilterCondition
+from .schema import ImageMilvusResponse, SegmentCaptionMilvusResponse, SegmentCaptionFilterCondition, ImageFilterCondition
 from typing import cast
 from pymilvus import AsyncMilvusClient,AnnSearchRequest,WeightedRanker
 from pymilvus import Function, FunctionType
@@ -97,17 +97,6 @@ class ImageMilvusClient(BaseMilvusClient[ImageMilvusResponse]):
         weight: list[float]
     ) -> list[ImageMilvusResponse]:
         assert len(requests) == len(weight), "The...."
-
-        rerank = Function(
-            name='weight',
-            input_field_names=[],
-            function_type=FunctionType.RERANK,
-            params={
-                "reranker": "weighted", 
-                "weights": weight,
-                "norm_score": True  
-            }
-        )
         client = cast(AsyncMilvusClient, self.client)
 
         result = await client.hybrid_search(
@@ -149,7 +138,7 @@ class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusRespo
                 start_time=str(fields['start_time']),
                 end_time=str(fields['end_time']),
                 related_video_id=str(fields['related_video_id']),
-                segment_caption=str(fields['caption']),
+                segment_caption=str(fields['segment_caption']),
                 segment_caption_minio_url=str(fields['segment_caption_minio_url']),
                 user_bucket=str(fields['user_bucket']),
                 score=float(hit.score)
@@ -195,23 +184,14 @@ class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusRespo
             "The number of requests and weights must match."
         )
 
-        rerank = Function(
-            name='weight',
-            input_field_names=[],
-            function_type=FunctionType.RERANK,
-            params={
-                "reranker": "weighted",
-                "weights": weight,
-                "norm_score": True
-            }
-        )
         client = cast(AsyncMilvusClient, self.client)
 
         result = await client.hybrid_search(
             collection_name=self.collection,
             reqs=requests,
             ranker=WeightedRanker(*weight),
-            limit=limit
+            limit=limit,
+            output_fields=['*']
         )
 
         if not result:

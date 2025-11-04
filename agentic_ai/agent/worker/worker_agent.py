@@ -19,9 +19,16 @@ from llama_index.core.tools import BaseTool, FunctionTool
 from llama_index.core.workflow import Context
 from llama_index.core.objects import ObjectRetriever
 from llama_index.core.workflow import Event
+from llama_index.core.prompts import RichPromptTemplate
 from agentic_ai.tools.type.factory import ToolOutputFormatter
+from llama_index.core.llms import  TextBlock
 from typing import Literal
+
+
+
 from .prompt import MAKE_DECISION_PROMPT
+
+
 class AgentDecision(Event):
     name: str
     decision:str
@@ -40,6 +47,8 @@ class ToolsOrCodeDecision(BaseModel):
 
 EXECUTE_TOOL_NAME='execute'
 
+
+
 class WorkerCodeVideoAgent(BaseWorkflowAgent):
     """
     A workflow agent that is specialized in generating code and execute a bunch of tools
@@ -55,7 +64,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         description="The function to execute the code"
     )
 
-    code_act_system_prompt: str = Field(
+    code_act_system_prompt: RichPromptTemplate = Field(
         ...,
         description="System prompt for code generation mode"
     )
@@ -73,15 +82,16 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
 
     def __init__(
         self,
-        execution_key:str,
+        execution_history_key:str,
         code_execute_fn: Union[Callable, Awaitable],
-        code_act_system_prompt: str,
+        code_act_system_prompt: RichPromptTemplate,
         name: str,
         description: str,
         system_prompt: str | None = None,
         tools: list[Union[BaseTool, Callable]] | None = None,
         tool_retriever: ObjectRetriever | None = None,
         llm: FunctionCallingLLM | None = None,
+        **kwargs
     ):
         """
         The initialization of the video agent
@@ -92,9 +102,10 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         tools.append(  
             FunctionTool.from_defaults(code_execute_fn, name='execute')  # type: ignore
         )
-        self.execution_history_key = execution_key
         super().__init__(
-                
+            execution_history_key=execution_history_key,
+            code_execute_fn=code_execute_fn,
+            code_act_system_prompt=code_act_system_prompt,
             name=name,
             description=description,
             system_prompt=system_prompt,
@@ -102,8 +113,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
             tool_retriever=tool_retriever,
             can_handoff_to=None,
             llm=llm,
-            code_act_system_prompt=code_act_system_prompt,
-            code_execute_fn=code_execute_fn,
+            **kwargs
         )
     
 
@@ -160,8 +170,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
             tool_descriptions.append(tool_description)
 
         return "\n\n".join(tool_descriptions)
-    
-    
+
     
     async def _handle_tool_call(
         self,
@@ -243,7 +252,9 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
     async def _handle_code_and_execute(
         self,
         ctx: Context,
-        current_llm_input: list[ChatMessage]
+        current_llm_input: list[ChatMessage],
+        tool_descriptions:str
+        
     ):
         system_prompt_added = False
         for msg in current_llm_input:
@@ -254,7 +265,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         if not system_prompt_added:
             code_system_msg = ChatMessage(
                 role="system",
-                content=self.code_act_system_prompt
+                content=self.code_act_system_prompt.format_messages(tool_descriptions=tool_descriptions)
             )
             current_llm_input = [code_system_msg] + current_llm_input
         
@@ -325,8 +336,6 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         message = ChatMessage(role="assistant", content=full_response_text)
         return message, tool_calls, raw
 
-        
-
     async def take_step(
         self, 
         ctx: Context,
@@ -342,6 +351,14 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
             await ctx.store.get(self.execution_history_key, default=[])
         )
         
+        for msg in llm_input:
+            for block in msg.blocks:
+                if isinstance(block, TextBlock):
+                    try:
+                        block.text = block.text.encode('latin1').decode('utf-8')
+                    except Exception:
+                        pass
+                        
         current_llm_input = [*llm_input, *exe_his]
 
         tool_descriptions = self._get_tool_descriptions(tools)
@@ -356,7 +373,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         
         ctx.write_event_to_stream(
             AgentInput(
-                input=current_llm_input, current_agent_name=self.name
+                input=decision_input, current_agent_name=self.name
             )
         )
 
@@ -374,7 +391,8 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         if raw_response.decision == 'code':
             message, tool_calls, raw = await self._handle_code_and_execute(
                 ctx=ctx,
-                current_llm_input=current_llm_input
+                current_llm_input=current_llm_input,
+                tool_descriptions=tool_descriptions
             )
             
         elif raw_response.decision == 'tools':
@@ -439,9 +457,12 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
                     )
                 )
         async with ctx.store.edit_state() as state:
-                
-            await ctx.store.set(self.execution_history_key, history_context)
-    
+            # await ctx.store.set(self.execution_history_key, history_context)
+            state[self.execution_history_key] = history_context
+
+        print(f"{ await ctx.store.get(
+            self.execution_history_key, default=[]
+        )=}")
 
     async def finalize(
         self, ctx: Context, output: AgentOutput, memory: BaseMemory

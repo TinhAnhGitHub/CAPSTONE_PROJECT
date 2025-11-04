@@ -16,6 +16,7 @@ CONTRASTIVE_VISUAL_ENHANCEMENT_PROMPT = PromptTemplate(
       consistent views of the same concept, if asked
     - Avoid domain-unfamiliar jargon unless explicitly required.
     - Make sure each prompt is under 25 words and coherent.
+    - THe output must be in Vietnamese.
 
     Input: {raw_query}
     variants: {variants}
@@ -36,6 +37,7 @@ CAPTION__ENHANCEMENT_PROMPT = PromptTemplate(
     - Prefer objective description over subjective opinion.
     - Avoid redundant phrases like "This image shows...".
     - Output one sentence only.
+    - The output must be in English
 
     Input: {raw_query}
     variants: {variants

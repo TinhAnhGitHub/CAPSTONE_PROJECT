@@ -2,7 +2,7 @@ from llama_index.core.tools import FunctionTool
 from functools import partial, wraps
 import json
 from collections import defaultdict
-from typing import Callable, Annotated, get_origin, get_args, get_type_hints
+from typing import Callable, Annotated, get_origin, get_args, get_type_hints, cast
 import inspect
 from agentic_ai.tools.clients.milvus.client import ImageMilvusClient, SegmentCaptionImageMilvusClient
 from agentic_ai.tools.clients.postgre.client import PostgresClient
@@ -14,8 +14,19 @@ from agentic_ai.tools.schema.artifact import VideoInterface, ImageObjectInterfac
 from llama_index.core.llms import  TextBlock, ImageBlock, VideoBlock
 from llama_index.core.base.llms.types import ContentBlock
 
+from llama_index.core.tools import FunctionTool
 
 from .registry import tool_registry
+
+
+def safe_partial(func: Callable, **kwargs):
+    sig = inspect.signature(func)
+    valid_params = sig.parameters.keys()
+
+    filtered_kwargs = {
+        k:v for k, v in kwargs.items() if k in valid_params
+    }
+    return partial(func, **filtered_kwargs)
 
 
 
@@ -63,29 +74,14 @@ class ToolOutputFormatter:
         result_dict: dict[str, list[dict]] = defaultdict(list)
     
         for image in list_images:
-            query = image.query if image.query else "No query related"
-            image_query = image.reference_query_image.expr() if image.reference_query_image else "No reference image"
-
-            if isinstance(query, list):
-                query = ', '.join(query)
-
-            result_dict[image.related_video_id].append({
-                "frame_index": image.frame_index,
-                "timestamp": image.timestamp,
-                "caption": image.caption_info,
-                "score": round(image.score, 4) if image.score else "No score",
-                "minio_path": image.minio_path,
-                "query_relation": f"Match for query: '{query}'",
-                "reference_query_image": f"The match reference image: {image_query}"
-            })
-        
+            result_dict[image.related_video_id].append(image.model_dump())
         readable_result = {
-            "type": "visual_search_result",
+            "type": "Search Image Results",
             "summary": f"Retrieved {len(list_images)} visually similar frames across {len(result_dict)} videos.",
             "results": result_dict
         }
         
-        return TextBlock(text=json.dumps(readable_result, indent=2))
+        return TextBlock(text=json.dumps(readable_result, indent=2,  ensure_ascii=False))
 
     @staticmethod
     def format_segment_interface(
@@ -95,20 +91,13 @@ class ToolOutputFormatter:
         result_dict: dict[str, list[dict]] = defaultdict(list)
 
         for segment in list_segments:
-            query = segment.segment_caption_query if segment.segment_caption_query else "No query related"
-            result_dict[segment.related_video_id].append({
-                "start_frame_index": segment.start_frame_index,
-                "end_frame_index": segment.end_frame_index,
-                "start_time": segment.start_time,
-                "end_time": segment.end_time,
-                "caption": segment.caption_info,
-                "score": round(segment.score, 4) if segment.score else "No score",
-                "duration": f"{segment.start_time} → {segment.end_time}",
-                "query_relation": f"Segment semantically related to query: '{query}'"
-            })
+            result_dict[segment.related_video_id].append(segment.model_dump())
 
-        for video_id in result_dict:
-            result_dict[video_id].sort(key=lambda x: x["score"], reverse=True)
+        for video_id, segments in result_dict.items():
+            segments.sort(
+                key=lambda x: (x.get("score") or 0.0), 
+                reverse=True
+            )
 
         readable_result = {
             "type": "visual_segment_search_result",
@@ -116,16 +105,17 @@ class ToolOutputFormatter:
                 f"Retrieved {len(list_segments)} relevant segments across "
                 f"{len(result_dict)} videos based on semantic similarity to the query."
             ),
-            "results": result_dict
+            "results": result_dict,
         }
 
-        return TextBlock(text=json.dumps(readable_result, indent=2))
+        return TextBlock(
+            text=json.dumps(readable_result, indent=2, ensure_ascii=False)
+        )
 
     @staticmethod
     def format_bytes_object(
         byte_mime_type: list[tuple[bytes,str]]
     ) -> list[ContentBlock]:
-
 
         result: list[ContentBlock] = []
         for byte_object, mime_type  in byte_mime_type:
@@ -203,6 +193,35 @@ class ToolFactory:
         if get_origin(return_type) is Annotated:
             return_type = get_args(return_type)[0]
         return return_type
+    
+    def _make_callable_from_partial(self, fn_partial: Callable, formatter_func: Callable | None) -> Callable:
+        if not isinstance(fn_partial, partial):
+            return fn_partial
+        base_fn = fn_partial.func
+        @wraps(base_fn)
+        async def async_wrapper(*args, **kwargs):
+            result = await fn_partial(*args, **kwargs)
+            if formatter_func:
+                return formatter_func(result)
+            return result
+
+        @wraps(base_fn)
+        def sync_wrapper(*args, **kwargs):
+            result = fn_partial(*args, **kwargs)
+            if formatter_func:
+                return formatter_func(result)
+            return result
+        
+        wrapper = async_wrapper if inspect.iscoroutinefunction(base_fn) else sync_wrapper
+        sig = inspect.signature(base_fn)
+        bound_params = set(fn_partial.keywords.keys()) if fn_partial.keywords else set()
+        new_params = [p for n, p in sig.parameters.items() if n not in bound_params]
+        wrapper.__signature__ = sig.replace(parameters=new_params)
+
+
+        wrapper.__name__ = getattr(base_fn, "__name__", "wrapped_partial")
+        wrapper.__doc__ = getattr(base_fn, "__doc__", "")
+        return wrapper
 
 
     def _bind_tool(self, tool_name:str) -> Callable | None:
@@ -228,21 +247,13 @@ class ToolFactory:
                 f"but they were not provided to ToolFactory"
             )
         partial_func= partial(metadata.func, **bound_kwargs)
+        print(metadata.name)
         return_type = self._get_return_type(metadata.func)
         formatter_func = self.formatter.get_formatter(return_type)
-
-        @wraps(metadata.func)
-        async def bound_func(*args, **kwargs): #enforce async function
-            result = await partial_func(*args, **kwargs)
-            if formatter_func:
-                return formatter_func(result)
-            return result
-        
-        bound_func.__name__ = metadata.name
-        bound_func.__doc__ = metadata.docstring or metadata.func.__doc__
-
-        self._tool_cache[tool_name] = bound_func
-        return bound_func
+        wrapper_func = self._make_callable_from_partial(partial_func, formatter_func)
+        self._tool_cache[tool_name] = wrapper_func
+        return wrapper_func
+    
     
     def get_tool(self, name: str) -> Callable | None:
         return self._bind_tool(name)
@@ -278,21 +289,45 @@ class ToolFactory:
             for name in tool_registry.list_all()
             if self._bind_tool(name) is not None
         }
-
-
-
-
-        
-
-
-
+    
     
 
+    def get_all_tools_functool(
+        self,
+        **kwargs
+    ) -> dict[str, FunctionTool]:
+        """
+        Turn the tools into FunctionToosl
+        If kwargs provide -> add to the partial functions
+        """
+        fn_name2fn_tool = {}
+        for name in tool_registry.list_all():
+            if self._bind_tool(name) is not None:
+                fnc = cast(Callable, self._bind_tool(name))
+                fnc = safe_partial(fnc, **kwargs)
+                fnc = self._make_callable_from_partial(fnc, None)
 
-        
+                if inspect.iscoroutinefunction(fnc):
+                    func_tool = FunctionTool.from_defaults(
+                        async_fn=fnc
+                    )
+                else:
+                    func_tool = FunctionTool.from_defaults(
+                        fn=fnc
+                    )                
+                fn_name2fn_tool[fnc.__name__] = func_tool
 
-        
-
-
-
+        return fn_name2fn_tool
+    
+    def get_all_tools_normal(
+        self, **kwargs
+    )->dict[str, Callable]:
+        fn_name2fn_tool = {}
+        for name in tool_registry.list_all():
+            if self._bind_tool(name) is not None:
+                fnc = cast(Callable, self._bind_tool(name))
+                fnc = safe_partial(fnc, **kwargs)
+                fnc = self._make_callable_from_partial(fnc, None)               
+                fn_name2fn_tool[fnc.__name__] = fnc
+        return fn_name2fn_tool
         

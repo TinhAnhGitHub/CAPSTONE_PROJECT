@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import Field, BaseModel
+from pydantic import Field, BaseModel, model_validator
 from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact
 
 
@@ -9,11 +9,7 @@ class VideoInterface(BaseModel):
     """
     video_id: str
     fps: float
-    duration: str
-
-    def __str__(self) -> str:
-        return super().__str__()
-
+    # duration: str
 
 class SegmentObjectInterface(BaseModel):
     """
@@ -44,24 +40,14 @@ class SegmentObjectInterface(BaseModel):
         ),
     )
 
+    @model_validator(mode='after')
+    def fill_defaults(cls, values):
+        if values.segment_caption_query is None:
+            values.segment_caption_query = "No semantic query relatd"
+        return values
+    
 
-    def expr(self) -> str:
-        """
-        Structured, agent-readable summary of the segment object.
-        Designed for reasoning agents or retrievers to parse easily.
-        """
-        return (
-            f"SegmentObject("
-            f"video_id='{self.related_video_id}', "
-            f"frames={self.start_frame_index}-{self.end_frame_index}, "
-            f"time='{self.start_time}->{self.end_time}', "
-            f"caption='{self.caption_info}', "
-            f"score={self.score if self.score is not None else 'N/A'}, "
-            f"query='{self.segment_caption_query if self.segment_caption_query else 'N/A'}'"
-            f")"
-        )
-    
-    
+
 
 
 class ImageObjectInterface(BaseModel):
@@ -75,7 +61,7 @@ class ImageObjectInterface(BaseModel):
     caption_info: str | None= Field(None, description="Descriptive caption summarizing the image content.")
     minio_path: str = Field(..., description="Storage path or URL for this image (e.g., MinIO or S3).")
 
-    score: float | None = Field(
+    score: float | None | str  = Field(
         None,
         description=(
             "Normalized similarity score between this image and the retrieval query. "
@@ -84,7 +70,7 @@ class ImageObjectInterface(BaseModel):
         ),
     )
 
-    query: list[str] | str | None = Field(
+    query: list[str] | None = Field(
         None,
         description=(
             "The search query or queries that led to the retrieval of this image. "
@@ -92,35 +78,24 @@ class ImageObjectInterface(BaseModel):
             "If `None`, the image was not semantically retrieved."
         ),
     )
-    reference_query_image: ImageObjectInterface | None = Field(
-        None,
-        description=(
-            "If this image was retrieved using another image as the query, "
-            "this field holds that reference image's metadata."
-        )
-    )
+    # reference_query_image: ImageObjectInterface | None = Field(
+    #     None,
+    #     description=(
+    #         "If this image was retrieved using another image as the query, "
+    #         "this field holds that reference image's metadata."
+    #     )
+    # )
 
-    def expr(self) -> str:
-        """
-        Structured, agent-readable representation of the image object.
-        """
-        query_repr = (
-            f"{self.query}"
-            if self.query
-            else "N/A"
-        )
-        return (
-            f"ImageObject("
-            f"video_id='{self.related_video_id}', "
-            f"frame={self.frame_index}, "
-            f"timestamp='{self.timestamp}', "
-            f"caption='{self.caption_info}', "
-            f"path='{self.minio_path}', "
-            f"score={self.score if self.score is not None else 'N/A'}, "
-            f"query={query_repr}"
-            f")"
-        )
+    @model_validator(mode='after')
+    def fill_defaults(cls, values):
+        if values.score is None:
+            values.score = "No semantic score"
+        if values.query is None:
+            values.query = "No semantic query relatd"
+        return values
 
+    
+        
 
 
 

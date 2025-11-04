@@ -157,4 +157,6 @@ class ToolRegistry:
         
         return "".join(lines)
 
+  
+
 tool_registry = ToolRegistry()

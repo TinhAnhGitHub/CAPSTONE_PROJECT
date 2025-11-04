@@ -6,13 +6,13 @@ import asyncio
 import io
 from agentic_ai.tools.clients.postgre.client import PostgresClient
 from agentic_ai.tools.clients.minio.client import StorageClient
-from ingestion.prefect_agent.service_asr.core.schema import  ASRInferenceResponse
-from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact, ASRArtifact
+from ingestion.prefect_agent.service_asr.core.schema import  ASRResult
+from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact, ASRArtifact,AutoshotArtifact
 from typing import Annotated, Literal, cast
 import cv2
 
 
-from .helper import extract_s3_minio_url, create_tmp_file_from_minio_object, timecode_to_frame
+from .helper import extract_s3_minio_url, create_tmp_file_from_minio_object, timecode_to_frame, parse_time_safe
 from .registry import tool_registry
 
 ##########################
@@ -37,7 +37,7 @@ async def get_video_from_segment(
     return VideoInterface(
         video_id=related_video_id,
         fps=metadata['fps'],
-        duration=metadata['duration']
+        # duration=metadata['duration']
     )
 
 @tool_registry.register(
@@ -57,7 +57,7 @@ async def get_video_from_image(
     return VideoInterface(
         video_id=related_video_id,
         fps=metadata['fps'],
-        duration=metadata['duration']
+        # duration=metadata['duration']
     )
 
 
@@ -82,8 +82,9 @@ async def get_asr_from_video(
     if json_dict is None:
         raise ValueError()
 
-    asr_response = ASRInferenceResponse.model_validate(json_dict)
-    tokens = asr_response.result.tokens
+
+    asr_response = ASRResult.model_validate(json_dict)
+    tokens = asr_response.tokens
     context = []
     for token in tokens:
         context_token = f"""
@@ -107,10 +108,13 @@ async def get_all_segment_info_from_video_interface(
     postgres_client: PostgresClient,
     minio_client: StorageClient
 )->list[SegmentObjectInterface]:
-    child_artifacts = await postgres_client.get_children_artifact(artifact_id=video_interface.video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__])
-    
+    child_artifacts = await postgres_client.get_children_artifact(artifact_id=video_interface.video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__ ])
+    print(child_artifacts)
+    children_segments = list(
+        filter(lambda x: x.artifact_type==SegmentCaptionArtifact.__name__, child_artifacts)
+    )
     result: list[SegmentObjectInterface] = []
-    for artifact in child_artifacts:
+    for artifact in children_segments:
         minio_url = artifact.minio_url
         bucket, object_name = extract_s3_minio_url(minio_url)
 
@@ -156,13 +160,12 @@ async def get_segments(
         include_within_range (bool): If True, then all the range within hop is included, else just return the destination segment
     """
 
-    
 
     parent_video_id = current_segment.related_video_id
-    children_segments = await postgres_client.get_children_artifact(artifact_id=parent_video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__])
+    children_artifact = await postgres_client.get_children_artifact(artifact_id=parent_video_id, filter_artifact_type=[SegmentCaptionArtifact.__name__])
 
     filter_segments: list[SegmentObjectInterface] = []
-    for child in children_segments:
+    for child in children_artifact:
         minio_path = child.minio_url
         bucket, object_name = extract_s3_minio_url(minio_path)
         json_dict = minio_client.read_json(bucket=bucket, object_name=object_name)
@@ -174,7 +177,7 @@ async def get_segments(
         del json_dict['caption']
 
         segment_artifact = SegmentCaptionArtifact.model_validate(json_dict)
-
+       
         if forward_or_backward == 'forward':
             if  segment_artifact.start_frame >= current_segment.end_frame_index:
                 filter_segments.append(
@@ -189,6 +192,7 @@ async def get_segments(
                         segment_caption_query=None
                     )
                 )
+            filter_segments.sort(key=lambda s: parse_time_safe(s.end_time))
         
         elif forward_or_backward == 'backward':
             if segment_artifact.end_frame <= current_segment.start_frame_index:
@@ -204,7 +208,8 @@ async def get_segments(
                         segment_caption_query=None
                     )
                 )
-        
+            filter_segments.sort(key=lambda s: parse_time_safe(s.end_time), reverse=True)
+    
     return filter_segments[:hop] if include_within_range else filter_segments[hop-1]
 
 ##########################
@@ -229,11 +234,13 @@ async def get_images(
     parent_video_id = image.related_video_id
     child_segments = await postgres_client.get_children_artifact(artifact_id=parent_video_id, filter_artifact_type=[ImageCaptionArtifact.__name__])
 
+    print(f"{child_segments=}")
     filter_segments = []
 
     for child in child_segments:
         minio_path = child.minio_url
         bucket, object_name = extract_s3_minio_url(minio_path)
+        print(bucket)
         image_id = cast(str,child.parent_artifact_id)
         image_metadata = await postgres_client.get_artifact(artifact_id=image_id)
         if image_metadata is None:
@@ -255,10 +262,11 @@ async def get_images(
                         minio_path=image_metadata.minio_url,
                         timestamp=image_caption_artifact.time_stamp,
                         score=None,
-                        reference_query_image=None,
+                        # reference_query_image=None,
                         query=None
                     )
                 )
+            filter_segments.sort(key=lambda s: parse_time_safe(s.timestamp))
         elif forward_or_backward == 'backward':
             if image_caption_artifact.frame_index <= image.frame_index:
                 filter_segments.append(
@@ -269,10 +277,11 @@ async def get_images(
                         minio_path=image_metadata.minio_url,
                         timestamp=image_caption_artifact.time_stamp,
                         score=None,
-                        reference_query_image=None,
+                        # reference_query_image=None,
                         query=None
                     )
                 )
+            filter_segments.sort(key=lambda s: parse_time_safe(s.timestamp), reverse=True)
     return filter_segments[:hop] if include_within_range else filter_segments[hop-1]
     
 
@@ -350,8 +359,7 @@ async def extract_frames_by_time_window(
             content_type="image/webp",
             file_obj=image_bytes
         )
-
-
+        
         image_interface = ImageObjectInterface(
             related_video_id=video_interface.video_id,
             frame_index=frame_index,
@@ -359,7 +367,7 @@ async def extract_frames_by_time_window(
             minio_path=s3_url,
             timestamp=timestamp_hms,
             score=None,
-            reference_query_image=None,
+            # reference_query_image=None,
             query=None
         )
 
@@ -447,6 +455,6 @@ async def extract_frame_time(
         minio_path=s3_url,
         timestamp=timestamp_hms,
         score=None,
-        reference_query_image=None,
+        # reference_query_image=None,
         query=None
     )

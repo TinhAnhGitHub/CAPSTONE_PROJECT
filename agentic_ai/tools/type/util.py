@@ -12,7 +12,7 @@ from agentic_ai.tools.clients.postgre.client import PostgresClient
 from ingestion.core.artifact.schema import ASRArtifact
 from agentic_ai.tools.clients.minio.client import StorageClient
 from collections import defaultdict
-from ingestion.prefect_agent.service_asr.core.schema import  ASRInferenceResponse
+from ingestion.prefect_agent.service_asr.core.schema import  ASRResult
 import re
 from .helper import extract_s3_minio_url, time_range_overlap, time_to_seconds
 
@@ -151,7 +151,7 @@ def from_range_time_to_range_index(
     Returns:
         Tuple[int, int]: Start and end frame indices.
     """
-    start,end = timecode_to_frame(frame_index=start_time, fps=video.fps),timecode_to_frame(frame_index=end_time, fps=video.fps)
+    start,end = timecode_to_frame(timecode=start_time, fps=video.fps),timecode_to_frame(timecode=end_time, fps=video.fps)
     return f"Result: ({start},{end})"
 
 
@@ -164,8 +164,8 @@ def read_image(image_interface: ImageObjectInterface, minio_client: StorageClien
     """
     Read image, return base64 and mime/type
     """
-    minio = image_interface.minio_path
-    bucket, object_name = extract_s3_minio_url(minio)
+    minio_path = image_interface.minio_path
+    bucket, object_name = extract_s3_minio_url(minio_path)
     image_bytes = cast(bytes, minio_client.get_object(bucket=bucket, object_name=object_name))
     mime_type, _ = mimetypes.guess_type(object_name)
     mime_type = mime_type or "application/octet-stream"
@@ -233,24 +233,29 @@ async def get_related_asr_from_image(
     video_asr_artifact = video_asr_artifacts[0]
     bucket_name, object_name = extract_s3_minio_url(video_asr_artifact.minio_url)
     minio_object = cast(dict, minio_client.read_json(bucket=bucket_name, object_name=object_name))
-    asr_object = ASRInferenceResponse.model_validate(minio_object)
+    asr_object = ASRResult.model_validate(minio_object)
 
-    asr_tokens = asr_object.result.tokens
+    asr_tokens = asr_object.tokens
+    print(asr_tokens)
 
     timestamp = image_object_interface.timestamp
 
     ts_center = time_to_seconds(timestamp)
     window_start = ts_center - window_seconds
     window_end = ts_center + window_seconds
+
+    print("ASR range:", asr_tokens[0].start, "→", asr_tokens[-1].end)
+    print("Image timestamp:", timestamp)
     
     snippet_tokens = [
         t for t in asr_tokens
+        
         if time_range_overlap(
-            start_input=f"{window_start}",
-            end_input=f"{window_end}",
-            start_range=t.start,
-            end_range=t.end,
-            iou=0.0
+            start_input=window_start,
+            end_input=window_end,
+            start_range=time_to_seconds(t.start),
+            end_range=time_to_seconds(t.end),
+            iou=0.2
         )
     ]
 
@@ -296,7 +301,7 @@ async def get_related_asr_from_segment(
     ],
     postgres_client: Annotated[PostgresClient, "Auto-provided."],
     minio_client: Annotated[StorageClient, "Auto-provided."],
-):
+)-> str:
     parent_video_id = segment_interface.related_video_id
     video_asr_artifacts = await postgres_client.get_children_artifact(
         artifact_id=parent_video_id,
@@ -306,8 +311,8 @@ async def get_related_asr_from_segment(
     video_asr_artifact = video_asr_artifacts[0]
     bucket_name, object_name = extract_s3_minio_url(video_asr_artifact.minio_url)
     minio_object = cast(dict, minio_client.read_json(bucket=bucket_name, object_name=object_name))
-    asr_object = ASRInferenceResponse.model_validate(minio_object)
-    asr_tokens = asr_object.result.tokens
+    asr_object = ASRResult.model_validate(minio_object)
+    asr_tokens = asr_object.tokens
 
     segment_start_time = time_to_seconds(segment_interface.start_time)
     segment_end_time = time_to_seconds(segment_interface.end_time)
@@ -317,11 +322,11 @@ async def get_related_asr_from_segment(
     snippet_tokens = [
         t for t in asr_tokens
         if time_range_overlap(
-            start_input=f"{window_start}",
-            end_input=f"{window_end}",
-            start_range=t.start,
-            end_range=t.end,
-            iou=0.0
+            start_input=window_start,
+            end_input=window_end,
+            start_range=time_to_seconds(t.start),
+            end_range=time_to_seconds(t.end),
+            iou=0.2
         )
     ]
 

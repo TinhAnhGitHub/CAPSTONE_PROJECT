@@ -1,4 +1,3 @@
-from ingestion.core.config.storage import MinioSettings
 import urllib3
 from urllib3.util import Timeout
 from minio import Minio
@@ -12,8 +11,7 @@ class StorageError(RuntimeError):
     pass
 
 class StorageClient:
-    def __init__(self, settings: MinioSettings) -> None:
-        self.settings = settings 
+    def __init__(self, host:str, port: str, access_key:str, secret_key:str,secure:bool) -> None:
         timeout = Timeout(connect=5.0, read=120.0)  
         self._http_client = urllib3.PoolManager(
             maxsize=50,
@@ -21,10 +19,10 @@ class StorageClient:
             block=True,
         )
         self.client = Minio(
-            endpoint=f"{settings.host}:{settings.port}",
-            access_key=settings.access_key,
-            secret_key=settings.secret_key,
-            secure=settings.secure,
+            endpoint=f"{host}:{port}",
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
             http_client=self._http_client,
         )
     
