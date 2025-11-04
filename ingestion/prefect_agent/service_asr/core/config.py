@@ -6,13 +6,13 @@ from shared.config import ServiceConfig, LogLevel
 class ASRServiceConfig(ServiceConfig):
     """Runtime configuration for the ASR service."""
 
-    chunkformer_model_path: str = Field(..., description="Path to the Chunkformer model checkpoint directory")
+    model_name: str = Field(..., description="Path to the Chunkformer model checkpoint directory")
     temp_dir: str = Field(default="./tmp/asr", description="Directory for intermediate audio artifacts")
 
     default_chunk_size: int = Field(default=64, ge=1)
     default_left_context: int = Field(default=128, ge=0)
     default_right_context: int = Field(default=128, ge=0)
-    default_total_batch_duration: int = Field(default=1800, ge=1)
+    default_total_batch_duration: int = Field(default=900, ge=1)
     default_sample_rate: int = Field(default=16000, ge=8000)
     default_num_extraction_workers: int = Field(default=1, ge=1, le=4)
     default_num_asr_workers: int = Field(default=1, ge=1, le=4)
@@ -25,12 +25,12 @@ class ASRServiceConfig(ServiceConfig):
     log_rotation: str = Field("100 MB",)
 
     @property
-    def MODEL_PATH(self) -> str:  # pragma: no cover - compatibility shim
-        return self.chunkformer_model_path
+    def MODEL_PATH(self) -> str:  
+        return self.model_name
 
     @property
-    def TEMP_DIR(self) -> str:  # pragma: no cover
+    def TEMP_DIR(self) -> str:  
         return self.temp_dir
 
 
-asr_service_config = ASRServiceConfig()  # type: ignore[arg-type]
+asr_service_config = ASRServiceConfig()  # type: ignore

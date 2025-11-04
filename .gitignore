@@ -2,6 +2,7 @@
 __pycache__/
 *.py[codz]
 *$py.class
+<<<<<<< HEAD
 agent/__pycache__/
 agent/tools/__pycache__/
 .python-version
@@ -25,6 +26,15 @@ agent/tools/.env
 # .env
 agentic_ai/.env
 agentic_ai/agent/.env
+=======
+
+
+**.spec-workflow/
+**service_data/
+# C extensions
+*.so
+**.spec
+>>>>>>> upstream/feat/agent
 # Distribution / packaging
 .Python
 build/

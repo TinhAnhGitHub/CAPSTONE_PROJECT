@@ -14,12 +14,12 @@ class BaseMilvusClient(ABC, Generic[OutputT]):
         self.collection = collection
         self.client: AsyncMilvusClient | None = None
 
-    async def __aenter__(self):
+    async def connect(self):
         self.client = AsyncMilvusClient(uri=self.uri)
         await self.client.load_collection(self.collection)
         return self
 
-    async def __aclose__(self):
+    async def close(self):
         if self.client:
             await self.client.close()
         self.client = None

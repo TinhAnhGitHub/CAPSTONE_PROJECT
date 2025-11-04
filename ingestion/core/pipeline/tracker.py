@@ -25,9 +25,9 @@ class ArtifactMetadata(BaseModel):
     user_id: str = Field(..., description="User id associated")
     minio_url: str = Field(..., description="Full S3/Minio URL to the artifact file (e.g., 's3://bucket/path/to/file').")
     parent_artifact_id: str | None = Field(None, description="The ID of the immediate parent artifact from which this one was derived, enabling lineage tracking.")
-    task_name: str = Field(..., description="The name of the task or workflow step that produced this artifact (e.g., 'autoshot_processing').")
     created_at: datetime = Field(default_factory=datetime.now, description="UTC timestamp when the artifact metadata was created/inserted into the database.")
     artifact_metadata: dict = Field(..., description="related metadata")
+    lineage_parents: list[str] = Field(default_factory=list)
 
 
 class ArtifactSchema(Base):
@@ -38,7 +38,6 @@ class ArtifactSchema(Base):
     minio_url: Mapped[str] = mapped_column(Text, nullable=False)
     user_id: Mapped[str] = mapped_column(String(128),nullable=False)
     parent_artifact_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
-    task_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(), index=True)
     artifact_metadata: Mapped[dict] = mapped_column("metadata", JSON, nullable=True)
     
@@ -61,7 +60,6 @@ class ArtifactLineageSchema(Base):
         nullable=False,
         index=True,
     )
-    transformation_type = Column(String(128), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     
 
@@ -100,18 +98,25 @@ class ArtifactTracker:
                 artifact_type=metadata.artifact_type,
                 minio_url=metadata.minio_url,
                 parent_artifact_id=metadata.parent_artifact_id,
-                task_name=metadata.task_name,
                 created_at=metadata.created_at,
                 user_id=metadata.user_id,
+                artifact_metadata=metadata.artifact_metadata,
             )
             session.add(artifact)
             await session.flush()
 
-            if metadata.parent_artifact_id:
+            if len(metadata.lineage_parents)>0:
+                for parent_id in {pid for pid in metadata.lineage_parents if pid}:
+                    lineage = ArtifactLineageSchema(
+                        parent_artifact_id=parent_id,
+                        child_artifact_id=metadata.artifact_id,
+                    )
+                    session.add(lineage)
+
+            elif metadata.parent_artifact_id:
                 lineage = ArtifactLineageSchema(
                     parent_artifact_id=metadata.parent_artifact_id,
                     child_artifact_id=metadata.artifact_id,
-                    transformation_type=metadata.task_name,
                 )
                 session.add(lineage)
             
@@ -131,7 +136,6 @@ class ArtifactTracker:
                 artifact_type=result.artifact_type,
                 minio_url=result.minio_url,
                 parent_artifact_id=result.parent_artifact_id or None,
-                task_name=result.task_name,
                 created_at=result.created_at,
                 user_id=result.user_id,
                 artifact_metadata=result.artifact_metadata

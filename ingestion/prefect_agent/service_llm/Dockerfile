@@ -22,8 +22,5 @@ COPY ./uv.lock ./
 RUN uv venv --system-site-packages .venv
 RUN uv sync --frozen --no-dev 
 
-
-
-
 # CMD ["tail", "-f", "/dev/null"]
 CMD ["uv", "run", "service_llm/main.py"]

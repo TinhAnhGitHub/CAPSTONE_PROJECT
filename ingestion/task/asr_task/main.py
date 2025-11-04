@@ -1,33 +1,22 @@
 from __future__ import annotations
-from typing import AsyncIterator, Literal, cast  
-from prefect import task
-from pydantic import BaseModel
+from typing import AsyncIterator
 from core.pipeline.base_task import BaseTask
 from core.artifact.persist import ArtifactPersistentVisitor
 from core.artifact.schema import ASRArtifact, VideoArtifact
 from prefect_agent.service_asr.core.schema import ASRInferenceRequest, ASRInferenceResponse
 from core.clients.base import BaseMilvusClient, BaseServiceClient
-
-
-class ASRSettings(BaseModel):
-    model_name: str
-    device: Literal['cuda', 'cpu']
-
-
-
-class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings]):
+from prefect.logging import get_run_logger
+class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact]):
     def __init__(
         self, 
         artifact_visitor: ArtifactPersistentVisitor,
-        config: ASRSettings,
+        **kwargs
     ):
         super().__init__(
             name=ASRProcessingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+             **kwargs
         )
-        # Correct task name for ASR artifacts
-        self.name = 'asr'
 
     async def preprocess(self, input_data: list[VideoArtifact]) -> list[ASRArtifact]:
         """
@@ -42,7 +31,6 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings])
                 related_video_id=video_art.artifact_id,
                 related_video_minio_url=video_art.minio_url_path,
                 related_video_extension=video_art.video_extension,
-                task_name=self.name,
                 user_bucket=video_art.user_bucket,
                 related_video_fps=video_art.fps,
                 artifact_type=ASRArtifact.__name__
@@ -55,12 +43,17 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings])
         assert client is not None, "The execution required client service"
         assert isinstance(client, BaseServiceClient)
 
+        logger = get_run_logger()
+        logger.info("Starting ASR execution for %d artifacts", len(input_data))
         
         for artifact in input_data:
             exist = await artifact.accept_check_exist(self.visitor)
             
-
             if exist:
+                logger.debug(
+                    "ASR artifact already exists for video %s; skipping inference",
+                    artifact.related_video_id,
+                )
                 yield artifact, None
                 continue
             
@@ -69,6 +62,11 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings])
                 metadata={}
             )
 
+            logger.info(
+                "Submitting ASR request for video %s at %s",
+                artifact.related_video_id,
+                artifact.related_video_minio_url,
+            )
 
             response = await client.make_request(
                 method='POST',
@@ -77,6 +75,11 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings])
             )
             parsed = ASRInferenceResponse.model_validate(response)
             result_asr = parsed.result.model_dump(mode='json')
+            logger.debug(
+                "Received ASR response for video %s with %d segments",
+                artifact.related_video_id,
+                len(result_asr.get("segments", [])),
+            )
             yield artifact, result_asr
     
     async def postprocess(self, output_data: tuple[ASRArtifact, dict|None ]) -> ASRArtifact:        
@@ -89,4 +92,3 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact, ASRSettings])
 
     
     
-

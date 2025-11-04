@@ -135,12 +135,6 @@ def create_planner_agent(
         tools=registry_tools + [sketch_plan],
     )
 
-
-
-
-
-
-
 def create_orchestrator_agent(
     llm: LLM,
     all_tools: dict[str, BaseTool]

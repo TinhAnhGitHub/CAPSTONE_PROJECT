@@ -1,0 +1,23 @@
+prefect-version: 3.4.10
+
+project:
+  name: ingestion-video-processing
+
+deployments:
+  - name: ingestion-test
+    version: 1.0.0
+    description: GPU-enabled video processing pipeline triggered by the upload API (Docker Compose local deployment)
+    entrypoint: flow/video_processing.py:video_processing_flow
+    tags:
+      - gpu
+      - ingestion
+    concurrency_limit: 10
+    
+    work_pool:
+      name: local-pool
+      work_queue_name: default
+      job_variables:
+        env:
+          PREFECT_LOGGING_TO_API_ENABLED: "true"
+    
+    schedule: null

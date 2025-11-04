@@ -77,16 +77,35 @@ services:
     environment:
       PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:prefect@postgres:5432/prefect
       PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_UI_API_URL: http://100.113.186.28:4200/api
       PREFECT_MESSAGING_BROKER: prefect_redis.messaging
       PREFECT_MESSAGING_CACHE: prefect_redis.messaging
       PREFECT_REDIS_MESSAGING_HOST: redis
       PREFECT_REDIS_MESSAGING_PORT: 6379
       PREFECT_REDIS_MESSAGING_DB: 0
+      
     command: prefect server start --no-services
     ports:
       - "4200:4200"
 
   
+  prefect-setup:
+    image: prefecthq/prefect:3-latest
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    depends_on:
+      prefect-server:
+        condition: service_started
+    command: >
+      sh -c "
+        prefect work-pool create --type process local-pool || true &&
+        prefect concurrency-limit create gpu-heavy 3 || prefect concurrency-limit update gpu-heavy 1 &&
+        prefect concurrency-limit create llm-service 3 || prefect concurrency-limit update llm-service 1 &&
+        prefect concurrency-limit create embedding-service 3 || prefect concurrency-limit update embedding-service 2
+      "
+    restart: "no"
+
+
   prefect-services:
     image: prefecthq/prefect:3-latest
     depends_on:
@@ -105,14 +124,47 @@ services:
 
   
   prefect-worker:
-    image: prefecthq/prefect:3-latest
+    build:
+      context: ./
+      dockerfile: Dockerfile
     depends_on:
       prefect-server:
         condition: service_started
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
-    command: prefect worker start --pool local-pool
-  
+      HF_HUB_DISABLE_XET: 1
+    env_file:
+      - ./.env
+    working_dir: /app
+    volumes:
+      - ./api:/app/api
+      - ./core:/app/core
+      - ./flow:/app/flow
+      - ./task:/app/task
+      - ./main.py:/app/main.py
+      - ./prefect_agent/shared:/app/prefect_agent/shared
+      - ./prefect_agent/service_asr:/app/prefect_agent/service_asr
+      - ./prefect_agent/service_autoshot:/app/prefect_agent/service_autoshot
+      - ./prefect_agent/service_llm:/app/prefect_agent/service_llm
+      - ./prefect_agent/service_image_embedding:/app/prefect_agent/service_image_embedding
+      - ./prefect_agent/service_text_embedding:/app/prefect_agent/service_text_embedding
+    command: uv run prefect worker start --pool local-pool
+    extra_hosts:
+       - "host.docker.internal:host-gateway"
+
+  # progress-tracker:
+  #   build:
+  #     context: ./
+  #     dockerfile: Dockerfile
+  #   container_name: progress-tracker
+  #   working_dir: /app
+  #   volumes:
+  #     - ./test:/app/test
+  #   command: uv run uvicorn test.test_server_api:app --host 0.0.0.0 --port 9009
+  #   ports:
+  #     - "9009:9009"
+  #   restart: unless-stopped
+
 
   consul:
       image: hashicorp/consul:latest
@@ -311,16 +363,11 @@ services:
         condition: service_started
       consul:
         condition: service_started
+      prefect-worker:                      
+        condition: service_started
+    env_file:
+      - ./.env
     environment:
-      MINIO_HOST: minio
-      MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      MINIO_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      POSTGRE_DATABASE_URL: postgresql+asyncpg://prefect:prefect@postgres:5432/prefect
-      CONSUL_HOST: consul
-      CONSUL_PORT: "8500"
       PREFECT_API_URL: http://prefect-server:4200/api
       HF_HUB_DISABLE_XET: 1
 
@@ -334,6 +381,7 @@ services:
     restart: unless-stopped
 
     volumes:
+      - ./prefect.yaml:/app/prefect.yaml:ro
       - ./api:/app/api
       - ./core:/app/core
       - ./flow:/app/flow
@@ -345,6 +393,8 @@ services:
       - ./prefect_agent/service_llm:/app/prefect_agent/service_llm
       - ./prefect_agent/service_image_embedding:/app/prefect_agent/service_image_embedding
       - ./prefect_agent/service_text_embedding:/app/prefect_agent/service_text_embedding
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 
 

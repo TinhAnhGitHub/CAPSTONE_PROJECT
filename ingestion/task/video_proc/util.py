@@ -1,6 +1,7 @@
 import cv2
 from pathlib import Path
 from fastapi import UploadFile
+from datetime import timedelta
 from typing import BinaryIO
 from fractions import Fraction
 import ffmpeg 
@@ -73,3 +74,33 @@ def get_video_fps(video_path: str) -> float:
     cap.release()
 
     return fps 
+
+
+import cv2
+from datetime import timedelta
+
+import cv2
+from datetime import timedelta
+
+def get_video_duration_cv2(path: str) -> str:
+    cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        raise ValueError(f"Cannot open video file: {path}")
+    
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    cap.release()
+
+    if fps <= 0:
+        raise ValueError("Invalid FPS retrieved; possibly corrupted file.")
+
+    duration_seconds = frame_count / fps
+    td = timedelta(seconds=duration_seconds)
+
+    total_seconds = td.total_seconds()
+    hours, remainder = divmod(int(total_seconds), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    milliseconds = int((total_seconds - int(total_seconds)) * 1000)
+    
+    return f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03d}"
+

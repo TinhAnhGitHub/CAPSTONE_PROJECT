@@ -1,27 +1,22 @@
-from typing import Any, Optional
-from uuid import uuid4, UUID
-
+from typing import Optional,cast
+from uuid import uuid4
+from prefect.client.schemas import FlowRun
+from prefect.exceptions import ObjectNotFound
 from fastapi import (
     APIRouter,
-    Depends,
-    File,
-    Form,
-    HTTPException,
-    UploadFile,
     status,
-    BackgroundTasks
+    HTTPException
 )
+from core.lifespan import DEPLOY_IDENTIFIER
 from pydantic import BaseModel, Field
 from loguru import logger
-
-
-from core.config.storage import minio_settings
-from core.pipeline.tracker import ArtifactTracker
-from core.storage import StorageClient
-from core.dependencies.application import get_artifact_tracker, get_storage_client
-from flow.video_processing import video_processing_flow
+# from flow.video_processing import video_processing_flow
+import os
+from prefect.deployments import run_deployment
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
+
+
 
 class UploadResponse(BaseModel):
     """Response after successful upload."""
@@ -31,6 +26,7 @@ class UploadResponse(BaseModel):
     video_names: list[str]
     status: str
     message: str
+    deployment_name: str
     tracking_url: Optional[str] = None
 
 
@@ -44,53 +40,51 @@ class UploadRequest(BaseModel):
     response_model=UploadResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Upload videos and start processing",
-    description="Upload one or more videos and automatically trigger the Prefect processing pipeline"
+    description="Upload one or more videos and trigger the Prefect deployment for processing",
 )
 async def upload_videos(
-    background_tasks: BackgroundTasks,
-    request_files: UploadRequest,
+    request: UploadRequest,
 ) -> UploadResponse:
     
-    
-
     logger.info(f"Calling video_processing_flow directly")
     run_id = str(uuid4())
-
-    video_files = request_files.videos
-    user_id = request_files.user_id
-
-    def run_flow_sync():
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(
-                video_processing_flow(
-                    video_files=video_files,
-                    user_id=user_id,
-                    run_id=run_id,
-                )
-            )
-            logger.info(f"Flow completed: {result}")
-        except Exception as e:
-            logger.exception(f"Flow failed: {e}")
-        finally:
-            loop.close()
-    
-    background_tasks.add_task(run_flow_sync)
-
+    try:
+        flow_run: FlowRun = await run_deployment( #type:ignore
+            name=DEPLOY_IDENTIFIER,
+            parameters={
+                "video_files": request.videos,
+                "user_id": request.user_id,
+                "run_id": run_id,
+            },
+            flow_run_name=run_id,
+            idempotency_key=run_id,
+            timeout=0
+        )
+        logger.info(
+            f"Triggered Prefect deployment '{DEPLOY_IDENTIFIER}' "
+            f"with flow_run_id={flow_run.id}, run_id={run_id}"
+        )
+    except ObjectNotFound as exc:
+        logger.exception(f"Deployment '{DEPLOY_IDENTIFIER}' not found")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Prefect deployment '{DEPLOY_IDENTIFIER}' is not registered. "
+                   f"Please run 'prefect deploy --name primary-gpu' first.",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unable to trigger Prefect deployment")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to trigger Prefect deployment",
+        ) from exc
+        
     return UploadResponse(
         run_id=run_id,
-        flow_run_id=run_id,  
-        video_count=len(video_files),
-        video_names=[f[1] or "unknown" for f in request_files],
-        status="RUNNING",
-        message=f"Processing started directly for {len(video_files)} video(s)",
-        tracking_url=f"/api/management/videos/{run_id}/status"
+        flow_run_id=str(flow_run.id),
+        video_count=len(request.videos),
+        video_names=[file_name or "unknown" for _, file_name in request.videos],
+        status=flow_run.state.type.value if flow_run.state else "SCHEDULED",
+        message="Video processing deployment submitted successfully",
+        tracking_url=f"/api/management/videos/{run_id}/status",
+        deployment_name=DEPLOY_IDENTIFIER,
     )
-
-
-
-
-
-    

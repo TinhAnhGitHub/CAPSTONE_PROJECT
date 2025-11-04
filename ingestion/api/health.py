@@ -7,10 +7,11 @@ from loguru import logger
 from sqlalchemy import text
 from core.dependencies.application import get_artifact_tracker, get_storage_client
 
-
+from core.clients.base import BaseMilvusClient
 from core.pipeline.tracker import ArtifactTracker
 from core.storage import StorageClient
-from core.clients.base import ClientConfig, MilvusCollectionConfig
+from core.clients.base import ClientConfig
+from core.config.milvus_index_config import MilvusIndexBaseConfig
 from core.clients.asr_client import ASRClient
 from core.clients.autoshot_client import AutoshotClient
 from core.clients.llm_client import LLMClient
@@ -18,8 +19,7 @@ from core.clients.image_embed_client import ImageEmbeddingClient
 from core.clients.text_embed_client import TextEmbeddingClient
 from core.pipeline.service_registry import ConsulServiceRegistry
 from core.clients.milvus_client import (
-    ImageEmbeddingMilvusClient,
-    TextCaptionEmbeddingMilvusClient,
+    ImageMilvusClient,
     SegmentCaptionEmbeddingMilvusClient
 )
 from core.app_state import AppState
@@ -137,6 +137,7 @@ async def check_microservice(
     """Check microservice connectivity and status."""
     async with client_class(config=config) as client:
         service_url = await client.get_service_url()
+        print(f"{service_url=}")
 
         
         try:
@@ -157,41 +158,25 @@ async def check_microservice(
         }
     
 async def check_milvus(
-    client_class,
-    collection_config: MilvusCollectionConfig,
-    host: str,
-    port: str,
-    user: str,
-    password: str,
-    db_name: str
+    client_instance,
 ) -> dict[str, Any]:
-    async with client_class(
-        config_collection=collection_config,
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        db_name=db_name,
-        timeout=10.0
-    ) as client:
-        has_collection = await client.client.has_collection(
-            collection_config.collection_name
-        )
-        
-        stats = {}
-        if has_collection:
-            stats = await client.get_collection_stats()
-        
-        return {
-            "connected": True,
-            "database": db_name,
-            "collection_name": collection_config.collection_name,
-            "collection_exists": has_collection,
-            "stats": stats
-        }
+    await client_instance.connect()
+    has_collection = await client_instance._client.has_collection(
+        client_instance.collection_name
+    )
 
+    stats = {}
+    if has_collection:
+        stats = await client_instance.get_collection_stats()
+    await client_instance.close()
 
-
+    return {
+        "connected": True,
+        "database": client_instance.db_name,
+        "collection_name": client_instance.collection_name,
+        "collection_exists": has_collection,
+        "stats": stats
+    }
 
 
 @router.get(
@@ -245,9 +230,6 @@ async def health_check(
         components=components,
         summary=summary
     )
-
-
-
 
 @router.get(
     "/database",
@@ -306,10 +288,10 @@ async def check_autoshot_service() -> ComponentHealth:
     config = AppState().base_client_config
     """Check Autoshot microservice connectivity and status."""
     return await check_component(
-        "autoshot-service",
+        "service-autoshot",
         check_microservice,
         AutoshotClient,
-        "autoshot-service",
+        "service-autoshot",
         config
     )
 
@@ -373,42 +355,12 @@ async def check_text_embedding_service() -> ComponentHealth:
 async def check_image_embeddings_milvus() -> ComponentHealth:
     """Check image embeddings Milvus collection status."""
 
-    milvus_config_collection = AppState().image_embedding_milvus_config
-    from core.config.storage import milvus_settings
+    milvus_config_collection = AppState().image_milvus_client
     
     return await check_component(
         "milvus-image-embeddings",
         check_milvus,
-        ImageEmbeddingMilvusClient,
-        milvus_config_collection,
-        milvus_settings.host,
-        milvus_settings.port,
-        milvus_settings.user,
-        milvus_settings.password,
-        milvus_settings.db_name
-    )
-
-
-@router.get(
-    "/milvus/text-caption-embeddings",
-    response_model=ComponentHealth,
-    summary="Text caption embeddings Milvus health check"
-)
-async def check_text_caption_milvus() -> ComponentHealth:
-
-    milvus_config_collection = AppState().text_image_caption_milvus_config
-    from core.config.storage import milvus_settings
-    
-    return await check_component(
-        "milvus-text-caption-embeddings",
-        check_milvus,
-        TextCaptionEmbeddingMilvusClient,
-        milvus_config_collection,
-        milvus_settings.host,
-        milvus_settings.port,
-        milvus_settings.user,
-        milvus_settings.password,
-        milvus_settings.db_name
+        milvus_config_collection
     )
 
 
@@ -420,18 +372,9 @@ async def check_text_caption_milvus() -> ComponentHealth:
 async def check_segment_caption_milvus() -> ComponentHealth:
     """Check segment caption embeddings Milvus collection status."""
 
-    milvus_config_collection = AppState().text_segment_caption_milvus_config
-    from core.config.storage import milvus_settings
-    
+    milvus_config_collection = AppState().seg_milvus_client    
     return await check_component(
         "milvus-segment-caption-embeddings",
         check_milvus,
-        SegmentCaptionEmbeddingMilvusClient,
-        milvus_config_collection,
-        milvus_settings.host,
-        milvus_settings.port,
-        milvus_settings.user,
-        milvus_settings.password,
-        milvus_settings.db_name
+        milvus_config_collection
     )
-

@@ -9,7 +9,7 @@ import requests
 from loguru import logger
 from PIL import Image
 from service_llm.core.config import LLMServiceConfig
-from service_llm.schema import LLMRequest, LLMResponse
+from service_llm.schema import LLMRequest, LLMResponse,LLMSingleResponse
 from shared.registry import BaseModelHandler, register_model
 from shared.schema import ModelInfo
 
@@ -21,6 +21,8 @@ from shared.schema import ModelInfo
 #         with Path(path).open("rb") as fh:
 #             return base64.b64encode(fh.read()).decode("utf-8")
 
+
+MAX_CURRENT = 10
 
 @register_model("openrouter_api")
 class OpenRouterAPIHandler(BaseModelHandler[LLMRequest, LLMResponse]):
@@ -52,14 +54,16 @@ class OpenRouterAPIHandler(BaseModelHandler[LLMRequest, LLMResponse]):
     def get_model_info(self) -> ModelInfo:
         return ModelInfo(model_name=self._model_name, model_type="openrouter_api")
 
-    async def preprocess_input(self, input_data: LLMRequest) -> Dict[str, Any]:
-        return {
-            "prompt": input_data.prompt,
-            "image_base64": input_data.image_base64,
-            "metadata": input_data.metadata,
-        }
+    async def preprocess_input(self, input_data: LLMRequest) -> list[Dict[str, Any]]:
 
-    async def run_inference(self, preprocessed_data: Dict[str, Any]) -> Dict[str, Any]:
+        return [{
+            "prompt": req.prompt,
+            "image_base64": req.image_base64,
+            "metadata": input_data.metadata,
+        } for req  in input_data.llm_requests]
+    
+
+    async def _run_inference(self, preprocessed_data: Dict[str, Any]) -> Dict[str, Any]:
         if self._session is None:
             raise RuntimeError("OpenRouter session not initialized")
 
@@ -130,17 +134,52 @@ class OpenRouterAPIHandler(BaseModelHandler[LLMRequest, LLMResponse]):
 
         response_payload = await asyncio.to_thread(_call_api)
         return response_payload
+    
+    async def run_inference(self, preprocessed_data: list[Dict[str, Any]]) -> list[Dict[str, Any]]:        
+        semaphore = asyncio.Semaphore(MAX_CURRENT)
+
+        async def _infer_with_semaphore(data):
+            async with semaphore:
+                return await self._run_inference(preprocessed_data=data)
+        
+        inference_tasks = [
+            asyncio.create_task(_infer_with_semaphore(p)) for p in preprocessed_data
+        ]
+        inference_results = await asyncio.gather(*inference_tasks, return_exceptions=True)
+        results: list[Dict[str, Any]] = []
+        for r in inference_results:
+            if isinstance(r, BaseException):
+                raise RuntimeError("OpenRouter request failed") from r
+            else:
+                results.append(r)
+        return results
+    
 
     async def postprocess_output(
         self,
-        output_data: Dict[str, Any],
+        output_data: list[Dict[str, Any]],
         original_input_data: LLMRequest,
     ) -> LLMResponse:
+        
+        single_responses: list[LLMSingleResponse] = []
+        for out in output_data:
+            single_responses.append(
+                LLMSingleResponse(
+                    answer=out.get("answer", ""),
+                    input_tokens=out.get("input_tokens"),
+                    output_tokens=out.get("output_tokens"),
+                    status="success" if "error" not in out else "error",
+                    error=out.get("error"),
+                )
+            )
+        overall_status = (
+            "success"
+            if all(r.status == "success" for r in single_responses)
+            else "partial_error"
+        )
         return LLMResponse(
-            answer=output_data.get("answer", ""),
+            responses=single_responses,
             metadata=original_input_data.metadata,
             model_name=self._model_name,
-            status="success",
-            input_tokens=output_data.get("input_tokens"),
-            output_tokens=output_data.get("output_tokens"),
+            status=overall_status,
         )

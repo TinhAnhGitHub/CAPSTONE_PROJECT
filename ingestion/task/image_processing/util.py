@@ -17,21 +17,49 @@ def parse_s3_url(s3_url: str) -> tuple[str, str]:
     parsed = urlparse(s3_url)
     return parsed.netloc, parsed.path.lstrip("/")
 
+def _read_frame_sequential(video_path: str, frame_index: int) -> tuple[bool, np.ndarray | None]:
+    """Read frames sequentially up to frame_index; returns (success, frame)."""
+    cap = cv2.VideoCapture(video_path)
+    try:
+        if not cap.isOpened():
+            return False, None
+        for _ in range(frame_index + 1):
+            ok, frame = cap.read()
+            if not ok:
+                return False, None
+        return True, frame #type:ignore
+    finally:
+        cap.release()
+
+
 def read_frame_sync(video_path: str, frame_index: int) -> bytes:
     """Blocking: read a specific frame from a video and return it encoded as WebP."""
     cap = cv2.VideoCapture(video_path)
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    try:
+        if not cap.isOpened():
+            raise RuntimeError(f"Failed to open video at {video_path}")
 
-    if frame_index < 0 or frame_index >= total:
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if frame_index < 0 or frame_index >= total:
+            raise ValueError(f"Frame index {frame_index} out of range (0-{total - 1})")
+
+        ok = True
+        frame: np.ndarray | None = None
+
+        if frame_index == 0:
+            ok, frame = cap.read()
+        else:
+            ok = cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            if ok:
+                ok, frame = cap.read()
+
+        if not ok or frame is None:
+            ok, frame = _read_frame_sequential(video_path, frame_index)
+
+        if not ok or frame is None:
+            raise RuntimeError(f"Failed to read frame at index {frame_index}")
+    finally:
         cap.release()
-        raise ValueError(f"Frame index {frame_index} out of range (0-{total - 1})")
-
-    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-    ok, frame = cap.read()
-    cap.release()
-
-    if not ok:
-        raise RuntimeError(f"Failed to read frame at index {frame_index}")
 
     success, img = cv2.imencode(".webp", frame, [cv2.IMWRITE_WEBP_QUALITY, 90])
     if not success:

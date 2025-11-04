@@ -1,7 +1,13 @@
+import base64
 import cv2
+import logging
 import numpy as np
 from typing import List
 from urllib.parse import urlparse
+
+from prefect.exceptions import MissingContextError
+from prefect.logging import get_run_logger
+
 
 
 def return_related_asr_with_shot(
@@ -42,10 +48,16 @@ def return_related_asr_with_shot(
     return "\n\n".join(result).strip()
 
 
-import cv2
-import base64
-import numpy as np
-from typing import List
+
+
+_fallback_logger = logging.getLogger(__name__)
+
+
+def _get_logger():
+    try:
+        return get_run_logger()
+    except MissingContextError:
+        return _fallback_logger
 
 
 def extract_images(
@@ -80,26 +92,26 @@ def extract_images(
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     end_frame = min(end_frame, total_frames - 1)
 
-    # Evenly spaced frame indices
     step = (end_frame - start_frame) / (n_frames + 1)
     frame_indices = [int(start_frame + (i + 1) * step) for i in range(n_frames)]
 
     encoded_frames: List[str] = []
+    logger = _get_logger()
 
     for idx in frame_indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ok, frame = cap.read()
         if not ok:
-            print(f"[WARN] Could not read frame {idx}")
+            logger.warning("Could not read frame %s from %s", idx, local_video_path)
             continue
 
-        # Encode to WEBP
+
         success, buffer = cv2.imencode(".webp", frame, [cv2.IMWRITE_WEBP_QUALITY, quality])
         if not success:
-            print(f"[WARN] Failed to encode frame {idx}")
+            logger.warning("Failed to encode frame %s from %s", idx, local_video_path)
             continue
 
-        # Convert to base64 string
+
         encoded = base64.b64encode(buffer).decode("utf-8")
         encoded_frames.append(encoded)
 

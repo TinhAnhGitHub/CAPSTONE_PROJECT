@@ -1,7 +1,7 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, Any
 from enum import Enum
-
+from datetime import datetime
 
 
 class ASRConfig(BaseModel):
@@ -19,10 +19,25 @@ class ASRConfig(BaseModel):
 
 class TimestampedToken(BaseModel):
     text: str
-    start: str
-    end: str 
+    start: str # HH:MM:SS.ms
+    end: str  # HH:MM:SS.ms
     start_frame: str
     end_frame: str
+
+    @field_validator("start", "end")
+    @classmethod
+    def validate_time_format(cls, v: str) -> str:
+        """
+        Ensure time strings are convertible to datetime objects.
+        Accepts format: HH:MM:SS:ms
+        """
+        try:
+            datetime.strptime(v, "%H:%M:%S.%f")
+        except Exception:
+            raise ValueError(f"Invalid timestamp format: {v} (expected HH:MM:SS:ms)")
+        return v
+
+
 
 
 

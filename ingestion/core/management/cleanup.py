@@ -1,16 +1,13 @@
 from typing import Any
-from urllib.parse import urlparse
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import select, delete
 from loguru import logger
-from core.clients.base import BaseMilvusClient, MilvusCollectionConfig
-from core.clients import milvus_client as _milvus_clients  
+from core.clients.base import BaseMilvusClient  
 from core.pipeline.tracker import ArtifactTracker, ArtifactSchema, ArtifactLineageSchema
 from core.storage import StorageClient, StorageError
 from task.common.util import parse_s3_url
 from core.app_state import AppState
-from core.clients.milvus_client import ImageEmbeddingMilvusClient, TextCaptionEmbeddingMilvusClient, SegmentCaptionEmbeddingMilvusClient
+from core.clients.milvus_client import ImageMilvusClient,  SegmentCaptionEmbeddingMilvusClient
 class DeletionResult(BaseModel):
     """Result of a deletion operation."""
     success: bool
@@ -22,14 +19,12 @@ class ArtifactDeleter:
             self, 
             tracker: ArtifactTracker, 
             storage: StorageClient, 
-            image_client: ImageEmbeddingMilvusClient,
-            text_cap_client: TextCaptionEmbeddingMilvusClient,
+            image_client: ImageMilvusClient,
             text_seg_client: SegmentCaptionEmbeddingMilvusClient,):
         
         self.tracker = tracker
         self.storage = storage
         self.image_client = image_client
-        self.text_cap_client = text_cap_client
         self.text_seg_client =  text_seg_client
         self._state = AppState()
 
@@ -64,7 +59,6 @@ class ArtifactDeleter:
     async def delete_by_related_video_id(self, related_video_id: str):
         clients: list[tuple[str, BaseMilvusClient ]] = [
               ("image_embedding", self.image_client),
-              ("text_caption_embedding", self.text_cap_client),
               ("segment_caption_embedding", self.text_seg_client),
         ]
         errors: list[str] = []

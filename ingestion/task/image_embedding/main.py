@@ -1,25 +1,27 @@
 from __future__ import annotations
-from typing import Literal, cast, AsyncIterator, BinaryIO
-from core.clients.image_embed_client import ImageEmbeddingRequest, ImageEmbeddingResponse
-from core.pipeline.base_task import BaseTask
-from core.artifact.schema import ImageEmbeddingArtifact, ImageArtifact
-from core.artifact.persist import ArtifactPersistentVisitor
-from pydantic import BaseModel
-from urllib.parse import urlparse
-from pathlib import Path
+
+import asyncio
 import base64
-import asyncio 
+from tqdm import tqdm
 import io
 import json
-from task.common.util import fetch_object_from_s3
-from core.clients.base import BaseServiceClient, BaseMilvusClient
+from pathlib import Path
+from typing import AsyncIterator, BinaryIO, cast, Literal
+from urllib.parse import urlparse
+
+from core.artifact.persist import ArtifactPersistentVisitor
+from core.artifact.schema import ImageArtifact, ImageEmbeddingArtifact
+from core.clients.base import BaseMilvusClient, BaseServiceClient
+from core.clients.image_embed_client import ImageEmbeddingRequest, ImageEmbeddingResponse
+from core.pipeline.base_task import BaseTask
+from task.common.util import cleanup_temp_file, fetch_object_from_s3
+
+from pydantic import BaseModel
 
 class ImageEmbeddingSettings(BaseModel):
     model_name: str
-    device: Literal['cuda', 'cpu']
+    device: Literal['cuda', 'cpu'] 
     batch_size: int
-
-
 
 
 def parse_s3_url(s3_url: str) -> tuple[str, str]:
@@ -40,25 +42,19 @@ def encode_image_base64(
     encoded_str = base64.b64encode(image_bytes).decode("utf-8")
     return encoded_str
 
-
-
-
 class ImageEmbeddingTask(BaseTask[
-    list[ImageArtifact], ImageEmbeddingArtifact, ImageEmbeddingSettings
+    list[ImageArtifact], ImageEmbeddingArtifact
 ]):
     def __init__(
         self,
         artifact_visitor: ArtifactPersistentVisitor,
-        config: ImageEmbeddingSettings,
+        **kwargs,
     ):
         super().__init__(
             name=ImageEmbeddingTask.__name__,
             visitor=artifact_visitor,
-            config=config
+             **kwargs
         )
-    
-    
-    
 
     async def preprocess(self, input_data: list[ImageArtifact]) -> list[ImageEmbeddingArtifact]:        
         result = []
@@ -80,14 +76,13 @@ class ImageEmbeddingTask(BaseTask[
         return result
     
 
-        
-
     async def execute(self, input_data:list[ImageEmbeddingArtifact], client: BaseServiceClient|None|BaseMilvusClient) -> AsyncIterator[tuple[ImageEmbeddingArtifact, BinaryIO|None]]:
         assert client is not None, "The execution required client service"
         assert isinstance(client, BaseServiceClient)
         batch: list[ImageEmbeddingArtifact] = []
         batches: list[list[ImageEmbeddingArtifact]] = []
-
+        
+        bs = cast(int,self.kwargs.get('batch_size'))
         while input_data:
             artifact = input_data.pop(0)
 
@@ -97,20 +92,30 @@ class ImageEmbeddingTask(BaseTask[
                 continue
 
             batch.append(artifact)
-
-            if len(batch) == self.config.batch_size:
+            
+            if len(batch) == bs:
                 batches.append(batch[:])
                 batch.clear()
         
         if batch:
             batches.append(batch[:])
 
-        for batch in batches:
-            images_local_paths = await asyncio.gather(*[
-                fetch_object_from_s3(artifact.image_minio_url, self.visitor.minio_client, suffix=artifact.extension)
-                for artifact in batch
-            ])
-            batch_images_encode = [encode_image_base64(p) for p in images_local_paths]
+        for batch in tqdm(batches, desc="Image embedding..."):
+            images_local_paths = await asyncio.gather(
+                *[
+                    fetch_object_from_s3(
+                        artifact.image_minio_url,
+                        self.visitor.minio_client,
+                        suffix=artifact.extension,
+                    )
+                    for artifact in batch
+                ]
+            )
+            try:
+                batch_images_encode = [encode_image_base64(p) for p in images_local_paths]
+            finally:
+                for path in images_local_paths:
+                    cleanup_temp_file(path)
 
             request = ImageEmbeddingRequest(
                 image_base64=batch_images_encode,
@@ -139,5 +144,4 @@ class ImageEmbeddingTask(BaseTask[
 
         await artifact.accept_upload(self.visitor, data)
         return artifact
-
 

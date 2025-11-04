@@ -1,11 +1,63 @@
-from ingestion.core.pipeline.tracker import ArtifactMetadata, ArtifactSchema, ArtifactLineageSchema
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import select
-
+from pydantic import BaseModel, Field
+from datetime import datetime
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Column, String, DateTime, JSON, Text, Index, ForeignKey, select, or_
+from uuid import uuid4
 
 Base = declarative_base()
+
+
+class ArtifactMetadata(BaseModel):
+    """
+    Pydantic model representing the metadata for an artifact stored in the database.
+    This captures essential details about the artifact, its origin, and associated data.
+    """
+    artifact_id: str = Field(..., description="Unique identifier for the artifact (e.g., SHA-256 hash or UUID).")
+    artifact_type: str = Field(..., description="The type of the artifact, such as 'video', 'json', 'image', or 'caption'. Determines the structure and purpose.")
+    user_id: str = Field(..., description="User id associated")
+    minio_url: str = Field(..., description="Full S3/Minio URL to the artifact file (e.g., 's3://bucket/path/to/file').")
+    parent_artifact_id: str | None = Field(None, description="The ID of the immediate parent artifact from which this one was derived, enabling lineage tracking.")
+    created_at: datetime = Field(default_factory=datetime.now, description="UTC timestamp when the artifact metadata was created/inserted into the database.")
+    artifact_metadata: dict = Field(..., description="related metadata")
+
+
+class ArtifactSchema(Base):
+    __tablename__ = "artifacts_application"
+
+    artifact_id: Mapped[str] = mapped_column(String(128), primary_key=True, index=True)
+    artifact_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    minio_url: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(128),nullable=False)
+    parent_artifact_id: Mapped[str|None] = mapped_column(String(128), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(), index=True)
+    artifact_metadata: Mapped[dict] = mapped_column("metadata", JSON, nullable=True)
+    
+
+class ArtifactLineageSchema(Base):
+    """Track artifact lineage relationships"""
+    __tablename__ = "artifact_lineage_application"
+
+    id = Column(String(128), primary_key=True, default=lambda: uuid4().hex)
+    parent_artifact_id = Column(
+        String(128),
+        ForeignKey("artifacts_application.artifact_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    child_artifact_id = Column(
+        String(128),
+        ForeignKey("artifacts_application.artifact_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    transformation_type = Column(String(128), nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    
 
 
 class PostgresClient:
@@ -39,12 +91,10 @@ class PostgresClient:
                 artifact_type=result.artifact_type,
                 minio_url=result.minio_url,
                 parent_artifact_id=result.parent_artifact_id or None,
-                task_name=result.task_name,
                 created_at=result.created_at,
-                user_id=result.user_id
+                user_id=result.user_id,
+                artifact_metadata=result.artifact_metadata
             )
-
-    
 
     async def get_children_artifact(
         self,
@@ -69,6 +119,7 @@ class PostgresClient:
                     ArtifactLineageSchema.parent_artifact_id==current_id
                 )
                 lineage_result = await session.execute(lineage_query)
+                
                 child_ids = [
                     row[0] for row in lineage_result
                 ]
@@ -78,14 +129,15 @@ class PostgresClient:
                 artifact_query = select(ArtifactSchema).where(
                     ArtifactSchema.artifact_id.in_(child_ids)
                 )
-
-                if filter_artifact_type:
-                    artifact_query = artifact_query.where(
-                        ArtifactSchema.artifact_type.in_(filter_artifact_type)
-                    )
+                
+                # if filter_artifact_type:
+                #     artifact_query = artifact_query.where(
+                #         ArtifactSchema.artifact_type.in_(filter_artifact_type)
+                #     )
 
                 artifact_result = await session.execute(artifact_query)
                 artifacts = artifact_result.scalars().all()
+                # print(f"{artifacts=}")
 
                 for a in artifacts:
                     results.append(
@@ -94,9 +146,9 @@ class PostgresClient:
                             artifact_type=a.artifact_type,
                             minio_url=a.minio_url,
                             parent_artifact_id=a.parent_artifact_id,
-                            task_name=a.task_name,
                             created_at=a.created_at,
                             user_id=a.user_id,
+                            artifact_metadata=a.artifact_metadata
                         )
                     )
 
@@ -104,6 +156,14 @@ class PostgresClient:
                     await fetch_children_recursive(a.artifact_id)
             
             await fetch_children_recursive(current_id=artifact_id)
+
+            # print(f"{len(results)}")
+            if filter_artifact_type:
+                results = list(
+                    filter(
+                        lambda x: x.artifact_type in filter_artifact_type, results
+                    )
+                )
             return results
 
         

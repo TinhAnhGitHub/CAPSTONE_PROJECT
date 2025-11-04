@@ -12,4 +12,5 @@ dependencies = [
     "moondream>=0.1.1",
     "mysql-connector-python>=9.4.0",
     "pillow<11.0.0",
+    "workflows>=3.2",
 ]

@@ -1,142 +1,144 @@
 from .base import BaseMilvusClient
-from .schema import VisualImageMilvusResponse,VisualImageFilterCondition, CaptionImageMilvusResponse, CaptionImageFilterCondition, SegmentCaptionMilvusResponse, SegmentCaptionFilterCondition
+from .schema import ImageMilvusResponse, SegmentCaptionMilvusResponse, SegmentCaptionFilterCondition, ImageFilterCondition
 from typing import cast
 from pymilvus import AsyncMilvusClient,AnnSearchRequest,WeightedRanker
+from pymilvus import Function, FunctionType
 
-
-class VisualImageMilvusClient(BaseMilvusClient[VisualImageMilvusResponse]):
-    def __init__(self, uri:str, collection_name:str, ann_field: str):
+class ImageMilvusClient(BaseMilvusClient[ImageMilvusResponse]):
+    def __init__(
+            self, 
+            uri:str,
+            collection_name:str, 
+            visual_param: dict,
+            caption_param:dict,
+            sparse_param:dict,
+            visual_ann_field: str = "visual_embedding_field", 
+            caption_ann_field:str  = "caption_embedding_field", 
+            sparse_field:str = "caption_sparse_embedding_field"
+        ):
         super().__init__(
             uri=uri,
             collection=collection_name
         )
-        self.ann_field = ann_field
+        
+        self.visual_param = visual_param
+        self.caption_param = caption_param
+        self.sparse_param = sparse_param
+        self.visual_ann_field = visual_ann_field
+        self.caption_ann_field = caption_ann_field
+        self.sparse_field = sparse_field
 
     @staticmethod
-    def _hit_to_item(hit) -> VisualImageMilvusResponse:
+    def _hit_to_item(hit) -> ImageMilvusResponse:
         fields = hit.fields if hasattr(hit, "fields") else hit.entity["fields"]
         try:
-            return VisualImageMilvusResponse(
-                    identification=str(fields["id"]),
+            return ImageMilvusResponse(
+                    id=str(fields["id"]),
                     related_video_id=str(fields["related_video_id"]),
-                    minio_url=str(fields["minio_url"]),
+                    image_minio_url=str(fields["image_minio_url"]),
                     user_bucket=str(fields["user_bucket"]),
                     timestamp=str(fields['timestamp']),
                     frame_index=int(fields['frame_index']),
+                    image_caption=str(fields['image_caption']),
                     score=float(hit.score),
                 )
         except Exception as e:
             missing = e.args[0]
             raise KeyError(f"Missing expected field '{missing}' in Milvus hit: {fields}")
     
-
-    async def search_dense(
+    def visual_dense_request(
         self,
-        query_embedding: list[list[float]],
-        top_k: int,
-        metric_type: str,
-        param:dict,
-        output_fields: list[str], 
-        filter_expr: VisualImageFilterCondition,
-    ) ->list[VisualImageMilvusResponse]:
+        data: list[list[float]],
+        limit:int,
+        expr:str | None
         
-        client = cast(AsyncMilvusClient, self.client)
-        search_params = {}
-        search_params['metric_type'] = metric_type
-        search_params['params']= param
-
-        res = await client.search( 
-            collection_name=self.collection,
-            data=query_embedding,
-            anns_field=self.ann_field,
-            limit=top_k,
-            output_fields=output_fields,
-            filter=filter_expr.to_expr(),
-            search_params=search_params
+    ):
+        return AnnSearchRequest(
+            data=data,
+            anns_field=self.visual_ann_field,
+            param=self.visual_param,
+            limit=limit,
+            expr=expr
         )
-        return self._from_hit_to_response(res)
 
-
-
-    
-
-
-class CaptionImageMilvusClient(BaseMilvusClient[CaptionImageMilvusResponse]):
-    def __init__(self, uri:str, collection_name:str, ann_field: str):
-        super().__init__(
-            uri=uri,
-            collection=collection_name
-        )
-        self.ann_field = ann_field
-    
-    @staticmethod
-    def _hit_to_item(hit) -> CaptionImageMilvusResponse:
-        fields = hit.fields if hasattr(hit, "fields") else hit.entity["fields"]
-        try:
-            return CaptionImageMilvusResponse(
-                    identification=str(fields["id"]),
-                    frame_index=int(fields['frame_index']),
-                    timestamp=str(fields['timestamp']),
-                    related_video_id=str(fields["related_video_id"]),
-                    caption=str(fields['caption']),
-                    caption_minio_url=str(fields['caption_minio_url']),
-                    score=float(hit.score),
-                    image_minio_url=str(fields['image_minio_url']),
-                    user_bucket=str(fields['userr_bucket'])
-                )
-        except Exception as e:
-            missing = e.args[0]
-            raise KeyError(f"Missing expected field '{missing}' in Milvus hit: {fields}")
-    
-    async def search_dense(
+    def caption_dense_request(
         self,
-        query_embedding: list[list[float]],
-        top_k: int,
-        metric_type: str,
-        param:dict,
-        output_fields: list[str], 
-        filter_expr: CaptionImageFilterCondition,
-    ) ->list[CaptionImageMilvusResponse]:
-        
-        client = cast(AsyncMilvusClient, self.client)
-        search_params = {}
-        search_params['metric_type'] = metric_type
-        search_params['params']= param
-
-        res = await client.search( 
-            collection_name=self.collection,
-            data=query_embedding,
-            anns_field=self.ann_field,
-            limit=top_k,
-            output_fields=output_fields,
-            filter=filter_expr.to_expr(),
-            search_params=search_params
+        data: list[list[float]],
+        limit:int,
+        expr:str | None
+    ):
+        return AnnSearchRequest(
+            data=data,
+            anns_field=self.caption_ann_field,
+            param=self.caption_param,
+            limit=limit,
+            expr=expr
         )
-        return self._from_hit_to_response(res)
 
-    
+    def caption_sparse_request(
+        self,
+        data: list[str],
+        limit:int,
+        expr:str | None
+    ):
+        return AnnSearchRequest(
+            data=data,
+            anns_field=self.sparse_field,
+            param=self.sparse_param,
+            limit=limit,
+            expr=expr
+        )
 
+
+    async def search_combination(
+        self,
+        requests: list[AnnSearchRequest],
+        limit:int,
+        weight: list[float]
+    ) -> list[ImageMilvusResponse]:
+        assert len(requests) == len(weight), "The...."
+        client = cast(AsyncMilvusClient, self.client)
+
+        result = await client.hybrid_search(
+            collection_name=self.collection,
+            reqs=requests,
+            ranker=WeightedRanker(*weight),
+            limit=limit,
+            output_fields=['*']
+        )
+        return self._from_hit_to_response(result)
 
 class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusResponse]):
-    def __init__(self, uri:str, collection_name:str, ann_field: str):
+    def __init__(
+        self,
+        uri: str,
+        collection_name: str,
+        dense_param: dict,
+        sparse_param: dict,
+        dense_field: str = "caption_embedding_field",
+        sparse_field: str = "caption_sparse_embedding_field"
+    ):
         super().__init__(
             uri=uri,
             collection=collection_name
         )
-        self.ann_field = ann_field
+        self.dense_param = dense_param
+        self.sparse_param = sparse_param
+        self.dense_field = dense_field
+        self.sparse_field = sparse_field
     
     @staticmethod
     def _hit_to_item(hit) -> SegmentCaptionMilvusResponse:
         fields = hit.fields if hasattr(hit, "fields") else hit.entity["fields"]
         try:
             return SegmentCaptionMilvusResponse(
-                identification=str(fields['id']),
+                id=str(fields['id']),
                 start_frame=int(fields['start_frame']),
                 end_frame=int(fields['end_frame']),
                 start_time=str(fields['start_time']),
                 end_time=str(fields['end_time']),
                 related_video_id=str(fields['related_video_id']),
-                caption=str(fields['caption']),
+                segment_caption=str(fields['segment_caption']),
                 segment_caption_minio_url=str(fields['segment_caption_minio_url']),
                 user_bucket=str(fields['user_bucket']),
                 score=float(hit.score)
@@ -144,29 +146,54 @@ class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusRespo
         except KeyError as e:
             raise KeyError(f"Missing expected field in Milvus hit: {e}") from e
 
-    
-    async def search_dense(
+    def dense_request(
         self,
-        query_embedding: list[list[float]],
-        top_k: int,
-        metric_type: str,
-        param:dict,
-        output_fields: list[str], 
-        filter_expr: SegmentCaptionFilterCondition,
-    ) ->list[SegmentCaptionMilvusResponse]:
-        
-        client = cast(AsyncMilvusClient, self.client)
-        search_params = {}
-        search_params['metric_type'] = metric_type
-        search_params['params']= param
-
-        res = await client.search( 
-            collection_name=self.collection,
-            data=query_embedding,
-            anns_field=self.ann_field,
-            limit=top_k,
-            output_fields=output_fields,
-            filter=filter_expr.to_expr(),
-            search_params=search_params
+        data: list[list[float]],
+        limit: int,
+        expr: str | None
+    ):
+        return AnnSearchRequest(
+            data=data,
+            anns_field=self.dense_field,
+            param=self.dense_param,
+            limit=limit,
+            expr=expr
         )
-        return self._from_hit_to_response(res)
+    
+    def sparse_request(
+        self,
+        data: list[str],
+        limit: int,
+        expr: str | None
+    ):
+        return AnnSearchRequest(
+            data=data,
+            anns_field=self.sparse_field,
+            param=self.sparse_param,
+            limit=limit,
+            expr=expr
+        )
+    
+    async def search_combination(
+        self,
+        requests: list[AnnSearchRequest],
+        limit: int,
+        weight: list[float]
+    ) -> list[SegmentCaptionMilvusResponse]:
+        assert len(requests) == len(weight), (
+            "The number of requests and weights must match."
+        )
+
+        client = cast(AsyncMilvusClient, self.client)
+
+        result = await client.hybrid_search(
+            collection_name=self.collection,
+            reqs=requests,
+            ranker=WeightedRanker(*weight),
+            limit=limit,
+            output_fields=['*']
+        )
+
+        if not result:
+            return []
+        return self._from_hit_to_response(result)

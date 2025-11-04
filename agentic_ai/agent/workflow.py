@@ -76,7 +76,7 @@ async def _stream_event(handler: WorkflowHandler, ctx: Context[AgentState], agen
         if isinstance(event, StopEvent):
             message_stream = event.response if hasattr(event, 'response') else str(event)
             message_stream_list.append(message_stream)
-            
+
             ctx.write_event_to_stream(
                 AgentResponse(
                     agent_name=agent_name,
