@@ -2,10 +2,11 @@ from typing import Callable, Any, Annotated, Literal
 from pydantic import BaseModel, Field
 from llama_index.core.agent.workflow import FunctionAgent, ReActAgent, CodeActAgent
 from llama_index.core.llms import LLM
-from llama_index.core.tools import BaseTool, FunctionTool
+from llama_index.core.tools import BaseTool, FunctionTool, ToolMetadata
 from llama_index.core.workflow import Context
 
-from .state import AgentState, PlannerState
+from llama_index.core.agent.workflow import AgentStream, AgentOutput
+from .state import AgentState, PlannerState, GreetingState
 from .events import (
     UserInputEvent,
     FinalResponseEvent,
@@ -14,23 +15,27 @@ from .events import (
     PlannerInputEvent,
     PlanProposedEvent,
     ExecutePlanEvent,
-    AllWorkersCompleteEvent
+    AllWorkersCompleteEvent,
+    StopEvent,
+    StartEvent
 )
 from .prompts import (
     GREETING_PROMPT,
     PLANNER_PROMPT,
     ORCHESTRATOR_PROMPT,
-    WORKER_AGENT_PROMPT_TEMPLATE
+    WORKER_AGENT_PROMPT_TEMPLATE,
+    GREETING_PROMPT_FUNC
 )
 
 from .schema import (
     WorkerBluePrint,
     WorkersPlan
 )
+from llama_index.core.workflow import step
+from llama_index.core.agent.workflow.workflow_events import AgentWorkflowStartEvent
 
-
-
-class Reactor(ReActAgent):
+import json, re
+class Planner(ReActAgent):
     def __hash__(self):
         return hash(self.name)
     def __init__(self, llm : LLM,name = "", description = "", system_prompt = "", tools = []):
@@ -41,39 +46,61 @@ class Reactor(ReActAgent):
                 system_prompt=system_prompt, 
                 tools = tools)
 
+
+
+class Greeter( FunctionAgent):
+    def __hash__(self):
+        return hash(self.name)
+    def extract_response(self, agent_output: AgentOutput) -> str:
+        response = agent_output.response
+        
+        raw_text = response.blocks[0].text
+        
+        match = re.search(r'```json\s*(\{[\s\S]*?\})\s*```', raw_text)
+        if match:
+            json_str = match.group(1)
+            data = json.loads(json_str)
+            print("Extracted JSON data:", data)
+            return GreetingState.model_validate(data)
+            
+    def __init__(self, llm : LLM,name = "", description = "", system_prompt = "", tools = [],structured_output_fn = None):
+        super().__init__(
+                llm = llm, 
+                name = name, 
+                description= description, 
+                system_prompt=system_prompt,
+                tools = tools,
+                output_cls=structured_output_fn)   
+        
+class Orchestrator(FunctionAgent):
+    def __hash__(self):
+        return hash(self.name)
+    
+class WorkerAgent(CodeActAgent):
+    def __hash__(self):
+        return hash(self.name)
+    
+class Planner(ReActAgent):
+    def __hash__(self):
+        return hash(self.name)
+
 def create_greeting_agent(
     llm: LLM,
     name="Greeting Agent",
-    description="",
+    description="An agent to receive user querry",
+    output_cls : type[BaseModel] = None
 ):
-    async def hand_off_to_agent(
-        ctx: Context[AgentState],
-        choose_next_agent_name: Literal["orchestrator","planner"],
-        reason: str,
-        passing_message: str,
-    ) -> str:
-        """
-        Handoff control to the planner agent when the user's request 
-        requires video search, retrieval, or complex operations.
-        
-        Args:
-            reason: Why you're handing off to planner
-        """
-        async with ctx.store.edit_state() as state:
-           state.greeting_state.choose_next_agent = choose_next_agent_name
-           state.greeting_state.reason = reason
-           state.greeting_state.passing_message = passing_message
-        
-        return f"Handing off to agent {choose_next_agent_name}: {reason}"
 
 
-    return FunctionAgent(
+    llm = llm.as_structured_llm(output_cls) if output_cls else llm
+
+    return Greeter(
         name=name,
         description=description,
         system_prompt=GREETING_PROMPT,
         llm=llm,
-        tools=[],
-        
+        structured_output_fn=output_cls,
+        tools=[]
     )
 
 
@@ -85,27 +112,6 @@ def create_planner_agent(
 ) -> ReActAgent:
     """
     """
-    # async def craft_plan(
-    #     ctx: Context,
-    #     plan_description: str,
-    #     required_tools: list[str],
-    #     execution_steps: list[dict[str, str]]
-    # ) -> str:
-    #     """
-    #     Finalize the plan and prepare for the orchestration
-    #     Args:
-    #         plan_description: High-level description of the plan
-    #         required_tools: List of tool names needed
-    #         execution_steps: List of steps, each with 'description' and 'tools_needed'
-    #     """
-    #     async with ctx.store.edit_state() as state:
-    #         state['state']['plan'] = {
-    #             "description": plan_description,
-    #             "required_tools": required_tools,
-    #             "steps": execution_steps
-    #         }
-    #         state["state"]["current_agent"] = "orchestrator"
-    #     return f"Plan created with {len(execution_steps)} steps"
 
     async def sketch_plan(
         ctx: Context[AgentState],
@@ -121,7 +127,7 @@ def create_planner_agent(
 
         return "Plan sketch steps"
     
-    return ReActAgent(
+    return Planner(
         name=name,
         description=description,
         system_prompt=PLANNER_PROMPT,
@@ -161,7 +167,7 @@ def create_orchestrator_agent(
         
         return final_answer
     
-    return FunctionAgent(
+    return Orchestrator(
         name="OrchestratorAgent",
         description="Orchestrates worker agents to execute the plan",
         system_prompt=ORCHESTRATOR_PROMPT,
@@ -192,7 +198,7 @@ def create_worker_agent(
 
     system_prompt = WORKER_AGENT_PROMPT_TEMPLATE
 
-    return CodeActAgent(
+    return WorkerAgent(
         name=name,
         description=description,
         system_prompt=system_prompt,
@@ -206,7 +212,7 @@ def create_consolidation_agent(
     name="Consolidator Agent",
     description="Combines and summarizes all worker outputs into a final answer",
 ):
-    return ReActAgent(
+    return Planner(
         name=name,
         description=description,
         system_prompt="You merge, summarize, and synthesize worker agent results.",

@@ -8,7 +8,7 @@ from .schema import WorkersPlan
 
 class UserInputEvent(StartEvent):
     input: str
-    chat_history : list = []
+    chat_history : list[ChatMessage] = []
 
 
 
@@ -30,14 +30,14 @@ class PlanProposedEvent(Event):
 
 
 # Progress and streaming events
-class AgentProgressEvent(Event):
+class AgentProgressEvent(StopEvent):
     agent_name: str
-    message: str
+    answer: Any
 
 
 class AgentResponse(Event):
     agent_name: str
-    message: str
+    answer: str
 
 
 
@@ -52,4 +52,6 @@ class ExecutePlanEvent(Event):
 class AllWorkersCompleteEvent(Event):
     user_msg: str
     result: list
+
+
     
