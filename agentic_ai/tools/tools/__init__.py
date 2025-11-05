@@ -46,3 +46,29 @@ random_tool = [FunctionTool(
         description="Generate a random number between 'low' and 'high' (inclusive)."
     ),
 )]
+
+def visual_content(tools: list[FunctionTool] = single_tools):
+    ctx= []
+    for tool in tools:
+        tool_info = {
+            "name": tool.metadata.name,
+            "description": tool.metadata.description
+        }
+        if hasattr(tool, "fn") and hasattr(tool.fn, "__annotations__"):
+            tool_info["parameters"] = {
+                k: str(v.__name__) if hasattr(v, "__name__") else str(v)
+                for k, v in tool.fn.__annotations__.items()
+                if k != "return"
+            }
+
+        ctx.append(tool_info)
+    return ctx
+
+get_visual_tools = FunctionTool(fn = visual_content,
+                                metadata =ToolMetadata(
+                                    name="get_visual_tools",
+                                    description="Get the list of tools that can be used to retrieve visual content from videos."
+                                ))
+
+get_context_tools = [get_visual_tools]
+get_all_tools  = single_tools

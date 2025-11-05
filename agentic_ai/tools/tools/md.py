@@ -44,7 +44,7 @@ def getframe(n: int):
 
 
 
-def single_caption(path, length: str = "short") -> str:
+def single_caption(path : int, length: str = "short") -> str:
     """
     Generate a caption for a single image.
     Args:
@@ -62,7 +62,7 @@ def single_caption(path, length: str = "short") -> str:
     return response.get("caption", "")
 
 
-def single_detect(path, object_name: str) -> list:
+def single_detect(path : int, object_name: str) -> list:
     """
     Detect specified object(s) in an image.
     Args:
@@ -79,7 +79,7 @@ def single_detect(path, object_name: str) -> list:
     return response.get("objects", [])
 
 
-def single_query(path, question: str) -> str:
+def single_query(path: int, question: str) -> str:
     """
     Answer a question about a single image.
     Args:
@@ -98,6 +98,7 @@ def single_query(path, question: str) -> str:
 
 # ---- Example local test ----
 if __name__ == "__main__":
+    print(single_caption.__doc__)
     setup = time()
     model = load_model()
     print("Model initialized in:", time() - setup)

@@ -46,7 +46,7 @@ class ExecutePlanEvent(Event):
     plan: WorkersPlan
     plan_description: str
     user_msg: str
-    agent_demand: str
+    agent_response: str
 
 
 class AllWorkersCompleteEvent(Event):

@@ -13,6 +13,7 @@ from llama_index.core.agent.workflow import ToolCall, AgentOutput
 from llama_index.core.workflow.handler import WorkflowHandler # type:ignore
 
 
+
 if __name__=="__main__":
     from state import AgentState
 
@@ -113,10 +114,10 @@ class VideoAgentWorkFlow(Workflow):
         self.context_tools = context_tools
         self.all_tools = all_tools
         
-        self.greeting_agent = create_greeting_agent(llm=llm)
-        self.orchestrator_agent = create_orchestrator_agent(llm=llm, all_tools=all_tools)
+        self.greeting_agent = create_greeting_agent(llm=llm, output_cls=GreetingState)
+        self.orchestrator_agent = create_orchestrator_agent(llm=llm, all_tools=all_tools, output_cls= OrchestratorState)
         self.consolidator = create_consolidation_agent(llm)
-        self.planning_agent = create_planner_agent(llm=self.llm, registry_tools=self.context_tools)
+        self.planning_agent = create_planner_agent(llm=self.llm, registry_tools=self.context_tools, output_cls=PlannerState)
 
         self.logger = logger
 
@@ -139,14 +140,14 @@ class VideoAgentWorkFlow(Workflow):
             ChatMessage(role='user', content=ev.input)
         )
         user_message = ev.input
-        
-        full_response =await self.greeting_agent.run(
+        # print(" ================= Start greeting agent ================= \n")
+        agent_output =await self.greeting_agent.run( # FunctionAgent
                         user_msg=user_message,
-                        chat_history=chat_history
+                        chat_history=chat_history,
                     )
 
-
-        full_response = self.greeting_agent.extract_response(full_response)
+        # print(f" ================= Check greeting agent: {type(full_response)} ================= \n",vars(agent_output))
+        full_response = self.greeting_agent.extract_response(agent_output)
 
         next_agent = full_response.choose_next_agent
         reason = full_response.reason
@@ -157,17 +158,15 @@ class VideoAgentWorkFlow(Workflow):
            state.greeting_state.choose_next_agent = next_agent
            state.greeting_state.reason = reason
            state.greeting_state.passing_message = passing_message
-        
-        
-        print("Greeting agent finished processing.")
-        if next_agent == "planner": 
-            chat_history.append(
-                ChatMessage(role="assistant", content=str(full_response))
+           state.chat_history.append(
+                ChatMessage(role="assistant", content=str(f"{reason=}\n{passing_message=}"))
             )
+        
+        if next_agent == "planner": 
 
             return PlannerInputEvent(
                 user_msg=user_message,
-                planner_demand=f"The original user message: {user_message}. And here is the instruction of the greeting agent. {passing_message}"
+                planner_demand=passing_message
             )
 
         else:
@@ -183,73 +182,48 @@ class VideoAgentWorkFlow(Workflow):
         ctx: Context[AgentState],
         ev: PlannerInputEvent
     ) -> PlanProposedEvent:
-        print(" ================= Start planner ================= \n")
-        planning_agent = self.planning_agent
+        
 
         user = ev.user_msg
-        message = f"The original user message: {ev.user_msg}. And here is the instruction of the greeting agent. {ev.planner_demand}"
         message = ev.planner_demand
 
-        handler = await planning_agent.run(user_msg=message, )
+        message = f"The original user message: {user}. Instruction of the greeting agent. {message}"
+        print("User message for planner:", user)
+        state = await ctx.store.get_state()
+        chat_history = state.chat_history
+        
+        print(" ================= Start planner ================= \n")
+        agent_output = await self.planning_agent.run(user_msg=message, 
+                                                     chat_history = chat_history)
+        
+        full_response = self.greeting_agent.extract_response(agent_output)
+        # full_response = await _stream_event(handler=agent_output, ctx=ctx, agent_name=self.planning_agent.name)
+        print(" ================= Check planner ================= \n",type(full_response))
 
-        #full_response = await _stream_event(handler=handler, ctx=ctx, agent_name=planning_agent.name)
-
-        print(" ================= Check planner ================= \n",type(handler))
-
-        plan_description = await ctx.store.get('planner_state.plan_description')
-        plan_detail = await ctx.store.get('planner_state.plan')
+        plan_description = full_response.plan_description
+        plan_detail = full_response.plan
         print(f"Plan detail: {plan_detail}")
 
-        
+        async with ctx.store.edit_state() as state:
+           state.planner_state.plan_description = plan_description
+           state.planner_state.plan = plan_detail
+           state.chat_history.append(
+                ChatMessage(role="assistant", content=str(f"{plan_description=}"))
+            )
         return PlanProposedEvent(
             user_msg=user,
-            agent_response=handler,
+            agent_response=full_response,
             plan_detail=plan_detail,
             plan_summary=plan_description
         )
     
 
-    
-    @step
-    async def verify_plan(
-        self,
-        ctx: Context[AgentState],
-        ev: PlanProposedEvent
-    ) -> ExecutePlanEvent | PlannerInputEvent:
-        """
-        Orchestrator reviews the proposed plan from the planner.
-        If the plan is good, it proceeds to execution.
-        Otherwise, it requests a revised plan.
-        """
-        
-        ctx.write_event_to_stream(
-            AgentResponse(
-                agent_name="Orchestrator Agent",
-                message="Checking on plan"
-            )
-        )
-        orc = self.orchestrator_agent
-        handler = orc.run(user_msg=f"Verify if the plan is acceptable: {ev}")
-
-        try:
-            full_response = await _stream_event(handler=handler, ctx=ctx, agent_name=orc.name)
-            print("Agent response received successfully")
-        except Exception as e:
-            print.exception("Error while streaming event from orchestrator")
-            raise
-
-        if "approved" in full_response.lower() in full_response.lower():
-            print("Plan approved")
-            return ExecutePlanEvent(plan=ev)
-        else:
-            print("Plan rejected, re-requesting input")
-            return PlannerInputEvent(reason="Plan needs revision")
         
     @step
     async def execute_approved_plan(
         self,
         ctx: Context[AgentState],
-        ev: ExecutePlanEvent
+        ev: PlanProposedEvent
     ) -> AllWorkersCompleteEvent: # fix bug
         ctx.write_event_to_stream(
             AgentResponse(

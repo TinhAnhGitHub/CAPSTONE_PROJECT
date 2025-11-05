@@ -4,7 +4,7 @@ from agent.workflow import VideoAgentWorkFlow
 from dotenv import load_dotenv
 from os import getenv
 
-from tools.tools import single_tools
+from tools.tools import single_tools, get_context_tools
 from agent.log import setup_logger, get_logger
 
 import google.generativeai as genai
@@ -33,7 +33,7 @@ async def main(x =1):
 
     wf= VideoAgentWorkFlow(
         llm=llm,
-        context_tools=[],
+        context_tools=get_context_tools,
         all_tools=single_tools,
         logger=get_logger("Workflow")
     )

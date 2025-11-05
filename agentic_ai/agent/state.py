@@ -9,7 +9,7 @@ from .schema import WorkersPlan
 
 class PlannerState(BaseModel):
     plan: Optional[WorkersPlan] = None
-    plan_description: str | None = Field('Not yet planned', description="the plan summary")
+    plan_description: str = Field('Not yet planned', description="the plan summary")
 
 
 class GreetingState(BaseModel):

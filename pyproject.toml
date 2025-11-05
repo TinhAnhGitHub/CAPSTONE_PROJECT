@@ -8,9 +8,11 @@ dependencies = [
     "google-adk>=1.16.0",
     "llama-index>=0.14.6",
     "llama-index-llms-gemini>=0.6.1",
+    "loguru>=0.7.3",
     "minio>=7.2.18",
     "moondream>=0.1.1",
     "mysql-connector-python>=9.4.0",
     "pillow<11.0.0",
+    "pymilvus>=2.6.3",
     "workflows>=3.2",
 ]

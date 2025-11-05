@@ -4,14 +4,8 @@ from minio import Minio
 from minio.error import S3Error
 from typing import Dict, Any, BinaryIO
 import json
-
-
-<<<<<<< HEAD
 import logging
 
-
-=======
->>>>>>> upstream/feat/agent
 class StorageError(RuntimeError):
     """Raised when MinIO storage operations fail."""
     pass
@@ -37,15 +31,8 @@ class StorageClient:
     def _ensure_bucket(self, bucket: str) -> None:
         try:
             if not self.client.bucket_exists(bucket):
-<<<<<<< HEAD
-                self.logger.info(f"Bucket named: {bucket} does not exist, creating")
                 self.client.make_bucket(bucket)
         except S3Error as exc:
-            self.logger.error("MinIO bucket check failed for %s: %s", bucket, exc)
-=======
-                self.client.make_bucket(bucket)
-        except S3Error as exc:
->>>>>>> upstream/feat/agent
             raise StorageError(f"Failed to ensure bucket {bucket}: {exc}") from exc
 
     def get_object(self, bucket: str, object_name: str) -> bytes | None:
@@ -59,10 +46,6 @@ class StorageClient:
                 response.close()
                 response.release_conn()
         except S3Error as exc:
-<<<<<<< HEAD
-            self.logger.info(f"Bucket: {bucket} has no {object_name}")
-=======
->>>>>>> upstream/feat/agent
             return None
 
     def read_json(self, bucket: str, object_name: str) -> Dict[str, Any] | None:

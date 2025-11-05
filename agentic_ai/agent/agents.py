@@ -1,4 +1,4 @@
-from typing import Callable, Any, Annotated, Literal
+from typing import Callable, Any, Annotated, Literal, Type
 from pydantic import BaseModel, Field
 from llama_index.core.agent.workflow import FunctionAgent, ReActAgent, CodeActAgent
 from llama_index.core.llms import LLM
@@ -6,7 +6,7 @@ from llama_index.core.tools import BaseTool, FunctionTool, ToolMetadata
 from llama_index.core.workflow import Context
 
 from llama_index.core.agent.workflow import AgentStream, AgentOutput
-from .state import AgentState, PlannerState, GreetingState
+from .state import AgentState, PlannerState, GreetingState, ChatMessage
 from .events import (
     UserInputEvent,
     FinalResponseEvent,
@@ -23,8 +23,7 @@ from .prompts import (
     GREETING_PROMPT,
     PLANNER_PROMPT,
     ORCHESTRATOR_PROMPT,
-    WORKER_AGENT_PROMPT_TEMPLATE,
-    GREETING_PROMPT_FUNC
+    WORKER_AGENT_PROMPT_TEMPLATE
 )
 
 from .schema import (
@@ -38,22 +37,27 @@ import json, re
 class Planner(ReActAgent):
     def __hash__(self):
         return hash(self.name)
-    def __init__(self, llm : LLM,name = "", description = "", system_prompt = "", tools = []):
+    def __init__(self, llm : LLM,name = "", description = "", system_prompt = "", tools = [], output_cls = None):
         super().__init__(
                 llm = llm, 
                 name = name, 
                 description= description, 
                 system_prompt=system_prompt, 
-                tools = tools)
+                tools = tools,
+                output_cls=output_cls
+            )
 
 
-
-class Greeter( FunctionAgent):
+class Wrapper():
     def __hash__(self):
         return hash(self.name)
     def extract_response(self, agent_output: AgentOutput) -> str:
+        format = self.output_cls
+        structured_response = agent_output.structured_response
+        if structured_response and format:
+            return format.model_validate(structured_response)
         response = agent_output.response
-        
+        print(">>> Raw response from greeting agent:\n", agent_output.structured_response)
         raw_text = response.blocks[0].text
         
         match = re.search(r'```json\s*(\{[\s\S]*?\})\s*```', raw_text)
@@ -61,83 +65,75 @@ class Greeter( FunctionAgent):
             json_str = match.group(1)
             data = json.loads(json_str)
             print("Extracted JSON data:", data)
-            return GreetingState.model_validate(data)
-            
-    def __init__(self, llm : LLM,name = "", description = "", system_prompt = "", tools = [],structured_output_fn = None):
-        super().__init__(
-                llm = llm, 
-                name = name, 
-                description= description, 
-                system_prompt=system_prompt,
-                tools = tools,
-                output_cls=structured_output_fn)   
-        
-class Orchestrator(FunctionAgent):
-    def __hash__(self):
-        return hash(self.name)
+            return format.model_validate(data)
+     
+class Greeter(Wrapper, FunctionAgent):
+    pass 
+
+class Orchestrator(Wrapper,FunctionAgent):
+    pass
     
-class WorkerAgent(CodeActAgent):
-    def __hash__(self):
-        return hash(self.name)
+class WorkerAgent(Wrapper,CodeActAgent):
+    pass
     
-class Planner(ReActAgent):
-    def __hash__(self):
-        return hash(self.name)
+class Planner(Wrapper,ReActAgent):
+    pass
 
 def create_greeting_agent(
     llm: LLM,
     name="Greeting Agent",
     description="An agent to receive user querry",
-    output_cls : type[BaseModel] = None
+    output_cls : type[BaseModel] = None,
+    verbose: bool = True,
 ):
-
-
-    llm = llm.as_structured_llm(output_cls) if output_cls else llm
 
     return Greeter(
         name=name,
         description=description,
         system_prompt=GREETING_PROMPT,
         llm=llm,
-        structured_output_fn=output_cls,
-        tools=[]
+        tools=[],
+        output_cls=output_cls,
+        verbose=verbose
     )
+
+    # llm = llm.as_structured_llm(output_cls) if output_cls else llm
+
+    # return Greeter(
+    #     name=name,
+    #     description=description,
+    #     system_prompt=GREETING_PROMPT,
+    #     llm=llm,
+    #     tools=[],
+    #     structured_output_fn=output_cls,
+    #     verbose=verbose
+    # )
 
 
 def create_planner_agent(
     llm: LLM,
-    registry_tools: list[BaseTool],
+    registry_tools: list[BaseTool] = [],
     name="",
     description="",
+    output_cls: type[BaseModel] = None
 ) -> ReActAgent:
     """
     """
-
-    async def sketch_plan(
-        ctx: Context[AgentState],
-        plan_description: str,
-        plan_detail: WorkersPlan | None = None
-    ):
-        async with ctx.store.edit_state() as state:
-            state.planner_state = PlannerState(
-                    plan_description=plan_description,
-                    plan=plan_detail
-                )
-
-
-        return "Plan sketch steps"
     
     return Planner(
         name=name,
         description=description,
         system_prompt=PLANNER_PROMPT,
         llm=llm,
-        tools=registry_tools + [sketch_plan],
+        tools=registry_tools,
+        output_cls=output_cls,
+        verbose=True
     )
 
 def create_orchestrator_agent(
     llm: LLM,
-    all_tools: dict[str, BaseTool]
+    all_tools: dict[str, BaseTool],
+    output_cls: type[BaseModel] = None
 ):
     async def spawn_worker_agents(
         ctx: Context[AgentState],
@@ -166,7 +162,8 @@ def create_orchestrator_agent(
         description="Orchestrates worker agents to execute the plan",
         system_prompt=ORCHESTRATOR_PROMPT,
         llm=llm,
-        tools=[spawn_worker_agents, consolidate_results]
+        tools=[spawn_worker_agents, consolidate_results],
+        output_cls=output_cls
     )
 
 def create_worker_agent(
@@ -174,7 +171,7 @@ def create_worker_agent(
     name: str,
     description: str,
     tools: list[BaseTool],
-    code_execute_fn: Callable
+    code_execute_fn: Callable,
 ):
     """
     Creates a CodeActAgent worker that can write Python code to use tools
