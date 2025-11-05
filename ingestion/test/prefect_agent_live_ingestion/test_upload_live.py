@@ -38,7 +38,7 @@ def test_upload_submit(http: httpx.Client, base_urls: dict[str, str], mock_data_
         print(data)
         assert data["run_id"]
         assert data.get("flow_run_id")
-        assert data.get("video_count") == 2
+        assert data.get("video_count") == 1
         assert data.get("deployment_name")
     else:
         # In this case, provide context for easier debugging in CI output

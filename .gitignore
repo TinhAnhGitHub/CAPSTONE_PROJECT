@@ -30,6 +30,7 @@ agentic_ai/agent/.env
 
 
 **.spec-workflow/
+**local/
 **service_data/
 # C extensions
 *.so

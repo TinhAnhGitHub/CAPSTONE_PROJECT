@@ -9,6 +9,8 @@ from llama_index.core.agent.workflow.workflow_events import (
     AgentOutput,
     AgentStream,
     ToolCallResult,
+    AgentStreamStructuredOutput,
+    ToolCall
 )
 from llama_index.core.base.llms.types import ChatResponse
 from llama_index.core.bridge.pydantic import BaseModel, Field
@@ -27,7 +29,7 @@ from typing import Literal
 
 
 
-from .prompt import MAKE_DECISION_PROMPT
+from .prompt import MAKE_DECISION_PROMPT, WORKER_SYSTEM_PROMPT
 
 
 class AgentDecision(Event):
@@ -103,6 +105,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         tools.append(  
             FunctionTool.from_defaults(code_execute_fn, name='execute')  # type: ignore
         )
+        system_prompt = system_prompt or WORKER_SYSTEM_PROMPT
         super().__init__(
             execution_history_key=execution_history_key,
             code_execute_fn=code_execute_fn,
@@ -193,9 +196,11 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
             if thoughts and thoughts != seen_thoughts:
                 new_part = thoughts[len(seen_thoughts):]
                 ctx.write_event_to_stream(
-                    AgentThinking(
-                        name=self.name,
-                        thinking_content=new_part
+                    AgentStream(
+                        current_agent_name=self.name,
+                        thinking_delta=new_part,
+                        delta=new_part,
+                        response=""
                     )
                 )
 
@@ -216,6 +221,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
                     response=last_chat_response.message.content or "",
                     tool_calls=tool_calls or [],
                     raw=raw,
+                    thinking_delta=None,
                     current_agent_name=self.name,
                 )
             )
@@ -257,20 +263,12 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         tool_descriptions:str
         
     ):
-        system_prompt_added = False
-        for msg in current_llm_input:
-            if msg.role.value == "system":
-                system_prompt_added = True
-                break
-        
-        if not system_prompt_added:
-            code_system_msg = ChatMessage(
-                role="system",
-                content=self.code_act_system_prompt.format_messages(tool_descriptions=tool_descriptions)
-            )
-            current_llm_input = [code_system_msg] + current_llm_input
-        
-
+        code_system_msgs = self.code_act_system_prompt.format_messages(
+            tool_descriptions=tool_descriptions
+        )
+        current_llm_input = [*code_system_msgs, *current_llm_input]
+    
+        print(current_llm_input)
         response = await self.llm.astream_chat(current_llm_input)
         last_chat_response = ChatResponse(message=ChatMessage())
         
@@ -282,9 +280,11 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
             if thoughts and thoughts != seen_thoughts:
                 new_part = thoughts[len(seen_thoughts):]
                 ctx.write_event_to_stream(
-                    AgentThinking(
-                        name=self.name,
-                        thinking_content=new_part
+                    AgentStream(
+                        current_agent_name=self.name,
+                        thinking_delta=new_part,
+                        delta=new_part,
+                        response=""
                     )
                 )
 
@@ -314,7 +314,6 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
         tool_calls = []
         if code:
             tool_id = str(uuid.uuid4())
-
             tool_calls = [
                 ToolSelection(
                     tool_id=tool_id,
@@ -377,10 +376,11 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
                 input=decision_input, current_agent_name=self.name
             )
         )
-
+        raw_response = None
         sllm = self.llm.as_structured_llm(ToolsOrCodeDecision)
         chat_response = await sllm.achat(decision_input)
-        raw_response = cast(ToolsOrCodeDecision, chat_response.raw)
+        raw_response = ToolsOrCodeDecision.model_validate(chat_response.raw)
+        
         ctx.write_event_to_stream(
             AgentDecision(
                 name=self.name,
@@ -458,12 +458,7 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
                     )
                 )
         async with ctx.store.edit_state() as state:
-            # await ctx.store.set(self.execution_history_key, history_context)
             state[self.execution_history_key] = history_context
-
-        print(f"{ await ctx.store.get(
-            self.execution_history_key, default=[]
-        )=}")
 
     async def finalize(
         self, ctx: Context, output: AgentOutput, memory: BaseMemory
