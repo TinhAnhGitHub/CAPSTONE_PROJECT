@@ -17,4 +17,5 @@ dependencies = [
     "tenacity>=9.1.2",
     "tqdm",
     "prefect",
+    "consul2"
 ]

@@ -2,6 +2,31 @@
 __pycache__/
 *.py[codz]
 *$py.class
+<<<<<<< HEAD
+agent/__pycache__/
+agent/tools/__pycache__/
+.python-version
+script.sh
+uv.lock
+# C extensions
+*.so
+.env
+# Keyframes
+agent/tools/keyframes/
+agent/keyframes/
+agent/
+# Extra file
+script.sh
+local/*
+
+# .env
+.env
+agent/.env
+agent/tools/.env
+# .env
+agentic_ai/.env
+agentic_ai/agent/.env
+=======
 
 
 **.spec-workflow/
@@ -10,6 +35,7 @@ __pycache__/
 # C extensions
 *.so
 **.spec
+>>>>>>> upstream/feat/agent
 # Distribution / packaging
 .Python
 build/

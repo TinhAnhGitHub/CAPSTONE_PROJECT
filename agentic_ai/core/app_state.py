@@ -1,5 +1,5 @@
 from typing import Any
-from agentic.tools.type.registry import FunctionRegistry
+from tools.type.registry import FunctionRegistry
 
 class Appstate:
     _instance = None

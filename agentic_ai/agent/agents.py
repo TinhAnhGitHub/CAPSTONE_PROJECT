@@ -1,12 +1,24 @@
-from typing import Callable, Any, Annotated
+from typing import Callable, Any, Annotated, Literal, Type
 from pydantic import BaseModel, Field
 from llama_index.core.agent.workflow import FunctionAgent, ReActAgent, CodeActAgent
 from llama_index.core.llms import LLM
-from llama_index.core.tools import BaseTool, FunctionTool
+from llama_index.core.tools import BaseTool, FunctionTool, ToolMetadata
 from llama_index.core.workflow import Context
 
-from .state import AgentState
-
+from llama_index.core.agent.workflow import AgentStream, AgentOutput
+from .state import AgentState, PlannerState, GreetingState, ChatMessage
+from .events import (
+    UserInputEvent,
+    FinalResponseEvent,
+    AgentProgressEvent,
+    AgentResponse,
+    PlannerInputEvent,
+    PlanProposedEvent,
+    ExecutePlanEvent,
+    AllWorkersCompleteEvent,
+    StopEvent,
+    StartEvent
+)
 from .prompts import (
     GREETING_PROMPT,
     PLANNER_PROMPT,
@@ -14,106 +26,114 @@ from .prompts import (
     WORKER_AGENT_PROMPT_TEMPLATE
 )
 
+from .schema import (
+    WorkerBluePrint,
+    WorkersPlan
+)
+from llama_index.core.workflow import step
+from llama_index.core.agent.workflow.workflow_events import AgentWorkflowStartEvent
 
-class WorkerBluePrint(BaseModel):
-   name: str = Field(..., description="The specific name of the agents")
-   description: str = Field(..., description="The description detail of the agent. This description will refect its jobs, role, and how it should reasoning, perspective, to get the answer, based on the provided tools")
-   task: str = Field(..., description="The specific task that it must complete")
-   tools: list[str] = Field(..., description="The available tools that the system offer")
-   max_iterations: int = Field(3, description="How many times that the agent have to try, before it give up :(  ")
+import json, re
+class Planner(ReActAgent):
+    def __hash__(self):
+        return hash(self.name)
+    def __init__(self, llm : LLM,name = "", description = "", system_prompt = "", tools = [], output_cls = None):
+        super().__init__(
+                llm = llm, 
+                name = name, 
+                description= description, 
+                system_prompt=system_prompt, 
+                tools = tools,
+                output_cls=output_cls
+            )
 
 
-class WorkersPlan(BaseModel):
-    plan: list[WorkerBluePrint] = Field(default_factory=list,description="The plan for these agents. Should be around 1-3 agents only. 2 is a sweet spot.")
+class Wrapper():
+    def __hash__(self):
+        return hash(self.name)
+    def extract_response(self, agent_output: AgentOutput) -> str:
+        format = self.output_cls
+        structured_response = agent_output.structured_response
+        if structured_response and format:
+            return format.model_validate(structured_response)
+        response = agent_output.response
+        print(">>> Raw response from greeting agent:\n", agent_output.structured_response)
+        raw_text = response.blocks[0].text
+        
+        match = re.search(r'```json\s*(\{[\s\S]*?\})\s*```', raw_text)
+        if match:
+            json_str = match.group(1)
+            data = json.loads(json_str)
+            print("Extracted JSON data:", data)
+            return format.model_validate(data)
+     
+class Greeter(Wrapper, FunctionAgent):
+    pass 
 
+class Orchestrator(Wrapper,FunctionAgent):
+    pass
+    
+class WorkerAgent(Wrapper,CodeActAgent):
+    pass
+    
+class Planner(Wrapper,ReActAgent):
+    pass
 
 def create_greeting_agent(
     llm: LLM,
     name="Greeting Agent",
-    description="",
+    description="An agent to receive user querry",
+    output_cls : type[BaseModel] = None,
+    verbose: bool = True,
 ):
-    async def hand_off_to_agent(
-        ctx: Context[AgentState],
-        choose_next_agent_name: str,
-        reason: str,
-        passing_message: str,
-    ) -> str:
-        """
-        Handoff control to the planner agent when the user's request 
-        requires video search, retrieval, or complex operations.
-        
-        Args:
-            reason: Why you're handing off to planner
-        """
-        async with ctx.store.edit_state() as state:
-           state.greeting_state.choose_next_agent = choose_next_agent_name
-           state.greeting_state.reason = reason
-           state.greeting_state.passing_message = passing_message
-        
-        return f"Handing off to agent {choose_next_agent_name}: {reason}"
 
-
-    return FunctionAgent(
+    return Greeter(
         name=name,
         description=description,
         system_prompt=GREETING_PROMPT,
         llm=llm,
-        tools=[hand_off_to_agent],
-        
+        tools=[],
+        output_cls=output_cls,
+        verbose=verbose
     )
+
+    # llm = llm.as_structured_llm(output_cls) if output_cls else llm
+
+    # return Greeter(
+    #     name=name,
+    #     description=description,
+    #     system_prompt=GREETING_PROMPT,
+    #     llm=llm,
+    #     tools=[],
+    #     structured_output_fn=output_cls,
+    #     verbose=verbose
+    # )
 
 
 def create_planner_agent(
     llm: LLM,
-    registry_tools: list[BaseTool],
+    registry_tools: list[BaseTool] = [],
     name="",
     description="",
+    output_cls: type[BaseModel] = None
 ) -> ReActAgent:
     """
     """
-    # async def craft_plan(
-    #     ctx: Context,
-    #     plan_description: str,
-    #     required_tools: list[str],
-    #     execution_steps: list[dict[str, str]]
-    # ) -> str:
-    #     """
-    #     Finalize the plan and prepare for the orchestration
-    #     Args:
-    #         plan_description: High-level description of the plan
-    #         required_tools: List of tool names needed
-    #         execution_steps: List of steps, each with 'description' and 'tools_needed'
-    #     """
-    #     async with ctx.store.edit_state() as state:
-    #         state['state']['plan'] = {
-    #             "description": plan_description,
-    #             "required_tools": required_tools,
-    #             "steps": execution_steps
-    #         }
-    #         state["state"]["current_agent"] = "orchestrator"
-    #     return f"Plan created with {len(execution_steps)} steps"
-
-    async def sketch_plan(
-        ctx: Context[AgentState],
-        plan_description: str,
-        plan_detail: WorkersPlan | None = None
-    ):
-        async with ctx.store.edit_state() as state:
-            state.planner_state.plan = plan_detail
-            state.planner_state.plan_description = plan_description
-        return f"Plan sketch steps"
     
-    return ReActAgent(
+    return Planner(
         name=name,
         description=description,
         system_prompt=PLANNER_PROMPT,
         llm=llm,
-        tools=registry_tools + [finalize_plan, sketch_plan],
+        tools=registry_tools,
+        output_cls=output_cls,
+        verbose=True
     )
 
 def create_orchestrator_agent(
     llm: LLM,
-    all_tools: dict[str, BaseTool]
+    all_tools: dict[str, BaseTool],
+    output_cls: type[BaseModel] = None
 ):
     async def spawn_worker_agents(
         ctx: Context[AgentState],
@@ -123,7 +143,7 @@ def create_orchestrator_agent(
         async with ctx.store.edit_state() as state:
             state.planner_state.plan = worker_specs
             
-            state["state"]["workers_spawned"] = 
+            state["state"]["workers_spawned"] = [w.name for w in worker_specs.plan]
         
         return f"Spawned {len(worker_specs.plan)} worker agents"
     
@@ -137,12 +157,13 @@ def create_orchestrator_agent(
         
         return final_answer
     
-    return FunctionAgent(
+    return Orchestrator(
         name="OrchestratorAgent",
         description="Orchestrates worker agents to execute the plan",
         system_prompt=ORCHESTRATOR_PROMPT,
         llm=llm,
-        tools=[spawn_worker_agents, consolidate_results]
+        tools=[spawn_worker_agents, consolidate_results],
+        output_cls=output_cls
     )
 
 def create_worker_agent(
@@ -150,7 +171,7 @@ def create_worker_agent(
     name: str,
     description: str,
     tools: list[BaseTool],
-    code_execute_fn: Callable
+    code_execute_fn: Callable,
 ):
     """
     Creates a CodeActAgent worker that can write Python code to use tools
@@ -168,7 +189,7 @@ def create_worker_agent(
 
     system_prompt = WORKER_AGENT_PROMPT_TEMPLATE
 
-    return CodeActAgent(
+    return WorkerAgent(
         name=name,
         description=description,
         system_prompt=system_prompt,
@@ -177,6 +198,18 @@ def create_worker_agent(
         code_execute_fn=code_execute_fn
     )
 
+def create_consolidation_agent(
+    llm: LLM,
+    name="Consolidator Agent",
+    description="Combines and summarizes all worker outputs into a final answer",
+):
+    return Planner(
+        name=name,
+        description=description,
+        system_prompt="You merge, summarize, and synthesize worker agent results.",
+        llm=llm,
+        structured_output_fn=FinalResponseEvent
+    )
 
         
         

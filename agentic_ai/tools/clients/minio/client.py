@@ -4,7 +4,7 @@ from minio import Minio
 from minio.error import S3Error
 from typing import Dict, Any, BinaryIO
 import json
-
+import logging
 
 class StorageError(RuntimeError):
     """Raised when MinIO storage operations fail."""
@@ -25,6 +25,8 @@ class StorageClient:
             secure=secure,
             http_client=self._http_client,
         )
+
+        self.logger = logging.getLogger(__name__)
     
     def _ensure_bucket(self, bucket: str) -> None:
         try:
