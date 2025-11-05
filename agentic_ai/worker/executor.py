@@ -172,19 +172,20 @@ class SandboxCodeExecutor:
                         asyncio.set_event_loop(loop)
                         return_value = loop.run_until_complete(coro)
                         loop.close()
+                else:
                 
-                last_expr = (
-                    tree.body[-1] if tree.body  and isinstance(tree.body[-1], ast.Expr) else None
-                )
-                if last_expr is not None:
-                    prefix = tree.body[:-1]
-                    if prefix:
-                        exec(compile(ast.Module(prefix, []), "<sandbox>", "exec"), global_ctx, local_ctx)
-                        return_value = eval(
-                            compile(ast.Expression(last_expr.value), "<sandbox>", "eval"), global_ctx, local_ctx 
-                        )
-                    else:
-                        exec(compile(tree, '<sandbox>', 'exec'))
+                    last_expr = (
+                        tree.body[-1] if tree.body  and isinstance(tree.body[-1], ast.Expr) else None
+                    )
+                    if last_expr is not None:
+                        prefix = tree.body[:-1]
+                        if prefix:
+                            exec(compile(ast.Module(prefix, []), "<sandbox>", "exec"), global_ctx, local_ctx)
+                            return_value = eval(
+                                compile(ast.Expression(last_expr.value), "<sandbox>", "eval"), global_ctx, local_ctx 
+                            )
+                        else:
+                            exec(compile(tree, '<sandbox>', 'exec'))
         except SandboxViolationError as e:
             exception_repr = f"SandboxViolation Error: {e}"
         

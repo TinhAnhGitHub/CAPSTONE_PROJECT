@@ -1,4 +1,4 @@
-from typing import Union, Callable, Awaitable, Sequence, cast
+from typing import Union, Callable, Awaitable, Sequence, cast, get_type_hints, get_origin, get_args, Annotated
 import uuid
 import re
 import inspect
@@ -169,6 +169,43 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
             tool_description = f"def {fn_name}{signature!s}:"
             if docstring:
                 tool_description += f'\n  """\n{docstring}\n  """\n'
+
+            try:
+                type_hints = get_type_hints(fn)
+            except Exception:
+                type_hints = {}
+            
+            ret_type = type_hints.get('return')
+
+            if ret_type:
+                origin = get_origin(ret_type)
+                args = get_args(ret_type)
+                model_cls = None
+            
+                if origin is Annotated:
+                    model_cls = args[0]
+                elif origin in (list, Sequence):
+                    model_cls = args[0]
+                else:
+                    model_cls = ret_type
+
+                if inspect.isclass(model_cls) and issubclass(model_cls, BaseModel):
+                    tool_description += "\n  # Return fields:\n"
+                    for field_name, field in model_cls.model_fields.items():
+                        f_type = field.annotation
+                        f_type_name = (
+                            f_type.__name__ if hasattr(f_type, "__name__") else str(f_type) #type:ignore
+                        )
+                        desc = field.description or ""
+                        default = (
+                            f" (default={field.default!r})"
+                            if field.default not in (None, inspect._empty)
+                            else ""
+                        )
+                        tool_description += f"  # - {field_name}: {f_type_name}{default}"
+                        if desc:
+                            tool_description += f" — {desc}"
+                        tool_description += "\n"
 
             tool_description += "\n  ...\n"
             tool_descriptions.append(tool_description)

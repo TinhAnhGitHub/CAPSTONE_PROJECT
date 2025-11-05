@@ -41,11 +41,11 @@ async def enhance_visual_query(
     dependencies=["llm_as_tools"]
 )
 async def enhance_textual_query(
-    raw_query: Annotated[str, "Original user query (textual or event intent)"],
-    variants: Annotated[list[str], "List of semantic or contextual variations"],
+    raw_query: Annotated[str, "Câu truy vấn gốc của người dùng (văn bản hoặc ý định sự kiện)"],
+    variants: Annotated[list[str], "Danh sách các biến thể ngữ nghĩa hoặc bối cảnh"],
     llm_as_tools: LLM,
 ) -> list[str]:
-    """Enhance a textual query for richer embedding or captioning."""
+    """Tăng cường câu truy vấn văn bản để tạo phiên bản giàu ngữ nghĩa hơn cho embedding hoặc mô tả hình ảnh."""
     prompt = CAPTION__ENHANCEMENT_PROMPT.format(raw_query=raw_query, variants=variants)
     sllm = llm_as_tools.as_structured_llm(EVQResponse)
     response = await sllm.acomplete(prompt)

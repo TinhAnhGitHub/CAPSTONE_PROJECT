@@ -27,24 +27,23 @@ CONTRASTIVE_VISUAL_ENHANCEMENT_PROMPT = PromptTemplate(
 
 CAPTION__ENHANCEMENT_PROMPT = PromptTemplate(
     """
-    You are a visual captioning expert. 
-    Generate a single, detailed sentence that describes the given image vividly 
-    but concisely for semantic embedding retrieval.
+    Bạn là một chuyên gia mô tả hình ảnh và tăng cường truy vấn ngữ nghĩa.  
+    Hãy tạo một câu mô tả ngắn gọn nhưng chi tiết và sinh động cho hình ảnh được mô tả dưới đây,  
+    nhằm phục vụ cho việc truy xuất hoặc embedding ngữ nghĩa.
 
-    Guidelines:
-    - Focus on *what is distinctive* in the image: objects, relationships, actions, context.
-    - Include *visual attributes* (color, shape, texture, mood).
-    - Prefer objective description over subjective opinion.
-    - Avoid redundant phrases like "This image shows...".
-    - Output one sentence only.
-    - The output must be in English
+    Hướng dẫn:
+    - Tập trung vào *những điểm nổi bật hoặc khác biệt* trong hình ảnh: đối tượng, mối quan hệ, hành động, bối cảnh.
+    - Bao gồm *thuộc tính thị giác*: màu sắc, hình dạng, kết cấu, không khí, tâm trạng.
+    - Ưu tiên mô tả khách quan, tránh nhận xét chủ quan.
+    - Không dùng các cụm dư thừa như “Bức ảnh này cho thấy...” hay “Đây là hình ảnh của...”.
+    - Chỉ viết *một câu duy nhất*.
+    - Đầu ra phải bằng **tiếng Việt**.
 
-    Input: {raw_query}
-    variants: {variants
-    Output: A list of retrieval-optimized caption.
+    Đầu vào: {raw_query}
+    Các biến thể: {variants}
+    Đầu ra: Danh sách một số các câu mô tả tối ưu cho truy xuất ngữ nghĩa
     """
 )
-
 
 
 CAPTION_WITH_ASR_FOCUS_PROMPT = PromptTemplate(

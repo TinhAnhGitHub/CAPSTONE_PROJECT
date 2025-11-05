@@ -253,8 +253,7 @@ class ToolFactory:
         partial_func= partial(metadata.func, **bound_kwargs)
         print(metadata.name)
         return_type = self._get_return_type(metadata.func)
-        formatter_func = self.formatter.get_formatter(return_type)
-        wrapper_func = self._make_callable_from_partial(partial_func, formatter_func)
+        wrapper_func = self._make_callable_from_partial(partial_func, None)
         self._tool_cache[tool_name] = wrapper_func
         return wrapper_func
     
@@ -293,8 +292,7 @@ class ToolFactory:
             for name in tool_registry.list_all()
             if self._bind_tool(name) is not None
         }
-    
-    
+
 
     def get_all_tools_functool(
         self,
@@ -306,10 +304,16 @@ class ToolFactory:
         """
         fn_name2fn_tool = {}
         for name in tool_registry.list_all():
-            if self._bind_tool(name) is not None:
-                fnc = cast(Callable, self._bind_tool(name))
+            fn = self._bind_tool(name)
+
+            if fn is not None:
+                return_type = self._get_return_type(tool_registry.get(name=name).func) #type:ignore
+                formatter = self.formatter.get_formatter(return_type=return_type)
+
+                fnc = cast(Callable, fn)
                 fnc = safe_partial(fnc, **kwargs)
-                fnc = self._make_callable_from_partial(fnc, None)
+                fnc = self._make_callable_from_partial(fnc, formatter)
+
 
                 if inspect.iscoroutinefunction(fnc):
                     func_tool = FunctionTool.from_defaults(
