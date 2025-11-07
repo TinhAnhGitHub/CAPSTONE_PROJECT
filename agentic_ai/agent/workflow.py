@@ -232,7 +232,7 @@ class VideoAgentWorkFlow(Workflow):
             )
         )
 
-        plan = ev.plan
+        plan = ev.plan_detail
 
 
         def create_code_executor_for_worker(worker_tools: list[BaseTool]):
@@ -330,12 +330,12 @@ class VideoAgentWorkFlow(Workflow):
                 message="Consolidating results..."
             )
         )
-        con = self.consolidator.name
+        con = self.consolidator
         handler = con.run(user_msg=f"{ev}")
 
-        full_response = await _stream_event(handler=handler, ctx=ctx, agent_name=con.name)
+       
         
-        return FinalResponseEvent(response=full_response)
+        return FinalResponseEvent(response=handler)
 
 
 

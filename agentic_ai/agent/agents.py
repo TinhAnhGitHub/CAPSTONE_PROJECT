@@ -206,10 +206,9 @@ def create_consolidation_agent(
     return Planner(
         name=name,
         description=description,
-        system_prompt="You merge, summarize, and synthesize worker agent results.",
-        llm=llm,
-        structured_output_fn=FinalResponseEvent
-    )
+        system_prompt="You merge, summarize, and synthesize worker agent results. Is the result good enough",
+        llm=llm
+        )
 
         
         
