@@ -28,8 +28,7 @@ def download_video(url: str, output_folder: str = "./videos", data : dict = None
     ydl_opts = {
         "outtmpl": f"{output_folder}/{id}_%(title)s.%(ext)s",
         "format": "bestvideo+bestaudio/best",
-        "keepvideo": True,
-        "ffmpeg_location":ffmpeg_path
+        "keepvideo": True
         
     }
 
