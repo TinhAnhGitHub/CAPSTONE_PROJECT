@@ -68,7 +68,9 @@ class HTTPProgressTracker:
                 return None
             payload = progress.model_dump(mode='json')
         try:
-            async with httpx.AsyncClient(base_url=self.base_url) as client:
+            async with httpx.AsyncClient(base_url="http://100.120.22.90:8010") as client:
+                print(f"{self.endpoint.format(video_id=video_id)}")
+                print(f"{self.base_url}")
                 response = await client.post(
                     self.endpoint.format(video_id=video_id),
                     json=payload
@@ -76,8 +78,8 @@ class HTTPProgressTracker:
                 response.raise_for_status()
             return response.json()
         except httpx.HTTPError as exc:
-            logger.warning(
-                "Failed to send progress update for %s: %s",
+            print(
+                "Failed to send progress update for",
                 video_id,
                 exc,
             )

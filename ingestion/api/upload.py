@@ -31,8 +31,12 @@ class UploadResponse(BaseModel):
 
 
 
+class VideoObject(BaseModel):
+    video_id: str
+    video_url: str
+
 class UploadRequest(BaseModel):
-    videos: list[tuple[str,str]] = Field(..., description="list of uploading videos, in the format of (video_id, video_s3_url)")
+    videos: list[VideoObject] = Field(..., description="list of uploading videos, in the format of (video_id, video_s3_url)")
     user_id: str
 
 @router.post(
@@ -48,11 +52,18 @@ async def upload_videos(
     
     logger.info(f"Calling video_processing_flow directly")
     run_id = str(uuid4())
+
+    video_files = request.videos
+    video_files_tuple = []
+    for vid_file in video_files:
+        video_files_tuple.append(
+            (vid_file.video_id, vid_file.video_url)
+        )
     try:
         flow_run: FlowRun = await run_deployment( #type:ignore
             name=DEPLOY_IDENTIFIER,
             parameters={
-                "video_files": request.videos,
+                "video_files": video_files_tuple,
                 "user_id": request.user_id,
                 "run_id": run_id,
             },
@@ -82,7 +93,7 @@ async def upload_videos(
         run_id=run_id,
         flow_run_id=str(flow_run.id),
         video_count=len(request.videos),
-        video_names=[file_name or "unknown" for _, file_name in request.videos],
+        video_names=[video_info.video_id for  video_info in request.videos],
         status=flow_run.state.type.value if flow_run.state else "SCHEDULED",
         message="Video processing deployment submitted successfully",
         tracking_url=f"/api/management/videos/{run_id}/status",
