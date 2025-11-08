@@ -6,6 +6,7 @@ from typing import Annotated, Sequence
 from beanie import PydanticObjectId
 from bson import ObjectId
 from fastapi import Depends, File, HTTPException, status
+import httpx
 import jwt
 from app.model.user import User
 
@@ -31,7 +32,7 @@ from app.model.video import Video
 from app.model.session_message import SessionMessage
 from fastapi.encoders import jsonable_encoder
 
-
+from werkzeug.utils import secure_filename
 class UserService:
     def __init__(self, minio_service: MinioService):
         self.minio_service = minio_service
@@ -162,6 +163,15 @@ class UserService:
         )
         return chat_history
 
+    async def create_new_chat_session(self, user_id: str):
+        session_id = PydanticObjectId()
+        new_chat_his = ChatHistory(
+            id=session_id, user_id=PydanticObjectId(user_id),
+        )
+        await new_chat_his.insert()
+        return str(session_id)
+
+
     async def get_user_chat_detail(self, session_id: str):
         """get chat detail by session id"""
         chat_messages = (
@@ -186,7 +196,8 @@ class UserService:
     async def add_videos_to_user(
         self, user_id: str, files: list[File], group_id: str, session_id: str = None
     ):
-        filenames = [file.filename for file in files]
+        # sanitize filenames
+        filenames = [secure_filename(file.filename) for file in files]
         new_videos = [
             Video(user_id=user_id, group_id=group_id, name=filename)
             for filename in filenames
@@ -204,14 +215,15 @@ class UserService:
         ]
         await SessionVideo.insert_many(new_group_videos)
         # save videos to minio
-        video_id_video_url_thumbnail_url_s3_url_obj = await self.minio_service.save_videos(
+        video_id_video_url_thumbnail_url_s3_url_obj = self.minio_service.save_videos(
             video_ids, files
         )
         # update video thumbnail urls
-        for vid, video_url, thumb_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj:
-            video = await Video.get(vid)
+        for video_id, video_url, thumbnail_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj:
+            video = await Video.get(video_id)
             if video:
-                video.thumbnail = thumb_url
+                video.thumbnail = thumbnail_url
+                video.url = video_url
                 await video.save()
 
         return video_id_video_url_thumbnail_url_s3_url_obj
@@ -222,6 +234,7 @@ class UserService:
             Video.group_id == PydanticObjectId(group_id)
         ).to_list()
 
+        # if session id is null return all videos with selected false
         session_videos = await SessionVideo.find(
             SessionVideo.session_id == PydanticObjectId(session_id)
         ).to_list()
@@ -265,4 +278,31 @@ class UserService:
         await Video.find({"_id": {"$in": video_ids}}).delete()
         # delete the session videos
         await SessionVideo.find({"video_id": {"$in": video_ids}}).delete()
+        # also tell ingestion to stop processing if it is processing those videos
+        # request ingestion service
+        async with httpx.AsyncClient() as client:
+            # loop thorugh video ids to make request
+            # liệu ingested có đưa ra 2th là xoá hay chưa xoá ko?
+            for vid in video_ids:
+                try:
+                    await client.post(
+                        f"http://100.113.186.28:8000/management/runs/{vid}/cancel",
+                        json={"video_id": str(vid)},
+                    )
+                except Exception as e:
+                    print(f"Error notifying ingestion service to delete video {vid}: {e}")
+
+        # also delete from minio
+        self.minio_service.delete_videos(video_ids)
+
+        return True
+
+    async def delete_session(self, session_id: str):
+        # xoá chat_messages
+        await SessionMessage.find(SessionMessage.session_id == PydanticObjectId(session_id)).delete()
+        # xoá session_videos 
+        await SessionVideo.find(SessionVideo.session_id == PydanticObjectId(session_id)).delete()
+        # xoá session (chat_history)
+        await ChatHistory.find_one(ChatHistory.id == PydanticObjectId(session_id)).delete()
+
         return True

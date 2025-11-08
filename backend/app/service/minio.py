@@ -1,12 +1,38 @@
 from datetime import timedelta
 import io
 import os
-import subprocess
+from io import BytesIO
 import tempfile
-import cv2
-class Minio():
+from moviepy import VideoFileClip
+from PIL import Image
+
+
+class Minio:
     def __init__(self, minio_client=None):
         self.minio_client = minio_client
+        self._ensure_buckets()
+
+    def _ensure_buckets(self):
+        buckets = ["avatars", "videos", "thumbnails"]
+        for bucket_name in buckets:
+            if not self.minio_client.bucket_exists(bucket_name):
+                self.minio_client.make_bucket(bucket_name)
+
+                # # Set different policies per bucket
+                # if bucket == "thumbnails":
+                #     # Make thumbnails publicly readable
+                #     policy = {
+                #         "Version": "2012-10-17",
+                #         "Statement": [
+                #             {
+                #                 "Effect": "Allow",
+                #                 "Principal": {"AWS": "*"},
+                #                 "Action": ["s3:GetObject"],
+                #                 "Resource": [f"arn:aws:s3:::{bucket}/*"],
+                #             }
+                #         ],
+                #     }
+                #     self.client.set_bucket_policy(bucket, json.dumps(policy))
 
     def add_user_avatar(self, idinfo, response) -> str:
         picture_data = response.content
@@ -30,7 +56,7 @@ class Minio():
 
         return url
 
-    async def save_videos(self, video_ids: list[str], files):
+    def save_videos(self, video_ids, files):
         """
         Saves videos & thumbnails. Returns list of dicts like:
         [
@@ -61,66 +87,62 @@ class Minio():
             thumbnail_url = self.generate_thumbnail(file, video_id)
 
             results.append(
-                {
-                    "video_id": video_id,
-                    "video_url": video_url,
-                    "thumbnail_url": thumbnail_url,
-                    "video_s3_url": "s3://videos/" + object_name,
-                }
+                (
+                    video_id,  # This is already a PydanticObjectId
+                    video_url,
+                    thumbnail_url,
+                    f"s3://videos/{object_name}",
+                )
             )
 
         return results
 
     def generate_thumbnail(self, file, video_id):
-        # Save to a temp file so OpenCV can read it
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-            tmp_path = tmp.name
-            file.file.seek(0)
-            tmp.write(file.file.read())
+        tmp_video = None
+        try:
+            # Save video
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+                tmp_video = tmp.name
+                file.file.seek(0)
+                tmp.write(file.file.read())
 
-        # Open the video
-        cap = cv2.VideoCapture(tmp_path)
-        if not cap.isOpened():
-            raise RuntimeError("❌ Cannot open video file")
+            # Extract frame at 5 seconds
+            with VideoFileClip(tmp_video) as clip:
+                # Get frame at 5 seconds (or middle if shorter)
+                timestamp = min(5, clip.duration / 2)
+                frame = clip.get_frame(timestamp)
 
-        # Get total frame count and FPS to choose middle frame
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        duration = frame_count / fps if fps > 0 else 0
-        target_time = min(5, duration / 2)  # 5s or middle of the video
+            # Convert to PIL Image and resize
+            image = Image.fromarray(frame)
+            image.thumbnail((320, 320), Image.Resampling.LANCZOS)
 
-        # Seek to the target frame
-        cap.set(cv2.CAP_PROP_POS_MSEC, target_time * 1000)
+            # Save to memory
+            thumb_bytes = BytesIO()
+            image.save(thumb_bytes, format="JPEG", quality=85)
+            thumb_bytes.seek(0)
 
-        success, frame = cap.read()
-        if not success:
-            raise RuntimeError("❌ Failed to read frame from video")
-
-        # Save frame as JPEG
-        thumbnail_path = tmp_path + "_thumb.jpg"
-        cv2.imwrite(thumbnail_path, frame)
-
-        cap.release()
-
-        # Upload to MinIO
-        thumb_object = f"{video_id}.jpg"
-        with open(thumbnail_path, "rb") as thumb_file:
+            # Upload
+            thumb_object = f"{video_id}.jpg"
             self.minio_client.put_object(
-                bucket_name="videos",
-                object_name=thumb_object,
-                data=thumb_file,
-                length=os.path.getsize(thumbnail_path),
+                "thumbnails",
+                thumb_object,
+                thumb_bytes,
+                thumb_bytes.getbuffer().nbytes,
                 content_type="image/jpeg",
             )
 
-        thumbnail_url = self.minio_client.presigned_get_object(
-            bucket_name="videos",
-            object_name=thumb_object,
-            expires=timedelta(days=7),
-        )
+            return self.minio_client.presigned_get_object(
+                "thumbnails", thumb_object, expires=timedelta(days=7)
+            )
 
-        # Cleanup
-        os.remove(tmp_path)
-        os.remove(thumbnail_path)
+        finally:
+            if tmp_video and os.path.exists(tmp_video):
+                os.remove(tmp_video)
 
-        return thumbnail_url
+    def delete_videos(self, video_ids):
+        for video_id in video_ids:
+            video_object = f"{video_id}.mp4"
+            thumb_object = f"{video_id}.jpg"
+
+            self.minio_client.remove_object("videos", video_object)
+            self.minio_client.remove_object("thumbnails", thumb_object)

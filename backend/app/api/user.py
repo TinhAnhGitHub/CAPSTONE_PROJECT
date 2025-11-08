@@ -173,10 +173,11 @@ async def upload_files(
     # bảo ingestion ingest mấy video có id đó
     try:
         async with httpx.AsyncClient() as client:
-            await client.post(
-                "http://localhost:8000/api/uploads/",
+            answer = await client.post(
+                "http://100.113.186.28:8000/uploads/",
                 json={"videos": video_ids_video_url_obj, "user_id": user_id},
             )
+            print(f"Ingestion service response: {answer.status_code} - {answer.text}")
     except Exception as e:
         logging.error(f"Error notifying ingestion service: {e}")
 
@@ -189,6 +190,16 @@ async def get_user_groups(user_service: UserServiceDep, user=Depends(verify_toke
     groups = await user_service.get_user_groups(user_id)
     return {"groups": groups}
 
+@router.post("/new-chat")
+async def create_new_chat(
+    user_service: UserServiceDep,
+    group: str = Form(None),
+    session_name: str = Form("New Chat"),
+    user=Depends(verify_token),
+):
+    user_id = user["user_id"]
+    new_chat_session_id = await user_service.create_new_chat_session(user_id)
+    return {"chat_session_id": new_chat_session_id}
 
 # get user video base on group
 @router.get("/videos")
@@ -222,7 +233,6 @@ async def create_user_group(
     user_id = user["user_id"]
     group_name = data.get("group_name", "New Group")
     new_group = await user_service.create_user_group(user_id, group_name)
-    print("🎉🎉🎉 Created group:", new_group)
     return {"group": new_group}
 
 
@@ -239,8 +249,19 @@ async def delete_group(
 async def delete_videos(
     user_service: UserServiceDep,
     data: dict,
-    user=Depends(verify_token),
 ):
+    user=Depends(verify_token),
     video_ids = data.get("video_ids", [])
     await user_service.delete_videos(video_ids)
+
     return {"msg": "Videos deleted"}
+
+@router.delete("/session/{session_id}/delete")
+async def delete_session(
+    user_service: UserServiceDep,
+    session_id: str,
+    user=Depends(verify_token),
+):
+    await user_service.delete_session(session_id)
+
+    return {"msg": "Session deleted"}

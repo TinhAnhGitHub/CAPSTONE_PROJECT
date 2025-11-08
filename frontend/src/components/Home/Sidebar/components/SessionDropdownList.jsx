@@ -10,22 +10,22 @@ import {
 } from '@heroicons/react/16/solid'
 import { useMutation, useQueryClient } from 'react-query'
 
-export default function GroupDropdownList({ group }) {
+export default function SessionDropdownList({ session }) {
     const queryClient = useQueryClient();
-    const deleteGroupMutation = useMutation({
-        mutationFn: (groupId) => {
-            return api.delete(`/api/user/groups/${groupId}/delete`)
+    const deleteSessionMutation = useMutation({
+        mutationFn: (session) => {
+            return api.delete(`/api/user/session/${session._id}/delete`);
         },
         onSettled: () => {
-            queryClient.invalidateQueries('groups');
+            queryClient.invalidateQueries('chatHistory');
         }
     })
-    function handleDelete(groupId) {
-        confirm("Are you sure to delete this group?") &&
-            deleteGroupMutation.mutate(groupId);
+    function handleDelete(session) {
+        confirm("Are you sure to delete this session?") &&
+            deleteSessionMutation.mutate(session);
     }
     return (
-        <div className="h-5 w-5" onClick={(e) => {e.stopPropagation()}}>
+        <div className="h-5 w-5" onClick={(e) => { e.stopPropagation(); }}>
             <Menu>
                 <MenuButton className="">
                     <EllipsisVerticalIcon className="h-5 w-5 text-gray-500" />
@@ -60,7 +60,7 @@ export default function GroupDropdownList({ group }) {
                     </MenuItem>
                     <MenuItem>
                         <button className="group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 data-focus:bg-white/10"
-                            onClick={() => handleDelete(group._id)}
+                            onClick={() => handleDelete(session)}
                         >
                             <TrashIcon className="size-4 fill-white/30" />
                             Delete

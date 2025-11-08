@@ -5,6 +5,8 @@ import VideoDropdownList from './VideoDropdownList';
 import SelectedIcon from './SelectedIcon';
 import { useStore } from '@/stores/chat';
 import clsx from 'clsx';
+import { ingested } from '@/utils/library';
+import IngestedStatus from './IngestedStatus/IngestedStatus';
 
 export default function VideoCard({ video }) {    
     const queryClient = useQueryClient();
@@ -16,25 +18,31 @@ export default function VideoCard({ video }) {
                 session_id: session_id,
             })
         },
-        onSuccess: () => {
+        onSettled: () => {
             queryClient.invalidateQueries(['videos']);
         }
     })
     const handleToggleSelect = async (video_id, session_id) => {
         selectMutation.mutate({video_id, session_id});
     }
+    
     return (
         <div className={clsx("relative mb-4 rounded-lg hover:shadow-lg p-2 cursor-pointer transition",
-            // !video.ingested && "opacity-50 cursor-not-allowed hover:shadow-none"
+            !ingested(video.ingested_status) && "opacity-50 !cursor-not-allowed hover:shadow-none"
             )}
             onClick={() => {
-                // if (!video.ingested) return; 
+                if (!ingested(video.ingested_status)) return;
                 handleToggleSelect(video._id, session_id)}}>
-            <img
-                src={"/images/testImage.png"}
-                alt="thumbnail"
-                className="w-full h-auto rounded-lg border border-gray-300"
-            />
+            <div className='relative'>
+                <img
+                    src={video.thumbnail || "/images/testImage.png"}
+                    alt="thumbnail"
+                    className="w-full h-auto rounded-lg border border-gray-300"
+                />
+                <div className='absolute top-0 left-0 w-full h-full flex items-center justify-center'>
+                    <IngestedStatus percentage={video.ingested_status} />
+                </div>
+            </div>
             <div className="relative">
                 <div className='pr-8'>
                     <h3 className="text-sm font-semibold truncate">{video.name}</h3>

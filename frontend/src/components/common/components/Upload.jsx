@@ -9,8 +9,12 @@ import { useStore } from '@/stores/chat';
 export default function Upload() {
     const group = useStore((state) => state.currentGroup);
     const sessionId = useStore((state) => state.session_id);
-
     const queryClient = useQueryClient();
+
+    const [isUploading, setIsUploading] = React.useState(false);
+    const [progress, setProgress] = React.useState(0);
+
+
     const uploadMutation = useMutation(
         async (files) => {
             setIsUploading(true);
@@ -33,19 +37,17 @@ export default function Upload() {
         {
             onSuccess: () => {
                 toast.success('Uploaded!');
-                queryClient.invalidateQueries('videos');
             },
             onError: () => {
                 toast.error('Error uploading file')
             },
             onSettled: () => {
+                queryClient.invalidateQueries(['videos']);
                 setIsUploading(false);
                 setProgress(0);
             }
         }
     );
-    const [isUploading, setIsUploading] = React.useState(false);
-    const [progress, setProgress] = React.useState(0);
     return (
         <>
             <Dropzone
@@ -60,7 +62,6 @@ export default function Upload() {
                                     `Uploading... ${progress}%`
                                     :
                                     <div><PlusIcon className='h-5 w-5 inline-block' /> Upload Video</div>
-
                             }
                         </div>
                     </div>

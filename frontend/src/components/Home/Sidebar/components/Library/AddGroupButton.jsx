@@ -9,7 +9,7 @@ export default function AddGroupButton() {
         mutationFn: (groupName) => {
             return api.post('/api/user/groups/create', { group_name: groupName })
         },
-        onSuccess: () => {
+        onSettled: () => {
             queryClient.invalidateQueries('groups');
         }
     })
