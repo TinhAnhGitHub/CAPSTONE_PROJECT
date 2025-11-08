@@ -28,7 +28,6 @@ class AppState:
         self.agent: Agent = None # type: ignore
         self.chat_service: ChatService = None # type: ignore
         self.user_service: UserService = None # type: ignore
-        # self.minio_service: MinioService = None # type: ignore
 
 
 app_state = AppState()
@@ -48,12 +47,6 @@ async def lifespan(app: FastAPI):
             secret_key=settings.MINIO_SECRET_KEY,
             secure=False,
         )
-        bucket_name = "avatars"
-        if not minio_client.bucket_exists(bucket_name):
-            minio_client.make_bucket(bucket_name)
-        bucket_name_videos = "videos"
-        if not minio_client.bucket_exists(bucket_name_videos):
-            minio_client.make_bucket(bucket_name_videos)
         
         minio_service = MinioService(minio_client)
 

@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "beanie>=2.0.0",
     "fastapi[standard]>=0.116.1",
+    "ffmpeg-python>=0.2.0",
     "google-auth>=2.40.3",
     "ipykernel>=6.30.1",
     "jwt>=1.4.0",
@@ -14,7 +15,9 @@ dependencies = [
     "llama-index-core>=0.12.42",
     "minio>=7.2.18",
     "motor>=3.7.1",
+    "moviepy>=2.2.1",
     "netifaces",
+    "opencv-python>=4.12.0.88",
     "passlib[bcrypt]>=1.7.4",
     "pydantic>=2.11.9",
     "pydantic-settings>=2.10.1",
@@ -24,4 +27,5 @@ dependencies = [
     "python-socketio>=5.13.0",
     "redis>=6.4.0",
     "uvicorn[standard]>=0.35.0",
+    "werkzeug>=3.1.3",
 ]

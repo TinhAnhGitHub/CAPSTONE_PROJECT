@@ -13,11 +13,11 @@ export default function VideosInConversation() {
       <div className=' flex justify-between items-center bg-black border-b border-gray-800 p-3'>
         <p className=''>Workspace videos</p>
       </div>
-      <div className='grid grid-cols-2 gap-2 p-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto '>
+      <div className='columns-2 gap-2 p-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto '>
         {
           selectedVideos.map((video, idx) => (
-            <div key={idx} className='cursor-pointer'>
-              <img src={"/images/testImage.png"} alt="thumbnail" className='w-full h-auto rounded-lg' />
+            <div key={idx} className='pb-1 cursor-pointer break-inside-avoid'>
+              <img src={video.thumbnail || "/images/testImage.png"} alt="thumbnail" className='w-full h-auto rounded-lg' />
               <div>
                 <h3 className='text-sm font-semibold truncate'>{video.name}</h3>
                 <p className='text-xs text-gray-500'>{video.length || "1:00"}</p>

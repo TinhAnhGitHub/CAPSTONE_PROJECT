@@ -10,26 +10,28 @@ import {
 } from '@heroicons/react/16/solid'
 import { useMutation, useQueryClient } from 'react-query'
 
-export default function VideoDropdownList({video}) {
+export default function VideoDropdownList({ video }) {
     const queryClient = useQueryClient();
     const deleteVideoMutation = useMutation({
-        mutationFn: (video_id) => {
+        mutationFn: (video) => {
+            console.log("Deleting video:", video);
             return api.delete('/api/user/videos/delete', {
                 data: {
-                    video_ids: [video_id]
+                    video_ids: [video._id],
+                    video_run_ids: [video.video_run_id],
                 }
             })
         },
-        onSuccess: () => {
+        onSettled: () => {
             queryClient.invalidateQueries('userVideos');
         }
     })
-    function handleDelete(video_id) {
+    function handleDelete(video) {
         confirm("Are you sure to delete this video?") &&
-        deleteVideoMutation.mutate(video_id);
+            deleteVideoMutation.mutate(video);
     }
     return (
-        <div className="h-5 w-5">
+        <div className="h-5 w-5" onClick={(e) => { e.stopPropagation(); }}>
             <Menu>
                 <MenuButton className="">
                     <EllipsisVerticalIcon className="h-5 w-5 text-gray-500" />
@@ -64,7 +66,7 @@ export default function VideoDropdownList({video}) {
                     </MenuItem>
                     <MenuItem>
                         <button className="group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 data-focus:bg-white/10"
-                            onClick={() => handleDelete(video._id)}
+                            onClick={() => handleDelete(video)}
                         >
                             <TrashIcon className="size-4 fill-white/30" />
                             Delete

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import socket from '@/api/socket';
-import { Button, Input, Textarea } from '@headlessui/react';
+import { Textarea } from '@headlessui/react';
 import clsx from 'clsx';
 import { useStore } from '@/stores/user';
 import { useStore as useStoreChat } from "@/stores/chat";
@@ -8,11 +8,11 @@ import { useStore as useStoreChat } from "@/stores/chat";
 import { useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
 import { useForm } from 'react-hook-form';
-import { RANDOM_IMAGE_URLS } from '@/constants/image';
 import parseChunkToBlock from '@/utils/chat/parseChunkToBlock';
 import addBlockToMessages from '@/utils/chat/addBlockToMessages';
 import BlockRenderer from './BlockRenderer';
 import { useVideos } from '@/api/services/hooks/query';
+import SendButton from './SendButton';
 
 export default function Chat() {
   const {
@@ -20,6 +20,7 @@ export default function Chat() {
     handleSubmit,
     getValues,
     reset,
+    control,
   } = useForm()
 
   const chatMessages = useStoreChat((state) => state.chatMessages);
@@ -193,15 +194,7 @@ export default function Chat() {
           placeholder="Ask the agent..."
         />
 
-
-        <Button
-          onClick={handlePrompt}
-          disabled={!getValues('prompt')?.trim()}
-          className="inline-flex items-center gap-2 rounded-md bg-gray-700 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-inner shadow-white/10 focus:not-data-focus:outline-none data-focus:outline data-focus:outline-white data-hover:bg-gray-600 data-open:bg-gray-700 self-end">
-          <svg className="w-6 h-6 text-white dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
-            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v13m0-13 4 4m-4-4-4 4" />
-          </svg>
-        </Button>
+          <SendButton control={control} handlePrompt={handlePrompt} />
       </div>
     </div>
   )

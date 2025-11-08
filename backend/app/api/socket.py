@@ -124,102 +124,103 @@ async def handle_stream_chat(socket_id, data: dict):
                 "error", {"message": "agent unreachable: " + str(e)}, to=socket_id
             )
 
-        # await sio.emit("stream_thinking", {"status": "AI is thinking..."}, to=socket_id)
-        # await asyncio.sleep(1)  # simulate delay for thinking
-        # await sio.emit(
-        #     "stream_thinking", {"status": "AI is getting images..."}, to=socket_id
-        # )
-        # await asyncio.sleep(1)  # simulate delay for getting images
+        await sio.emit("stream_thinking", {"status": "AI is thinking..."}, to=socket_id)
+        await asyncio.sleep(1)  # simulate delay for thinking
+        await sio.emit(
+            "stream_thinking", {"status": "AI is getting images..."}, to=socket_id
+        )
+        await asyncio.sleep(1)  # simulate delay for getting images
 
-        # # then response
-        # # stream response
-        # full_response = ""
-        # async for chunk in app_state.agent.stream_chat("message"):
-        #     if chunk:
-        #         full_response += chunk
-        #         await sio.emit(
-        #             "stream_chunk",
-        #             {
-        #                 "chunk": chunk,
-        #                 "msg_type": "text",
-        #                 "role": MessageRole.ASSISTANT.value,
-        #             },  # assistant
-        #             to=socket_id,
-        #         )
-        #         await asyncio.sleep(0.05)
+        # then response
+        # stream response
+        full_response = ""
+        async for chunk in app_state.agent.stream_chat("message"):
+            if chunk:
+                full_response += chunk
+                await sio.emit(
+                    "stream_chunk",
+                    {
+                        "chunk": chunk,
+                        "msg_type": "text",
+                        "role": MessageRole.ASSISTANT.value,
+                    },  # assistant
+                    to=socket_id,
+                )
+                await asyncio.sleep(0.05)
 
-        # # stream videos reponse
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
-        #         "msg_type": "video",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
-        #         "msg_type": "video",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await asyncio.sleep(1)
-        # # stream images reponse
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": "Images I found for you:",
-        #         "msg_type": "text",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },  # assistant
-        #     to=socket_id,
-        # )
+        # stream videos reponse
+        await sio.emit(
+            "stream_chunk",
+            {
+                "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+                "msg_type": "video",
+                "role": MessageRole.ASSISTANT.value,
+            },
+            to=socket_id,
+        )
+        await sio.emit(
+            "stream_chunk",
+            {
+                "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+                "msg_type": "video",
+                "role": MessageRole.ASSISTANT.value,
+            },
+            to=socket_id,
+        )
+        await asyncio.sleep(1)
+        # stream images reponse
+        await sio.emit(
+            "stream_chunk",
+            {
+                "chunk": "Images I found for you:",
+                "msg_type": "text",
+                "role": MessageRole.ASSISTANT.value,
+            },  # assistant
+            to=socket_id,
+        )
 
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": ["https://example.com/image1.jpg"],
-        #         "msg_type": "image",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": [
-        #             "https://example.com/image2.jpg",
-        #             "https://example.com/image3.jpg",
-        #         ],
-        #         "msg_type": "image",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await asyncio.sleep(0.5)
+        await sio.emit(
+            "stream_chunk",
+            {
+                "chunk": ["https://example.com/image1.jpg"],
+                "msg_type": "image",
+                "role": MessageRole.ASSISTANT.value,
+            },
+            to=socket_id,
+        )
+        await sio.emit(
+            "stream_chunk",
+            {
+                "chunk": [
+                    "https://example.com/image2.jpg",
+                    "https://example.com/image3.jpg",
+                ],
+                "msg_type": "image",
+                "role": MessageRole.ASSISTANT.value,
+            },
+            to=socket_id,
+        )
+        await asyncio.sleep(0.5)
 
-        # # save message
-        # ai_message = SessionMessage(
-        #     session_id=PydanticObjectId(session_id),
-        #     role=MessageRole.ASSISTANT,
-        #     blocks=[
-        #         TextBlock(text_content=full_response),
-        #         # list lấy từ stream ra
-        #         VideoBlock(video_urls=["1.mp4", "2.mp4"]),
-        #         TextBlock(text_content="Images I found for you:"),
-        #         ImageBlock(image_urls=["1.jpg", "2.jpg", "3.jpg"]),
-        #     ],
-        # )
-        # await app_state.chat_service.add_message(session_id, "ai", ai_message)
+        # save message
+        ai_message = SessionMessage(
+            session_id=PydanticObjectId(session_id),
+            role=MessageRole.ASSISTANT,
+            blocks=[
+                TextBlock(text_content=full_response),
+                # list lấy từ stream ra
+                VideoBlock(video_urls=["1.mp4", "2.mp4"]),
+                TextBlock(text_content="Images I found for you:"),
+                ImageBlock(image_urls=["1.jpg", "2.jpg", "3.jpg"]),
+            ],
+        )
+        await app_state.chat_service.add_message(session_id, "ai", ai_message)
 
-        # # notify finish
-        # await sio.emit(
-        #     "stream_end", {"timestamp": ai_message.timestamp.isoformat()}, to=socket_id
-        # )
+        # notify finish
+        await sio.emit(
+            "stream_end", {"timestamp": ai_message.timestamp.isoformat()}, to=socket_id
+        )
 
     except Exception as e:
         await sio.emit("error", {"message": str(e)}, to=socket_id)
+
