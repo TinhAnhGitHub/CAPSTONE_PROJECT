@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 from .prompt import CONTRASTIVE_VISUAL_ENHANCEMENT_PROMPT, CAPTION__ENHANCEMENT_PROMPT, CAPTION_WITH_ASR_FOCUS_PROMPT
 from ..registry import tool_registry
 from ..helper import extract_s3_minio_url
-from agentic_ai.tools.schema.artifact import ImageObjectInterface
-from agentic_ai.tools.clients.minio.client import StorageClient
+from videodeepsearch.tools.schema.artifact import ImageObjectInterface
+from videodeepsearch.tools.clients.minio.client import StorageClient
 from llama_index.core.base.llms.types import ImageBlock, TextBlock
 from ..util import get_related_asr_from_image
 

@@ -6,17 +6,27 @@ import asyncio
 import base64
 import mimetypes
 from typing import Tuple, cast
-from agentic_ai.tools.schema.artifact import VideoInterface, ImageObjectInterface, SegmentObjectInterface
+from videodeepsearch.tools.schema.artifact import VideoInterface, ImageObjectInterface, SegmentObjectInterface
 from typing import Annotated
-from agentic_ai.tools.clients.postgre.client import PostgresClient
+from videodeepsearch.tools.clients.postgre.client import PostgresClient
 from ingestion.core.artifact.schema import ASRArtifact
-from agentic_ai.tools.clients.minio.client import StorageClient
+from videodeepsearch.tools.clients.minio.client import StorageClient
 from collections import defaultdict
 from ingestion.prefect_agent.service_asr.core.schema import  ASRResult
 import re
+from pydantic import BaseModel, Field
 from .helper import extract_s3_minio_url, time_range_overlap, time_to_seconds
 
 from .registry import tool_registry
+
+
+class ImageRepresentation(BaseModel):
+    base64_str: str
+    mime_type: str
+
+class VideoRepresentation(BaseModel):
+    video_bytes: bytes
+    mime_type: str
 
 
 @tool_registry.register(
@@ -42,7 +52,7 @@ def frame_to_timecode(frame_index: int, fps: float) -> str:
     tags=["timecode", "frame", "conversion"],
     dependencies=[]
 )
-def timecode_to_frame(timecode: str, fps: float) -> int:
+def timecode_to_frame(timecode: str, fps: float) -> str:
     """
     Convert a timecode string (HH:MM:SS.sss) into a frame index given a frame rate (FPS).
 
@@ -64,7 +74,7 @@ def timecode_to_frame(timecode: str, fps: float) -> int:
     hours, minutes, seconds = match.groups()
     total_seconds = int(hours) * 3600 + int(minutes) * 60 + float(seconds)    
     frame_index = round(total_seconds * fps)
-    return frame_index
+    return str(frame_index)
 
 
 
@@ -119,7 +129,7 @@ def from_range_index_to_range_time(
 def from_time_to_index(
     video: VideoInterface,
     time: str
-) -> int:
+) -> str:
     """
     Return the frame index corresponding to a given timestamp.
     Args:
@@ -160,7 +170,7 @@ def from_range_time_to_range_index(
     tags=["minio", "image", "read", "binary"],
     dependencies=["minio_client"]
 )
-def read_image(image_interface: ImageObjectInterface, minio_client: StorageClient) -> tuple[str, str]:
+def read_image(image_interface: ImageObjectInterface, minio_client: StorageClient) -> ImageRepresentation:
     """
     Read image, return base64 and mime/type
     """
@@ -170,7 +180,8 @@ def read_image(image_interface: ImageObjectInterface, minio_client: StorageClien
     mime_type, _ = mimetypes.guess_type(object_name)
     mime_type = mime_type or "application/octet-stream"
     base64_str = base64.b64encode(image_bytes).decode("utf-8")
-    return base64_str, mime_type
+    return ImageRepresentation(base64_str=base64_str, mime_type=mime_type)
+
 
 @tool_registry.register(
     category="Utility/IO",
@@ -181,7 +192,7 @@ async def read_segment(
     segment_interface: SegmentObjectInterface, 
     minio_client: StorageClient, 
     postgres_client: PostgresClient
-) -> Tuple[bytes, str]:
+) -> VideoRepresentation:
     """
     Fetch a video segment and return its extension and bytes.
     """
@@ -204,7 +215,7 @@ async def read_segment(
     )
     video_bytes = cast(bytes, video_bytes)
     mime_type = mimetypes.types_map.get(f".{extension}", "application/octet-stream")
-    return video_bytes, mime_type
+    return VideoRepresentation(video_bytes=video_bytes, mime_type=mime_type)
      
     
 

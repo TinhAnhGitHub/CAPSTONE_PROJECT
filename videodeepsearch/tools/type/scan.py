@@ -1,11 +1,11 @@
 """
 This file contains the tools for agents to simulate the human-behaviour to interfact with the video, scanning images...
 """
-from agentic_ai.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface, VideoInterface
+from videodeepsearch.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface, VideoInterface
 import asyncio
 import io
-from agentic_ai.tools.clients.postgre.client import PostgresClient
-from agentic_ai.tools.clients.minio.client import StorageClient
+from videodeepsearch.tools.clients.postgre.client import PostgresClient
+from videodeepsearch.tools.clients.minio.client import StorageClient
 from ingestion.prefect_agent.service_asr.core.schema import  ASRResult
 from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact, ASRArtifact,AutoshotArtifact
 from typing import Annotated, Literal, cast
@@ -37,7 +37,8 @@ async def get_video_from_segment(
     return VideoInterface(
         video_id=related_video_id,
         fps=metadata['fps'],
-        # duration=metadata['duration']
+        minio_path=video_artifact_metadata.minio_url,
+        duration=metadata['duration']
     )
 
 @tool_registry.register(
@@ -57,7 +58,8 @@ async def get_video_from_image(
     return VideoInterface(
         video_id=related_video_id,
         fps=metadata['fps'],
-        # duration=metadata['duration']
+        minio_path=video_artifact_metadata.minio_url,
+        duration=metadata['duration']
     )
 
 
@@ -131,6 +133,7 @@ async def get_all_segment_info_from_video_interface(
                 end_time=json_dict['end_timestamp'],
                 caption_info=json_dict['caption'],
                 score=None,
+                minio_path=minio_url,
                 segment_caption_query=None
             )
         )
@@ -189,6 +192,7 @@ async def get_segments(
                         start_time=segment_artifact.start_timestamp,
                         end_time=segment_artifact.end_timestamp,
                         score=None,
+                        minio_path=segment_artifact.minio_url_path,
                         segment_caption_query=None
                     )
                 )
@@ -205,6 +209,7 @@ async def get_segments(
                         start_time=segment_artifact.start_timestamp,
                         end_time=segment_artifact.end_timestamp,
                         score=None,
+                        minio_path=segment_artifact.minio_url_path,
                         segment_caption_query=None
                     )
                 )

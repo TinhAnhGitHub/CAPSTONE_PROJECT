@@ -1,17 +1,17 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from sqlalchemy import text
-from llama_index.llms.google_genai import GoogleGenAI 
-
+from llama_index.llms.google_genai import GoogleGenAI
+from videodeepsearch.tools.type.factory import ToolFactory
 from videodeepsearch.tools.clients import *
 
 from .app_state import Appstate
 from .config.client_config import (
-    image_milvus_config, 
-    segment_caption_milvus_config, 
-    postgres_client_config, 
-    minio_storage_client_config, 
-    external_image_embedding_config, 
+    image_milvus_config,
+    segment_caption_milvus_config,
+    postgres_client_config,
+    minio_storage_client_config,
+    external_image_embedding_config,
     external_text_embedding_config
 )
 
@@ -21,7 +21,7 @@ from .config.llm_config import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    
+
     app_state = Appstate()
 
     external_image_embedding_client = ImageEmbeddingClient(
@@ -89,22 +89,20 @@ async def lifespan(app: FastAPI):
             model=llm_config.model_name,
             generation_config=llm_config.generation_config
         )
-    
-    
-    
 
+    small_llm = GoogleGenAI(
+        model_name='gemini-2.5-flash-lite',
+    )
 
-    
-
-    
-    
-
-
-
-
-
-
-
+    app_state.tool_factory = ToolFactory(
+        image_milvus_client=app_state.image_milvus_client,
+        external_client=app_state.external_client,
+        segment_milvus_client=app_state.segment_milvus_client,
+        postgres_client=app_state.postgres_client,
+        minio_client=app_state.minio_client,
+        llm_as_tools=small_llm
+    )
 
     yield 
 
+    

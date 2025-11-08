@@ -218,7 +218,7 @@ class ToolFactory:
         sig = inspect.signature(base_fn)
         bound_params = set(fn_partial.keywords.keys()) if fn_partial.keywords else set()
         new_params = [p for n, p in sig.parameters.items() if n not in bound_params]
-        wrapper.__signature__ = sig.replace(parameters=new_params)
+        wrapper.__signature__ = sig.replace(parameters=new_params) #type:ignore
 
 
         wrapper.__name__ = getattr(base_fn, "__name__", "wrapped_partial")
@@ -337,9 +337,3 @@ class ToolFactory:
                 fn_name2fn_tool[fnc.__name__] = fnc
         return fn_name2fn_tool
         
-
-
-def get_tool_factory() -> ToolFactory:
-    return ToolFactory(
-
-    )

@@ -1,10 +1,9 @@
 from __future__ import annotations
-from typing import Annotated, Union
-from pydantic import Field, BaseModel, model_validator
-from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact
+from pydantic import Field, BaseModel
 
+from abc import ABC, abstractmethod
 
-class BaseArtifact(BaseModel):
+class BaseArtifact(BaseModel, ABC):
     """
     This is the base artifact.
     Every tool's output that related to the video's information must be from this artifact class
@@ -12,21 +11,31 @@ class BaseArtifact(BaseModel):
     type_artifact: str
     minio_path: str
 
+    @abstractmethod
+    def expose_answer_to_agent(self) -> str:
+        """
+        All artifacts must implement this function to expose a part of the artifact -> save token
+        There will be a tool for the agent to view all the information of the artifact if necessary.
+        """
+
 class VideoInterface(BaseArtifact):
     """
     This will be the interface of a video
     """
-    type_artifact: str = "VideoInterface"
     video_id: str
+    type_artifact: str = "VideoInterface"
     fps: float
-    
-    # duration: str
+    duration: str
+
+    def expose_answer_to_agent(self) -> str:
+        return self.video_id
 
 class SegmentObjectInterface(BaseArtifact):
     """
     Represents a temporally localized **video segment** identified via semantic or event-level retrieval.
     """
     type_artifact: str = "SegmentObjectInterface"
+    
 
     related_video_id: str = Field(..., description="Unique identifier of the video containing this segment.")
     start_frame_index: int = Field(..., description="Index of the first frame in the segment.")
@@ -51,17 +60,25 @@ class SegmentObjectInterface(BaseArtifact):
             "If `None`, the segment was not produced by a semantic search process."
         ),
     )
-
-    @model_validator(mode='after')
-    def fill_defaults(cls, values):
-        if values.segment_caption_query is None:
-            values.segment_caption_query = "No semantic query relatd"
-        return values
     
+    def expose_answer_to_agent(self) -> str:
+        info = (
+            f"Video ID: {self.related_video_id} | "
+            f"Start: {self.start_time} | "
+            f"End: {self.end_time}"
+        )
+        if self.segment_caption_query is not None:
+            info += f" | Retrieved via query: '{self.segment_caption_query}'"
+        else:
+            info += " | Segment not retrieved via semantic similarity search"
 
+        if self.score is not None:
+            info += f" | Score: {self.score:.4f}"
+        else:
+            info += " | No similarity score available"
 
-
-
+        return info
+        
 class ImageObjectInterface(BaseArtifact):
     """
     Represents an **image** or single **video frame** retrieved through semantic or multimodal search.
@@ -90,23 +107,32 @@ class ImageObjectInterface(BaseArtifact):
             "If `None`, the image was not semantically retrieved."
         ),
     )
-    # reference_query_image: ImageObjectInterface | None = Field(
-    #     None,
-    #     description=(
-    #         "If this image was retrieved using another image as the query, "
-    #         "this field holds that reference image's metadata."
-    #     )
-    # )
 
-    @model_validator(mode='after')
-    def fill_defaults(cls, values):
-        if values.score is None:
-            values.score = "No semantic score"
-        if values.query is None:
-            values.query = "No semantic query relatd"
-        return values
+    def expose_answer_to_agent(self) -> str:
+        info = (
+            f"Video ID: {self.related_video_id} | "
+            f"Frame Index: {self.frame_index} | "
+            f"Timestamp: {self.timestamp}"
+        )
 
-    
+        if self.query:
+            query_str = (
+                ", ".join(self.query) if isinstance(self.query, list) else str(self.query)
+            )
+            info += f" | Retrieved via query: '{query_str}'"
+        else:
+            info += " | Image not retrieved via semantic similarity search"
+
+        if self.score is not None:
+            try:
+                score_val = float(self.score)
+                info += f" | Score: {score_val:.4f}"
+            except (ValueError, TypeError):
+                info += f" | Score: {self.score}"
+        else:
+            info += " | No similarity score available"
+
+        return info
         
 
 ARTIFACT_MODELS = (VideoInterface, SegmentObjectInterface, ImageObjectInterface)

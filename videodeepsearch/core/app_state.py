@@ -21,7 +21,7 @@ class Appstate:
     minio_client: StorageClient = None #type:ignore
 
     # llm style
-    llm_instance: dict[str, FunctionCallingLLM] = None
+    llm_instance: dict[str, FunctionCallingLLM] = {} #type:ignore
 
 
     

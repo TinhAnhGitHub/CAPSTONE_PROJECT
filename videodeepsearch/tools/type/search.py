@@ -1,19 +1,16 @@
 from typing import Annotated, cast
 import base64
-from agentic_ai.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface
-from agentic_ai.tools.clients.milvus.client import ImageMilvusClient, ImageFilterCondition, SegmentCaptionFilterCondition, SegmentCaptionImageMilvusClient
+from videodeepsearch.tools.schema.artifact import ImageObjectInterface, SegmentObjectInterface
+from videodeepsearch.tools.clients.milvus.client import ImageMilvusClient, ImageFilterCondition, SegmentCaptionFilterCondition, SegmentCaptionImageMilvusClient
 
-from agentic_ai.tools.clients.external.encode_client import ExternalEncodeClient
+from videodeepsearch.tools.clients.external.encode_client import ExternalEncodeClient
 from ingestion.prefect_agent.service_image_embedding.schema import ImageEmbeddingRequest
 from ingestion.prefect_agent.service_text_embedding.schema import TextEmbeddingRequest
-from agentic_ai.tools.clients.minio.client import StorageClient
-
-# from agentic_ai.tools.clients.postgre.client import PostgresClient
-# from ingestion.core.artifact.schema import ImageCaptionArtifact
-# from agentic_ai.tools.clients.minio.client import StorageClient
+from videodeepsearch.tools.clients.minio.client import StorageClient
 
 from .registry import tool_registry
 from .helper import extract_s3_minio_url
+
 
 @tool_registry.register(
     category='search',
@@ -243,7 +240,8 @@ async def get_segments_from_event_query(
             end_time=resp.end_time,
             caption_info=resp.segment_caption,
             score=resp.score,
-            segment_caption_query=event_query
+            segment_caption_query=event_query,
+            minio_path=resp.segment_caption_minio_url
         )
         result.append(segment)
 
@@ -335,21 +333,22 @@ async def get_images_from_multimodal_query(
             minio_path=resp.image_minio_url,
             score=resp.score,
             query=[visual_query,caption_query],
-            # reference_query_image=None
         )
         result.append(img)
     return result
 
 
-@tool_registry.register(
-    category="search",
-    tags=["visual", "semantic", "image", "similarity"],
-    dependencies=[
-        "visual_milvus_client",
-        "external_client",
-        "minio_client",
-    ]
-)
+
+
+# @tool_registry.register(
+#     category="search",
+#     tags=["visual", "semantic", "image", "similarity"],
+#     dependencies=[
+#         "visual_milvus_client",
+#         "external_client",
+#         "minio_client",
+#     ]
+# )
 async def find_similar_images_from_image(
     reference_image: ImageObjectInterface,
     top_k: int,
