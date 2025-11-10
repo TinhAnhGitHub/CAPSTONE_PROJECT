@@ -2,7 +2,7 @@ import os
 from typing import Any, Dict
 import uvicorn
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse 
 
 from core.lifespan import lifespan
 from fastapi.middleware.cors import CORSMiddleware

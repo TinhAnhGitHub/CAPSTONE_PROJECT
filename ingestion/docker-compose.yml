@@ -198,7 +198,7 @@ services:
       context: ./${AUTOSHOT_CONTEXT}
       dockerfile: Dockerfile
     container_name: autoshot
-    gpus: all
+    
     env_file:
       - ./${AUTOSHOT_CONTEXT}/.env
     environment:
@@ -222,7 +222,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    restart: no
+    restart: no 
 
 
   asr:
@@ -230,7 +230,7 @@ services:
       context: ./${ASR_CONTEXT}
       dockerfile: Dockerfile
     container_name: asr
-    gpus: all
+    
     env_file:
       - ./${ASR_CONTEXT}/.env
     environment:
@@ -262,7 +262,7 @@ services:
       context: ./${IMAGE_EMBEDDING_CONTEXT}
       dockerfile: Dockerfile
     container_name: ie
-    gpus: all
+    
     env_file:
       - ./${IMAGE_EMBEDDING_CONTEXT}/.env
     environment:
@@ -293,7 +293,7 @@ services:
       context: ./${LLM_CONTEXT}
       dockerfile: Dockerfile
     container_name: llm
-    gpus: all
+    
     env_file:
       - ./${LLM_CONTEXT}/.env
     environment:
@@ -324,7 +324,7 @@ services:
       context: ./${TEXT_EMBEDDING_CONTEXT}
       dockerfile: Dockerfile
     container_name: te
-    gpus: all
+    
     env_file:
       - ./${TEXT_EMBEDDING_CONTEXT}/.env
     environment:

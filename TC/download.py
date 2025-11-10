@@ -21,14 +21,14 @@ import subprocess
 def download_video(url: str, output_folder: str = "./videos", data : dict = None, id : int =None):
     """Download a YouTube video and record the URL in JSON."""
     os.makedirs(output_folder, exist_ok=True)
-    ffmpeg_path = "./ffmpeg-8.0-essentials_build/bin"
 
     if id is None:
         id = len(data["video"])+1
     ydl_opts = {
         "outtmpl": f"{output_folder}/{id}_%(title)s.%(ext)s",
         "format": "bestvideo+bestaudio/best",
-        "keepvideo": True
+        "keepvideo": True,
+        "output_format": "mp4"
         
     }
 
@@ -52,8 +52,8 @@ def insert_questions(data: dict , question: str ):
 def main():
     
     meta = load_json("./question.json")
-    link = "https://youtu.be/Y3q6l8lzmOY"
-    #res = download_video(link ,"./videos",meta, len(meta["video"])+1)
+    link = "https://youtu.be/D4oUb6ybZEE"
+    res = download_video(link ,"./videos",meta, len(meta["video"])+1)
 
     while True:
         x = int(input("1. Add question     2. Download      3. exit: "))

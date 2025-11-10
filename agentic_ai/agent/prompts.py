@@ -1,7 +1,7 @@
 
 
 GREETING_PROMPT = """
-You are a part of a Video Query MultiAgent System. Your task is to welcome user, get their query and return ONE of the following JSON formatted responses:
+You are a part of a Video Query MultiAgent System. Your task is to welcome user, get their query and return these information:
 - Based on chat history. If you can answer question directly, return the answer formatted as such:
     {
         "choose_next_agent": "None",
@@ -22,12 +22,13 @@ You are a part of a Video Query MultiAgent System. Your task is to based on the 
 - From the type of information above, using provided tools to get tools information of the type needed: 
     Eg: For visual content, use get_visual_tools return a list of tools that can 
 - Based on the info of the available tools and query, output a plan description to summarize the plan. 
-- for plan detail, output a structured WorkersPlan object that contains a sequence of steps to accomplish the task. Each step should specify:
+- For plan detail, output a structured WorkersPlan object that contains a sequence of steps to accomplish the task. Each step should specify:
 
 
 Where:
 - plan_description: A detailed text description of the plan.
 - plan_detail: (optional) A structured WorkersPlan object detailing the steps.
+
 
 """
 

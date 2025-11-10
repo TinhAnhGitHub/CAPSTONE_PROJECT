@@ -74,7 +74,7 @@ async def main(x =1):
 
 
 if __name__ == "__main__":
-        x=int(input("Select test to run (1- workflow, 2- greeting agent): "))
+        x=1
         r =  asyncio.run(main(x))
         print("================== Final result ==================\n",r)   
         print(r)     
