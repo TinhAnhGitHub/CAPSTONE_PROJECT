@@ -3,6 +3,7 @@ from typing import Annotated, Iterable
 import traceback
 import logging
 from llama_index.core.llms import ChatMessage
+from typing import Any
 
 from videodeepsearch.core.dependencies import get_workflow_service
 from videodeepsearch.agent.orc_service import WorkflowService
@@ -31,6 +32,32 @@ def _parse_chat_history(raw_history: Iterable[dict] | None) -> list[ChatMessage]
         chat_messages.append(ChatMessage(role=role, content=content))
     return chat_messages
 
+
+def _json_safe(obj: Any, _seen: set[int] | None = None) -> Any:
+    if _seen is None:
+        _seen = set()
+    
+    object_id = id(obj)
+    if object_id in _seen:
+        return "<circular>"
+
+    _seen.add(object_id)
+
+    if obj is None or isinstance(obj, (int,str,bool,float)):
+        return obj
+    
+    if isinstance(obj, dict):
+        safe_dict = {}
+        for k,v in obj.items():
+            try:
+                sk = str(k)
+            except Exception:
+                sk = "<non-string-key>"
+            
+            if sk in {"parent_ctx", "tool_factory", "code_execute_env"}:
+                safe_dict[sk] = '<omitted>'
+                continue
+            
 
 @router.websocket("/start_workflow")
 async def start_workflow_ws(
@@ -92,8 +119,11 @@ async def start_workflow_ws(
 
     except Exception as e:
         # Log full traceback to server logs for debugging visibility
+        
+        print(f"Object cause error: {output}") #type:ignore
         logger.exception("Unhandled error in start_workflow_ws")
         tb = traceback.format_exc()
+        
         try:
             await websocket.send_json({
                 'type': "error",

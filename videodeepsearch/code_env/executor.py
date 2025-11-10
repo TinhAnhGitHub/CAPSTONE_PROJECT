@@ -131,9 +131,6 @@ class SandboxCodeExecutor:
         self._globals = dict(self._base_globals)
         self._locals = {}
     
-
-    
-    
     def execute(self, code: str) -> ExecutionResult:
         stdout_buf = TeeIO(sys.stdout)
         stderr_buf = TeeIO(sys.stderr)
@@ -203,32 +200,7 @@ class SandboxCodeExecutor:
             return_value=return_value if success else None,
             exception_repr=exception_repr
         )
-    
 
-def build_worker_executor(
-    *,
-    tools_bindings: dict[str, Callable[..., Any]],
-    extra_globals: dict[str, Any] | None = None,
-    allowed_modules: Sequence[str] | None = None
-)-> Callable[[str], Coroutine[Any, Any, str]]:
-    shared_bindings = {}
-    for name, fn in tools_bindings.items():
-        shared_bindings[name] = fn
-    
-    if extra_globals:
-        shared_bindings.update(extra_globals)
-    
-    executor = SandboxCodeExecutor(
-        shared_bindings=shared_bindings,
-        allowed_modules=allowed_modules
-    )
-    async def _run(code:str)->str:
-        result = executor.execute(code)
-        return result.to_message()
-
-    return _run
-
-    
 
 
     

@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Callable, Coroutine
 from llama_index.core.llms.function_calling import FunctionCallingLLM
 
 from videodeepsearch.tools.clients import * 
 from videodeepsearch.tools.type.factory import ToolFactory
+from videodeepsearch.code_env.executor import SandboxCodeExecutor
 
 if TYPE_CHECKING:
     from videodeepsearch.agent.workflow import VideoAgentWorkFlow
+
 
 class Appstate:
     _instance = None
@@ -17,6 +19,7 @@ class Appstate:
         return cls._instance
     
     tool_factory: ToolFactory = None #type:ignore
+    code_sandbox: SandboxCodeExecutor = None #type:ignore
 
     external_client: ExternalEncodeClient = None  #type:ignore
     image_milvus_client: ImageMilvusClient = None #type:ignore

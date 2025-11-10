@@ -23,6 +23,7 @@ from .config.llm_config import (
 
 from videodeepsearch.agent.workflow import VideoAgentWorkFlow
 from videodeepsearch.agent.orc_service import WorkflowService
+from videodeepsearch.code_env.executor import SandboxCodeExecutor
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -111,6 +112,13 @@ async def lifespan(app: FastAPI):
 
     video_agentic_workflow = VideoAgentWorkFlow(timeout=3600, verbose=True)
     app.state.workflow_service = WorkflowService(orchestration=video_agentic_workflow)
+
+    global_dependencies = app_state.tool_factory.dependency_map
+    app_state.code_sandbox = SandboxCodeExecutor(
+        shared_bindings=global_dependencies
+    )
+
+
     yield 
 
 
