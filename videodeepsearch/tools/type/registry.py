@@ -1,4 +1,5 @@
-from typing import Callable, Dict, List, Optional, Any, get_type_hints, get_origin, get_args, Annotated, Sequence
+from typing import Callable, Dict, List, Optional, Any, get_type_hints, get_origin, get_args, Annotated
+from collections.abc import Sequence as SequenceABC
 from pydantic import BaseModel
 import inspect
 from llama_index.core.tools import FunctionTool
@@ -85,7 +86,14 @@ class ToolMetadata:
             origin = get_origin(ret_type)
             args = get_args(ret_type)
 
-        if origin is (list, Sequence):
+        origin_is_sequence = False
+        if origin is not None:
+            try:
+                origin_is_sequence = issubclass(origin, SequenceABC)
+            except TypeError:
+                origin_is_sequence = False
+
+        if origin_is_sequence and origin is not tuple:
             inner_type = args[0] if args else Any
             if inspect.isclass(inner_type) and issubclass(inner_type, BaseModel): #type:ignore
                 return _format_model_doc(inner_type, container='list')
@@ -177,11 +185,15 @@ class ToolRegistry:
         return self._tools.get(name)
     
     def list_all(self) -> List[str]:
-        """List all tool names"""
+        """
+        Use this tools to list all the tools available in the system
+        """
         return list(self._tools.keys())
 
     def list_all_tags(self) -> list[str]:
-        """List all unique tags used across registered tools."""
+        """
+        Use this tool to list all the available tags that associate with the predefined tools.
+        """
         return list(self._tags)
 
     def list_all_categories(self) -> list[str]:
@@ -207,9 +219,6 @@ class ToolRegistry:
 
         if metadata.docstring:
             lines.append(f"{metadata.docstring}\n")
-        
-        if metadata.docstring:
-            lines.append(f"{metadata.docstring}\n")
         lines.append("\n**User Parameters:**\n")
         for param_name, param in metadata.get_user_params().items():
             param_type = param.annotation
@@ -219,11 +228,13 @@ class ToolRegistry:
         lines.append(f"\n**Required Dependencies:** {', '.join(metadata.dependencies)}\n")
         lines.append(f"**Tags:** {', '.join(metadata.tags)}\n")
         lines.append(f"Output return: {metadata.return_fields_doc}\n\n")
-        lines.append(f"\n{"#"*10}\n")
+        lines.append("\n" + "#"*10 + "\n")
         return lines
 
     def generate_docs_all_functions(self) -> str:
-        """Generate markdown documentation for a specific tool."""
+        """
+        IMPORTANT: MUST USE THIS TOOL. Generating all the documentation related to the system tools' capability
+        """
         lines = ["# Tool Registry Documentation\n"]
         
         for tool_name in self.list_all():
@@ -254,12 +265,12 @@ def get_registry_tools() -> list[FunctionTool]:
     for ReAct or other agent planning systems.
     """
     return [
-        FunctionTool(fn=tool_registry.list_all),
-        FunctionTool(fn=tool_registry.list_all_tags),
-        FunctionTool(fn=tool_registry.list_all_categories),
-        FunctionTool(fn=tool_registry.list_by_category),
-        FunctionTool(fn=tool_registry.list_by_tags),
-        FunctionTool(fn=tool_registry.get),
-        FunctionTool(fn=tool_registry.generate_docs_all_functions),
-        FunctionTool(fn=tool_registry.generate_docs),
+        FunctionTool.from_defaults(fn=tool_registry.list_all),
+        FunctionTool.from_defaults(fn=tool_registry.list_all_tags),
+        FunctionTool.from_defaults(fn=tool_registry.list_all_categories),
+        FunctionTool.from_defaults(fn=tool_registry.list_by_category),
+        FunctionTool.from_defaults(fn=tool_registry.list_by_tags),
+        FunctionTool.from_defaults(fn=tool_registry.get),
+        FunctionTool.from_defaults(fn=tool_registry.generate_docs_all_functions),
+        FunctionTool.from_defaults(fn=tool_registry.generate_docs),
     ]

@@ -1,8 +1,12 @@
-from typing import Any 
+from __future__ import annotations
+from typing import Any, TYPE_CHECKING
 from llama_index.core.llms.function_calling import FunctionCallingLLM
 
 from videodeepsearch.tools.clients import * 
 from videodeepsearch.tools.type.factory import ToolFactory
+
+if TYPE_CHECKING:
+    from videodeepsearch.agent.workflow import VideoAgentWorkFlow
 
 class Appstate:
     _instance = None
@@ -22,6 +26,8 @@ class Appstate:
 
     # llm style
     llm_instance: dict[str, FunctionCallingLLM] = {} #type:ignore
+
+    video_agentic_workflow: "VideoAgentWorkFlow"  = None #type:ignore
 
 
     

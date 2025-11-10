@@ -28,7 +28,7 @@ def time_range_overlap(
         return (inter / union) >= iou or (s1 >= s2 and e1 <= e2)
 
 
-def timecode_to_frame(time_str: str, fps: float):
+def timecode_to_frame(time_str: str, fps: float)->str:
     match = re.match(r"^(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)$", time_str)
     if not match:
         raise ValueError(
@@ -38,7 +38,7 @@ def timecode_to_frame(time_str: str, fps: float):
     total_seconds = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
     frame_index = round(total_seconds * fps)
 
-    return frame_index      
+    return str(frame_index)      
 
 
 def create_tmp_file_from_minio_object(

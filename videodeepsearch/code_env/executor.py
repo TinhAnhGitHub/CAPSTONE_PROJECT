@@ -55,7 +55,6 @@ _SAFE_BUILTINS: dict[str, Any] =  {
     'object': object, 'slice': slice,
     'staticmethod': staticmethod, 'classmethod': classmethod,
     'property': property,
-    ''
     'print': print
 }
 
@@ -166,7 +165,7 @@ class SandboxCodeExecutor:
                     if loop and loop.is_running():
                         nest_asyncio.apply()
                         return_value = asyncio.ensure_future(coro)
-                        return_value = loop.run_until_complete(asyncio.gather(return_value))[0]
+                        return_value = loop.run_until_complete(asyncio.gather(return_value))[0] #type:ignore
                     else:
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
@@ -233,4 +232,3 @@ def build_worker_executor(
 
 
     
-

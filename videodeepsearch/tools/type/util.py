@@ -15,7 +15,7 @@ from collections import defaultdict
 from ingestion.prefect_agent.service_asr.core.schema import  ASRResult
 import re
 from pydantic import BaseModel, Field
-from .helper import extract_s3_minio_url, time_range_overlap, time_to_seconds
+from .helper import extract_s3_minio_url, time_range_overlap, time_to_seconds, timecode_to_frame
 
 from .registry import tool_registry
 
@@ -52,7 +52,7 @@ def frame_to_timecode(frame_index: int, fps: float) -> str:
     tags=["timecode", "frame", "conversion"],
     dependencies=[]
 )
-def timecode_to_frame(timecode: str, fps: float) -> str:
+def timecode_to_frame_func(timecode: str, fps: float) -> str:
     """
     Convert a timecode string (HH:MM:SS.sss) into a frame index given a frame rate (FPS).
 
@@ -138,7 +138,7 @@ def from_time_to_index(
     Returns:
         int: Frame index closest to the given time.
     """
-    return timecode_to_frame(timecode=time, fps=video.fps)
+    return timecode_to_frame(time_str=time, fps=video.fps)
     
 
 
@@ -161,7 +161,7 @@ def from_range_time_to_range_index(
     Returns:
         Tuple[int, int]: Start and end frame indices.
     """
-    start,end = timecode_to_frame(timecode=start_time, fps=video.fps),timecode_to_frame(timecode=end_time, fps=video.fps)
+    start,end = timecode_to_frame(time_str=start_time, fps=video.fps),timecode_to_frame(time_str=end_time, fps=video.fps)
     return f"Result: ({start},{end})"
 
 
