@@ -193,11 +193,11 @@ class VideoAgentWorkFlow(Workflow):
         chat_history = state.chat_history
         
         print(" ================= Start planner ================= \n")
-        agent_output = await self.planning_agent.run(user_msg=message, 
+        full_response = await self.planning_agent.run(user_msg=message, 
                                                      chat_history = chat_history)
+        print(" ================= Check planner ================= \n",vars(full_response))
+        full_response = self.greeting_agent.extract_response(full_response)
         
-        full_response = self.greeting_agent.extract_response(agent_output)
-        # full_response = await _stream_event(handler=agent_output, ctx=ctx, agent_name=self.planning_agent.name)
         print(" ================= Check planner ================= \n",type(full_response))
 
         plan_description = full_response.plan_description
