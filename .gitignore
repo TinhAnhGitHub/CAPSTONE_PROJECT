@@ -13,7 +13,6 @@ uv.lock
 # Keyframes
 agent/tools/keyframes/
 agent/keyframes/
-agent/
 # Extra file
 script.sh
 local/*
