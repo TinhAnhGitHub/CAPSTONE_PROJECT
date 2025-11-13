@@ -14,14 +14,14 @@ export default function BlockRenderer({ block, role }) {
                     : 'bg-gray-200 text-black self-start' // bot: left
             )}
         >
-            {block?.text_content}
+            {block?.text}
         </div>
     }
 
     if (block.block_type === 'image') {
         return (
             <div className="grid grid-cols-3 gap-2">
-                {block.image_urls.map((url, i) => (
+                {block.url.map((url, i) => (
                     <ImageViewer key={i} image={{ url: url, title: `Image ${i + 1}` }} />
                 ))}
             </div>
@@ -31,7 +31,7 @@ export default function BlockRenderer({ block, role }) {
     if (block.block_type === 'video') {
         return (
             <div className="grid grid-cols-3 gap-2">
-                {block.video_urls.map((url, i) => (
+                {block.url.map((url, i) => (
                     <VideoPlayer key={i} video={{ url: url, title: `Video ${i + 1}` }} />
                 ))}
             </div>

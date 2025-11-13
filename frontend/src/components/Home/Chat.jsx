@@ -42,7 +42,7 @@ export default function Chat() {
 
   const groupId = useStoreChat((state) => state.currentGroup);
   const { data: videos = [] } = useVideos(groupId, session_id);
-  const selectedVideosIds = videos.filter(video => video.selected).map(video => video.id);
+  const selectedVideosIds = videos.filter(video => video.selected).map(video => video._id);
   useQuery({
     queryKey: ["chatMessages", session_id],
     queryFn: async () => {
@@ -83,7 +83,7 @@ export default function Chat() {
       const newBlock = parseChunkToBlock("text", msg.content_delta);
       if (!newBlock) return;
 
-      const updated = addBlockToMessages(prev, 'assistant', newBlock);
+      const updated =  addBlockToMessages(prev, 'assistant', newBlock);
       setChatMessages(updated);
 
       requestAnimationFrame(() => {
@@ -150,7 +150,6 @@ export default function Chat() {
   const handlePrompt = async () => {
     const prompt = getValues('prompt').trim();
     if (!prompt) return;
-
     socket.emit('stream_chat', { userId, sessionId: getSessionId(), text: prompt, videos: selectedVideosIds });
     addChatMessage({
       role: 'user',
@@ -158,7 +157,7 @@ export default function Chat() {
       blocks: [
         {
           block_type: 'text',
-          text_content: prompt,
+          text: prompt,
         }
       ],
     });

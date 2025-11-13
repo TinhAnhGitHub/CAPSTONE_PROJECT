@@ -27,7 +27,6 @@ export default function LibraryModal({ isModalOpen, closeModal }) {
 
     useEffect(() => {
         socket.on('ingestion_status', (data)=> {
-            console.log("Received ingestion status:", data);
             // video_id and run_id
             // invalidate videos query to refetch updated status
             queryClient.invalidateQueries(['videos']);

@@ -77,11 +77,10 @@ async def handle_stream_chat(socket_id, data: dict):
 
             ai_url = "ws://100.113.186.28:8050/ws/start_workflow"
             payload = {
-                "user_id": "string123",
-                "video_ids": ["vid_e71c93a52"],
+                "user_id": user_id,
+                "video_ids": video_ids,
                 "user_demand": message,
                 "chat_history": chat_history_dict,
-                # "session_id": "123",
             }
 
             # HTTP stream
@@ -94,7 +93,6 @@ async def handle_stream_chat(socket_id, data: dict):
                         data = data.get("data", {})
                         msg_type = data.get("event_type", "")
                         # content = data.get("content", "")
-                        print("Received msg_type:", msg_type)
                         # AgentProgressEvent -> ...
                         # agentinput -> bỏ
 
