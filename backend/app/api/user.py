@@ -193,8 +193,6 @@ async def get_user_groups(user_service: UserServiceDep, user=Depends(verify_toke
 @router.post("/new-chat")
 async def create_new_chat(
     user_service: UserServiceDep,
-    group: str = Form(None),
-    session_name: str = Form("New Chat"),
     user=Depends(verify_token),
 ):
     user_id = user["user_id"]

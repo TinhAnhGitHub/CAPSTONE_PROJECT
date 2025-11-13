@@ -74,6 +74,7 @@ export default function Chat() {
 
 
     const handleAnswer = (msg) => {
+      console.log("stream_chunk", msg);
       setThinkingMessage('');
       const prev = useStoreChat.getState().chatMessages;
       

@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from fastapi.security import HTTPBearer
 import jwt
 import socketio
-
+import websockets
 from app.schema.user import ALGORITHM, SECRET_KEY
 from utils.blocks import parseFullResponseToBlocks
 
@@ -24,18 +24,7 @@ import httpx
 security = HTTPBearer(auto_error=False)
 
 
-def optional_verify_token(credentials=security):
-    if credentials is None:  # no token provided
-        return None
-    try:
-        payload = jwt.decode(
-            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
-        )
-        return payload
-    except jwt.InvalidTokenError:
-        # You could either return None (treat as guest) or reject
-        raise HTTPException(status_code=401, detail="Invalid token")
-
+# AGENT SOCKET USES RAW WS
 
 @sio.on("stream_chat")
 async def handle_stream_chat(socket_id, data: dict):
@@ -73,43 +62,43 @@ async def handle_stream_chat(socket_id, data: dict):
         # send data to agent, agent stream back
         try:
             # request agent
-            ai_url = "http://100.113.186.28:4141/api/agent/stream"
+            ai_url = "ws://100.113.186.28:8050/ws/start_workflow"
             payload = {
-                "session_id": str(session_id),
-                "text": message,
-                "videos": video_ids,
-                "user_id": user_id,
+                "user_id": "abc123",
+                "video_ids": ["video1_111", "video2_222"],
+                "user_demand": "Summarize the videos",
+                "chat_history": [
+                    {"role": "user", "content": "previous question"},
+                    {"role": "assistant", "content": "previous answer"},
+                ],
+                "session_id": "123",
             }
 
             full_response = []
-            # HTTP stream 
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("POST", ai_url, json=payload) as response:
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        if line.strip() == "[DONE]":
-                            break
-                        try:
-                            line = line.replace("data:", "").strip()
-                            data = json.loads(line)
-                            # data: {"chunk": "...", "msg_type": "text"/"image"/"video"}
-                            chunk = data.get("chunk", "")
-                            msg_type = data.get("msg_type", "text")
-                            
-                            await sio.emit(
-                                "stream_chunk",
-                                {
-                                    "chunk": chunk,
-                                    "msg_type": msg_type,
-                                    "role": MessageRole.ASSISTANT.value,
-                                },
-                                to=socket_id,
-                            )
-                            full_response.append({"msg_type": msg_type, "chunk": chunk})
+            # HTTP stream
+            async with websockets.connect(ai_url) as ws:
+                await ws.send(json.dumps(payload))
 
-                        except Exception as e:
-                            print("⚠️ parse error:", e, line)
+                async for msg in ws:
+                    try:
+                        data = json.loads(msg)
+
+                        # msg_type = data.get("type", "workflow_event")
+                        # content = data.get("content", "")
+
+                        await sio.emit(
+                            "stream_chunk",
+                            {
+                                # "msg_type": msg_type,
+                                "content": data,
+                                "role": MessageRole.ASSISTANT.value,
+                            },
+                            to=socket_id,
+                        )
+                        full_response.append({"content": data})
+
+                    except Exception as e:
+                        print("⚠️ parse error:", e)
             # update the db
             blocks = parseFullResponseToBlocks(full_response)
 
@@ -124,98 +113,6 @@ async def handle_stream_chat(socket_id, data: dict):
                 "error", {"message": "agent unreachable: " + str(e)}, to=socket_id
             )
 
-        await sio.emit("stream_thinking", {"status": "AI is thinking..."}, to=socket_id)
-        await asyncio.sleep(1)  # simulate delay for thinking
-        await sio.emit(
-            "stream_thinking", {"status": "AI is getting images..."}, to=socket_id
-        )
-        await asyncio.sleep(1)  # simulate delay for getting images
-
-        # then response
-        # stream response
-        full_response = ""
-        async for chunk in app_state.agent.stream_chat("message"):
-            if chunk:
-                full_response += chunk
-                await sio.emit(
-                    "stream_chunk",
-                    {
-                        "chunk": chunk,
-                        "msg_type": "text",
-                        "role": MessageRole.ASSISTANT.value,
-                    },  # assistant
-                    to=socket_id,
-                )
-                await asyncio.sleep(0.05)
-
-        # stream videos reponse
-        await sio.emit(
-            "stream_chunk",
-            {
-                "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
-                "msg_type": "video",
-                "role": MessageRole.ASSISTANT.value,
-            },
-            to=socket_id,
-        )
-        await sio.emit(
-            "stream_chunk",
-            {
-                "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
-                "msg_type": "video",
-                "role": MessageRole.ASSISTANT.value,
-            },
-            to=socket_id,
-        )
-        await asyncio.sleep(1)
-        # stream images reponse
-        await sio.emit(
-            "stream_chunk",
-            {
-                "chunk": "Images I found for you:",
-                "msg_type": "text",
-                "role": MessageRole.ASSISTANT.value,
-            },  # assistant
-            to=socket_id,
-        )
-
-        await sio.emit(
-            "stream_chunk",
-            {
-                "chunk": ["https://example.com/image1.jpg"],
-                "msg_type": "image",
-                "role": MessageRole.ASSISTANT.value,
-            },
-            to=socket_id,
-        )
-        await sio.emit(
-            "stream_chunk",
-            {
-                "chunk": [
-                    "https://example.com/image2.jpg",
-                    "https://example.com/image3.jpg",
-                ],
-                "msg_type": "image",
-                "role": MessageRole.ASSISTANT.value,
-            },
-            to=socket_id,
-        )
-        await asyncio.sleep(0.5)
-
-        # save message
-        ai_message = SessionMessage(
-            session_id=PydanticObjectId(session_id),
-            role=MessageRole.ASSISTANT,
-            blocks=[
-                TextBlock(text_content=full_response),
-                # list lấy từ stream ra
-                VideoBlock(video_urls=["1.mp4", "2.mp4"]),
-                TextBlock(text_content="Images I found for you:"),
-                ImageBlock(image_urls=["1.jpg", "2.jpg", "3.jpg"]),
-            ],
-        )
-        await app_state.chat_service.add_message(session_id, "ai", ai_message)
-
         # notify finish
         await sio.emit(
             "stream_end", {"timestamp": ai_message.timestamp.isoformat()}, to=socket_id
@@ -223,4 +120,3 @@ async def handle_stream_chat(socket_id, data: dict):
 
     except Exception as e:
         await sio.emit("error", {"message": str(e)}, to=socket_id)
-
