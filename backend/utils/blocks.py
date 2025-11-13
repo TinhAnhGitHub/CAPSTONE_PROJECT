@@ -1,4 +1,5 @@
-from app.model.session_message import ImageBlock, TextBlock, VideoBlock
+# from app.model.session_message import ImageBlock, TextBlock, VideoBlock
+from llama_index.core.base.llms.types import MessageRole, ImageBlock, TextBlock, VideoBlock
 
 
 def parseFullResponseToBlocks(responses: list):
@@ -29,10 +30,10 @@ def parseFullResponseToBlocks(responses: list):
 
         # otherwise start new block
         if t == "text":
-            blocks.append(TextBlock(text_content=c))
+            blocks.append(TextBlock(text=c))
         elif t == "image":
-            blocks.append(ImageBlock(image_urls=c if isinstance(c, list) else [c]))
+            blocks.append(ImageBlock(url=c if isinstance(c, list) else [c]))
         elif t == "video":
-            blocks.append(VideoBlock(video_urls=c if isinstance(c, list) else [c]))
+            blocks.append(VideoBlock(url=c if isinstance(c, list) else [c]))
 
     return blocks

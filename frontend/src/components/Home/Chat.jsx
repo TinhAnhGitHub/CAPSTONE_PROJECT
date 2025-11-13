@@ -34,7 +34,9 @@ export default function Chat() {
 
   const userId = user?.id;
 
+  const [agentProgess, setAgentProgress] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState('');
+
 
   const queryClient = useQueryClient();
 
@@ -65,20 +67,20 @@ export default function Chat() {
       queryClient.invalidateQueries(['chatHistory']);
     };
 
-    const handleStreamThinking = (msg) => {
-      setThinkingMessage(msg.status);
+    const handleThinking = (msg) => {
+      setAgentProgress(false);
+      setThinkingMessage(msg.content);
       requestAnimationFrame(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
       });
     };
 
 
-    const handleAnswer = (msg) => {
-      console.log("stream_chunk", msg);
+    const handleResponse = (msg) => {
       setThinkingMessage('');
       const prev = useStoreChat.getState().chatMessages;
       
-      const newBlock = parseChunkToBlock(msg.msg_type, msg.chunk)
+      const newBlock = parseChunkToBlock("text", msg.content_delta);
       if (!newBlock) return;
 
       const updated = addBlockToMessages(prev, 'assistant', newBlock);
@@ -88,29 +90,45 @@ export default function Chat() {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
       });
     };
+    const handleRunning = () => {
+      setAgentProgress(true);
+    }
 
-    const handleAnswerEnd = () => {
+    const handleMedia = () => {
       // done
     };
+
+    const handleFullResponse = (data) => {
+      console.log("full_response", data);
+    }
 
     // handle session status
     socket.on('message_received', handleStatus);
 
+    // handle agent progress event
+    socket.on("running", handleRunning);
+
+
     // handle stream thinking
-    socket.on('stream_thinking', handleStreamThinking);
+    socket.on('thinking', handleThinking);
 
     // handle answer
-    socket.on('stream_chunk', handleAnswer);
+    socket.on('response', handleResponse);
+
+    // check save on database
+    socket.on("full_response", handleFullResponse);
 
     // handle end
-    socket.on('stream_end', handleAnswerEnd);
+    socket.on('media', handleMedia);
 
 
     return () => {
       socket.off('message_received', handleStatus);
-      socket.off('stream_thinking', handleStreamThinking);
-      socket.off('stream_chunk', handleAnswer);
-      socket.off('stream_end', handleAnswerEnd);
+      socket.off('running', handleRunning);
+      socket.off('thinking', handleThinking);
+      socket.off('response', handleResponse);
+      socket.off('media', handleMedia);
+      socket.off('full_response', handleFullResponse);
     };
   }); // [] <- no deps, always up to date for dev
 
@@ -163,6 +181,7 @@ export default function Chat() {
         ))}
 
         {thinkingMessage && <div className='animate-pulse text-white flex flex-col pt-12'>{thinkingMessage}</div>}
+        {agentProgess && <div className='animate-pulse text-white flex flex-col pt-12'>...</div>}
         <div ref={bottomRef}></div>
       </div>
 
