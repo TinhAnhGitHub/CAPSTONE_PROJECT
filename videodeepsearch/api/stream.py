@@ -16,48 +16,14 @@ router = APIRouter(
 )
 
 
-def _parse_chat_history(raw_history: Iterable[dict] | None) -> list[ChatMessage]:
-    """Convert JSON payload chat history into ChatMessage objects."""
-    chat_messages: list[ChatMessage] = []
-    if not raw_history:
-        return chat_messages
-
-    for entry in raw_history:
-        if not isinstance(entry, dict):
-            continue
-        role = entry.get("role") or "user"
-        content = entry.get("content")
-        if content is None:
-            continue
-        chat_messages.append(ChatMessage(role=role, content=content))
-    return chat_messages
-
-
-def _json_safe(obj: Any, _seen: set[int] | None = None) -> Any:
-    if _seen is None:
-        _seen = set()
-    
-    object_id = id(obj)
-    if object_id in _seen:
-        return "<circular>"
-
-    _seen.add(object_id)
-
-    if obj is None or isinstance(obj, (int,str,bool,float)):
-        return obj
-    
-    if isinstance(obj, dict):
-        safe_dict = {}
-        for k,v in obj.items():
-            try:
-                sk = str(k)
-            except Exception:
-                sk = "<non-string-key>"
-            
-            if sk in {"parent_ctx", "tool_factory", "code_execute_env"}:
-                safe_dict[sk] = '<omitted>'
-                continue
-
+def _parse_chat_history(raw_history: list[dict]) -> list[ChatMessage]:
+    print(raw_history)
+    res = []
+    for his in raw_history:
+        message = ChatMessage.model_validate(his)
+        res.append(message)
+    return res
+   
 
 @router.websocket("/start_workflow")
 async def start_workflow_ws(
@@ -85,8 +51,7 @@ async def start_workflow_ws(
             user_id = data['user_id']
             list_video_ids = data['video_ids']
             user_demand = data['user_demand']
-            chat_history_payload = data.get('chat_history')
-            session_id = data['session_id']
+            chat_history_payload = data['chat_history']
             chat_history = _parse_chat_history(chat_history_payload)
 
             async_generator = workflow_service.ignite_workflow(
@@ -94,9 +59,7 @@ async def start_workflow_ws(
                 list_video_ids=list_video_ids,
                 user_demand=user_demand,
                 chat_history=chat_history,
-                session_id=session_id
             )
-
             async for output in async_generator:
                 await websocket.send_json(
                     {
@@ -120,8 +83,7 @@ async def start_workflow_ws(
 
     except Exception as e:
         # Log full traceback to server logs for debugging visibility
-        
-        print(f"Object cause error: {output}") #type:ignore
+        print(f"Output: {output}")
         logger.exception("Unhandled error in start_workflow_ws")
         tb = traceback.format_exc()
         

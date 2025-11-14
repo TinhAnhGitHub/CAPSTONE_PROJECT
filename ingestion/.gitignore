@@ -7,6 +7,7 @@ __pycache__/
 # C extensions
 *.so
 
+local/
 **/weight
 **/embedding_service
 **/service_data

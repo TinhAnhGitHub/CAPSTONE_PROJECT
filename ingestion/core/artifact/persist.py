@@ -37,7 +37,7 @@ class ArtifactPersistentVisitor:
 
             object_key = artifact.object_key
             if check_minio:
-                object_returned = self.minio_client.get_object(
+                object_returned = self.minio_client.object_exists(
                     bucket=bucket_name,
                     object_name=object_key,
                 )

@@ -212,8 +212,6 @@ class TextSegmentCaptionMilvusTask(
             
             embedding_bytes = await fetch_object_from_s3_bytes(artifact.minio_url_path, self.visitor.minio_client)
             embedding = json.loads(embedding_bytes.decode('utf-8'))
-
-
             
             caption_dict_path = await fetch_object_from_s3(
                 artifact.related_segment_caption_url,

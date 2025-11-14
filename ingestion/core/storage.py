@@ -151,4 +151,6 @@ class StorageClient:
                 return False
             raise StorageError(f"Error checking object {bucket}/{object_name}: {exc}") from exc
 
+
+
 __all__ = ["StorageClient", "StorageError"]

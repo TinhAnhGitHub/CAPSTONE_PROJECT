@@ -1,11 +1,14 @@
 import cv2
 from pathlib import Path
-from fastapi import UploadFile
 from datetime import timedelta
+import subprocess
+from fastapi import UploadFile
 from typing import BinaryIO
 from fractions import Fraction
 import ffmpeg 
 import hashlib
+
+
 def valid_video_files(file: UploadFile) -> bool:
     video_mime_types = {
         "video/mp4",
@@ -68,39 +71,65 @@ def get_video_metadata(video_filename: str, file: BinaryIO) -> dict:
 
 
 def get_video_fps(video_path: str) -> float:
-    """Return the FPS (frames per second) of a video file using OpenCV."""
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    cap.release()
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=r_frame_rate",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                video_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
 
-    return fps 
+        rate = result.stdout.strip()  
+        if "/" in rate:
+            num, den = rate.split("/")
+            fps = float(num) / float(den)
+        else:
+            fps = float(rate)
+
+        return fps
+
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to get FPS via ffprobe: {e.stderr.strip()}") from e
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error while getting FPS: {e}") from e
 
 
-import cv2
-from datetime import timedelta
+def get_video_duration_ffprobe(path: str) -> str:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
 
-import cv2
-from datetime import timedelta
+        duration_str = result.stdout.strip()
+        if not duration_str:
+            raise ValueError("ffprobe returned no duration; possibly corrupted file.")
+        duration_seconds = float(duration_str)
 
-def get_video_duration_cv2(path: str) -> str:
-    cap = cv2.VideoCapture(path)
-    if not cap.isOpened():
-        raise ValueError(f"Cannot open video file: {path}")
-    
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    cap.release()
-
-    if fps <= 0:
-        raise ValueError("Invalid FPS retrieved; possibly corrupted file.")
-
-    duration_seconds = frame_count / fps
-    td = timedelta(seconds=duration_seconds)
-
-    total_seconds = td.total_seconds()
-    hours, remainder = divmod(int(total_seconds), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    milliseconds = int((total_seconds - int(total_seconds)) * 1000)
-    
-    return f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03d}"
-
+        td = timedelta(seconds=duration_seconds)
+        total_seconds = td.total_seconds()
+        hours, remainder = divmod(int(total_seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        milliseconds = int((total_seconds - int(total_seconds)) * 1000)
+        return f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03d}"
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to get duration via ffprobe: {e.stderr.strip()}") from e
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error while getting duration: {e}") from e

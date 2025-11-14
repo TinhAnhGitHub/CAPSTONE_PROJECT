@@ -1,13 +1,14 @@
 import base64
-import cv2
-import logging
+import av
+import asyncio
+from PIL import Image
+import io
 import numpy as np
 from typing import List
 from urllib.parse import urlparse
-
-from prefect.exceptions import MissingContextError
-from prefect.logging import get_run_logger
-
+from pathlib import Path
+import decord
+import imageio.v3 as iio
 
 
 def return_related_asr_with_shot(
@@ -47,76 +48,88 @@ def return_related_asr_with_shot(
     
     return "\n\n".join(result).strip()
 
-
-
-
-_fallback_logger = logging.getLogger(__name__)
-
-
-def _get_logger():
-    try:
-        return get_run_logger()
-    except MissingContextError:
-        return _fallback_logger
-
-
-def extract_images(
-    local_video_path: str,
-    start_frame: int,
-    end_frame: int,
-    n_frames: int,
-    *,
-    quality: int = 80,
-) -> List[str]:
-    """
-    Extract `n_frames` uniformly spaced frames between [start_frame, end_frame)
-    and return them as base64-encoded WEBP strings.
-
-    Args:
-        local_video_path: Path to the video file.
-        start_frame: Starting frame index (inclusive).
-        end_frame: Ending frame index (exclusive).
-        n_frames: Number of frames to sample uniformly.
-        quality: WEBP encoding quality (1–100), default 80.
-
-    Returns:
-        List of base64-encoded WEBP strings.
-    """
-    if n_frames <= 0 or end_frame <= start_frame:
+def get_segment_frame_indices(start: int, end: int, n: int) -> list[int]:
+    """Return n evenly spaced frame indices between start and end."""
+    if n <= 0 or end <= start:
         return []
-
-    cap = cv2.VideoCapture(local_video_path)
-    if not cap.isOpened():
-        raise RuntimeError(f"Cannot open video: {local_video_path}")
-
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    end_frame = min(end_frame, total_frames - 1)
-
-    step = (end_frame - start_frame) / (n_frames + 1)
-    frame_indices = [int(start_frame + (i + 1) * step) for i in range(n_frames)]
-
-    encoded_frames: List[str] = []
-    logger = _get_logger()
-
-    for idx in frame_indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ok, frame = cap.read()
-        if not ok:
-            logger.warning("Could not read frame %s from %s", idx, local_video_path)
-            continue
+    total = end - start
+    return [start + (i + 1) * total // (n + 1) for i in range(n)]
 
 
-        success, buffer = cv2.imencode(".webp", frame, [cv2.IMWRITE_WEBP_QUALITY, quality])
-        if not success:
-            logger.warning("Failed to encode frame %s from %s", idx, local_video_path)
-            continue
+class FastFrameReader:
+    """High-performance random-access frame extractor using PyAV FFmpeg bindings."""
+
+    def __init__(self, video_bytes: bytes):
+        self.video_bytes = video_bytes
+        self.buffer = io.BytesIO(video_bytes)
+        self.container = av.open(self.buffer)
+        self.stream = self.container.streams.video[0]
+        self.fps = float(self.stream.average_rate)  # type: ignore
+        if self.fps <= 0:
+            raise RuntimeError("Invalid FPS detected in video.")
 
 
-        encoded = base64.b64encode(buffer).decode("utf-8")
-        encoded_frames.append(encoded)
+    def get_frame(self, frame_index: int) -> bytes:
+        ts_seconds = frame_index / self.fps
+        seek_ts = int(ts_seconds * av.time_base)
+        self.buffer.seek(0)
+        self.container.seek(seek_ts, stream=self.stream)#type:ignore
+        for frame in self.container.decode(video=0):#type:ignore
+            if frame.pts is None:
+                continue
+            pts_frame = int(frame.pts * self.fps * float(self.stream.time_base))#type:ignore
 
-    cap.release()
-    return encoded_frames
+            if pts_frame >= frame_index:
+                return self._encode_webp(frame)
+
+        raise RuntimeError(f"Could not decode requested frame {frame_index}.")
+
+    def _encode_webp(self, frame: av.VideoFrame) -> bytes:
+        rgb = frame.to_ndarray(format="rgb24")
+        img = Image.fromarray(rgb)
+
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=80)  
+        return buf.getvalue()
+    
+
+
+def extract_frames(video_bytes: bytes, indices: List[int]) -> List[tuple[int, bytes]]:
+    reader = FastFrameReader(video_bytes)
+    results = []
+    for idx in sorted(indices):
+        img_bytes = reader.get_frame(idx)
+        results.append((idx, img_bytes))
+    return results
+
+
+def extract_segment(
+    video_bytes: bytes,
+    segments: list[tuple[int,int]], # segment in order
+    n_per_segments: int
+) -> list[list[str]]:
+    
+    sorted_segments = sorted(segments, key=lambda x: x[0])
+
+    total_indices = []
+    for segment in sorted_segments:
+        start_frame, end_frame = segment
+        segment_indices = get_segment_frame_indices(start_frame, end_frame, n_per_segments)
+        total_indices.extend(segment_indices)
+    
+    indices_frames = extract_frames(video_bytes, total_indices)
+
+    results = []
+    for segment in sorted_segments:
+        start_frame, end_frame = segment
+        filter_frames = list(
+            filter(lambda x: x[0] >= start_frame and x[0] <= end_frame, indices_frames )
+        )
+
+        frames = [base64.b64encode(f[1]).decode('utf-8') for f in filter_frames]
+        results.append(frames)
+    return results
+
 
 
 

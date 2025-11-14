@@ -1,17 +1,10 @@
-import cv2
 import base64
-import numpy as np
-from typing import List
 from urllib.parse import urlparse
 from pathlib import Path
-
-
-
 
 def parse_s3_url(s3_url: str) -> tuple[str, str]:
     parsed = urlparse(s3_url)
     return parsed.netloc, parsed.path.lstrip("/")
-
 
 def encode_image_base64(
     image_path: str

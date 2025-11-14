@@ -1,17 +1,16 @@
-import asyncio
 import json
 from io import BytesIO
 from typing import AsyncIterator, cast
 from tqdm import tqdm
+import time
 from core.artifact.persist import ArtifactPersistentVisitor
 from core.artifact.schema import AutoshotArtifact, ImageArtifact
 from core.clients.base import BaseMilvusClient, BaseServiceClient
 from core.pipeline.base_task import BaseTask
 from prefect.logging import get_run_logger
-from pydantic import BaseModel
 
-from .util import get_segment_frame_indices, read_frame
-from task.common.util import cleanup_temp_file, fetch_object_from_s3
+from .util import get_segment_frame_indices, extract_frames_async
+from task.common.util import cleanup_temp_file, get_video_bytes, fetch_object_from_s3
 
 
 def frame_to_timecode(frame_index: int, fps: float) -> str:
@@ -107,18 +106,21 @@ class ImageProcessingTask(BaseTask[list[AutoshotArtifact], ImageArtifact]):
             if not not_process_images:
                 continue
 
-            local_video = await fetch_object_from_s3(
+            local_video_bytes = await get_video_bytes(
                 video_minio_path,
                 self.visitor.minio_client,
-                suffix=img_artifacts[0].related_video_extension,  # group image comes from 1 video -> same video extension
             )
-            try:
-                tasks = [read_frame(local_video, artifact.frame_index) for artifact in not_process_images]
-                frames = await asyncio.gather(*tasks)
-                for artifact, frame_byte in zip(not_process_images, frames):
-                    yield artifact, frame_byte
-            finally:
-                cleanup_temp_file(local_video)
+            
+            start_time = time.time()
+            indices = [artifact.frame_index for artifact in not_process_images]
+            print(f"Len indices: {len(indices)}")
+            frames = await extract_frames_async(local_video_bytes, indices)
+            end_time = time.time()
+            print(f"Duration of processing a single request: {end_time - start_time}")
+
+            for artifact, frame_byte in zip(not_process_images, frames):
+                yield artifact, frame_byte
+            
             
     async def postprocess(self, output_data: tuple[ImageArtifact, bytes | None]) -> ImageArtifact:
         artifact, image = output_data

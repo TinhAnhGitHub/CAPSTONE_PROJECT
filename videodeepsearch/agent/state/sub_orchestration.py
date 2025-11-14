@@ -6,9 +6,6 @@ from datetime import datetime
 from typing import Any
 from llama_index.core.agent.workflow import ToolCallResult
 
-from videodeepsearch.tools.schema.artifact import BaseArtifact
-from videodeepsearch.agent.worker.planner.schema import WorkersPlan
-
 
 class Evidence(BaseModel):
     description: str = Field(..., description="Summarize the evidence found")
@@ -34,8 +31,6 @@ class SubOrchestrationState(BaseModel):
     started_at: str = Field(default_factory=datetime.now().isoformat)
     completed_at: str| None
     
-    workers: list[str] = Field(default_factory=list, description="All worker names")
-    worker_plans: WorkersPlan | None = Field(None)
     findings: dict[str, list[WorkerFinding]] = Field(default_factory=dict, description="The finding of the worker agents while working")
     tool_logs: dict[str, list[ToolCallResult]] = Field(default_factory=dict)
     all_evidence: list[Evidence] = Field(default_factory=list, description="The list of evidence used in the orchestration")
@@ -80,8 +75,6 @@ def create_sub_orchestrator_initial_state(
     
     return SubOrchestrationState(
         user_demand=user_query,
-        worker_plans=None,
-        workers=[],
         completed_at=None,
         findings={},
         all_evidence=[],

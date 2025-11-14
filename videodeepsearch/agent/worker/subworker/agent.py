@@ -1,79 +1,102 @@
-from typing import Callable, Coroutine, Any
+from typing import Any, Annotated
+import re
 
 from llama_index.core.workflow import Context
 from llama_index.core.agent.workflow import AgentOutput
 from llama_index.core.llms.function_calling import FunctionCallingLLM
 from llama_index.core.tools import FunctionTool
+from llama_index.core.tools.utils import create_schema_from_function
 from llama_index.core.workflow import StopEvent
 
 from .definition import WorkerCodeVideoAgent
 from .prompt import WORKER_SYSTEM_PROMPT, CODE_ACT_PROMPT
-
-from videodeepsearch.agent.worker.planner.schema import WorkerBluePrint
-from videodeepsearch.tools.type.factory import ToolFactory
-from videodeepsearch.agent.state.sub_orchestration import SubOrchestrationState
-from videodeepsearch.agent.state.sub_orc_state_tool import get_typed_state
 from videodeepsearch.core.app_state import Appstate
+from videodeepsearch.agent.state.sub_orc_state_tool import(
+    sub_orchestration_state_update_findings,
+    sub_orchestration_state_update_tool_results,
+)
+
 
 SUB_WORKER_NAME = "SUB_WORKER_AGENT"
 
+
+
+# def create_additional_tools(
+#     agent_name: str,
+#     parent_ctx: Any,
+# ) -> list[FunctionTool]:
+    
+#     findings_schema = create_schema_from_function(
+#         name=f"sub_orc_update_findings_{agent_name}",
+#         func=sub_orchestration_state_update_findings,
+#         ignore_fields=['parent_ctx']
+#     )
+
+#     tool_results_schema = create_schema_from_function(
+#         name=f"sub_orc_update_tool_results_{agent_name}",
+#         func=sub_orchestration_state_update_tool_results,
+#         ignore_fields=["parent_ctx"],
+#     )
+#     additional_tools = [
+#         FunctionTool.from_defaults(
+#             async_fn=sub_orchestration_state_update_findings,
+#             fn_schema=findings_schema,
+#             name=f"update_findings_{re.sub(r'[^a-zA-Z0-9_]+', '_', agent_name)}",
+#             partial_params={
+#                 'parent_ctx': parent_ctx,
+#                 'worker_name': agent_name,
+#             },
+#         ),
+#         FunctionTool.from_defaults(
+#             async_fn=sub_orchestration_state_update_tool_results,
+#             fn_schema=tool_results_schema,
+#             name=f"update_tool_results_{re.sub(r'[^a-zA-Z0-9_]+', '_', agent_name)}",
+#             partial_params={
+#                 'parent_ctx': parent_ctx,
+#                 'worker_name': agent_name,
+#             }
+#         )
+#     ]
+#     return additional_tools
+
+
 async def run_worker_function_as_tools(
+    agent_name: Annotated[str, "The specific name of the agent (camel-case syntax)"], 
+    description: Annotated[str, "The description detail of the agent. This description will refect its jobs, role, and how it should reasoning, perspective, to get the answer, based on the provided tools"],
+    task: Annotated[str, "The specific task that it must complete"],
+    tools: Annotated[list[str], "The available tools that the system offer"],
+
     ctx: Context, # agent context (for streaming)
     parent_ctx: Any, # parent workflow context (for shared state)
-    agent_name: str, # agent name (append at run time) orchestration agent ignore
     user_message: str, # user_message provide at run time, orchestration agent ignore
-    additional_tools: list[FunctionTool], # provide at run time, ignore
     llm: FunctionCallingLLM, # provide at run time, ignore
     user_id: str,
     list_video_ids: list[str],
     verbose: bool = False,# provide at run time, ignore
     timeout: int = 3600,# provide at run time, ignore
 )-> str:
-    """
-    Asynchronous worker function that constructs and runs a specialized worker agent
-    with dynamically selected tools based on its blueprint, executes the user's task,
-    streams intermediate events, and returns the final result while persisting state.
-
-    ---
-    **Workflow Overview:**
-    1. Retrieve the current orchestration or global state using the provided `ctx`.
-    2. Extract the worker plan blueprint (`worker_blue_print`) associated with `agent_name`
-       from the overall plan (`get_state.worker_plans.plan_detail`).
-    3. Build the set of tools available to the worker by combining:
-         - Tools defined in the worker blueprint.
-         - Any `additional_tools` passed at runtime.
-    4. Instantiate a `WorkerCodeVideoAgent` configured with:
-         - The selected tools.
-         - The LLM for reasoning and function calling.
-         - System and code-acting prompts.
-         - The code execution environment.
-    5. Execute the agent asynchronously with the given `user_message`.
-    6. Stream all intermediate events (e.g., tool calls, intermediate results)
-       back through the context event stream.
-    7. Await the final result and persist the outcome in the global context.
-    8. Return the result as a string.
-    ---
-    **Returns:**
-    - `str`:
-        The final result of the worker agent's execution, serialized as a string.
-        This includes the completed reasoning or task output after all tools
-        and prompts have been applied.
-    """
-    get_state = await get_typed_state(parent_ctx)
-    the_plan = get_state.worker_plans.plan_detail #type:ignore
-    worker_blue_print = next(filter(lambda x: x.name == agent_name, the_plan))
+    
+    # additional_tools = create_additional_tools(
+    #     agent_name=agent_name,
+    #     parent_ctx=parent_ctx
+    # )
     all_tools = Appstate().tool_factory.get_all_tools_functool(user_id=user_id, list_video_id=list_video_ids)
-    filter_tools = list(filter(lambda x: x[0] in worker_blue_print.tools, all_tools.items()))
-    total_tools = additional_tools + list(dict(filter_tools).values())
+    filter_tools = list(filter(lambda x: x[0] in tools, all_tools.items()))
+
+    total_tools = [tool[1] for tool in filter_tools]  # + additional_tools
+
+
     async def _run(code:str) -> str:
         result = Appstate().code_sandbox.execute(code)
         return result.to_message()
+    
+
     agent_instance = WorkerCodeVideoAgent(
         name=agent_name,
         execution_history_key=f"{agent_name}_worker_space",
         code_execute_fn=_run,
-        description=worker_blue_print.description,
-        system_prompt=WORKER_SYSTEM_PROMPT.format(user_demand=user_message, task=worker_blue_print.task),
+        description=description,
+        system_prompt=WORKER_SYSTEM_PROMPT.format(user_demand=user_message, task=task),
         tools=total_tools,
         llm=llm,
         code_act_system_prompt=CODE_ACT_PROMPT,
@@ -93,6 +116,7 @@ async def run_worker_function_as_tools(
     except Exception as e:
         raise e
     return str(result)
+
 
 
 

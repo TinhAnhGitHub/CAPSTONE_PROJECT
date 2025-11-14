@@ -1,4 +1,5 @@
 import asyncio
+from typing import cast
 import tempfile
 from contextlib import suppress
 from pathlib import Path
@@ -11,6 +12,12 @@ def parse_s3_url(s3_url: str) -> tuple[str, str]:
     parsed = urlparse(s3_url)
     return parsed.netloc, parsed.path.lstrip("/")
 
+
+async def get_video_bytes(s3_url: str, storage: StorageClient):
+    bucket, object_name = parse_s3_url(s3_url)
+    loop = asyncio.get_running_loop()
+    data = await loop.run_in_executor(None, lambda: storage.get_object(bucket, object_name))
+    return cast(bytes, data)
 
 async def fetch_object_from_s3(s3_url: str, storage: StorageClient, suffix: str) -> str:
     """Fetch s3://bucket/path.mp4 to a local temp file asynchronously."""

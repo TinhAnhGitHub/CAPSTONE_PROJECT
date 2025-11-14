@@ -17,5 +17,9 @@ dependencies = [
     "tenacity>=9.1.2",
     "tqdm",
     "prefect",
-    "consul2"
+    "decord>=0.6.0",
+    "imageio>=2.37.2",
+    "av>=16.0.1",
+    "async-lru",
+    "throttler"
 ]

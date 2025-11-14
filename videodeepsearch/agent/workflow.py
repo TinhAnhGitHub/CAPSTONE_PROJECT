@@ -1,10 +1,7 @@
 """
 The main agent that we will call uponn
 """
-import re
-from llama_index.llms.google_genai import GoogleGenAI
 from typing import Annotated, cast
-import json
 from pydantic import BaseModel
 
 from llama_index.core.workflow import (
@@ -26,7 +23,7 @@ from llama_index.core.agent.workflow import (
 )
 from llama_index.core.workflow.handler import WorkflowHandler # type:ignore
 from llama_index.core.workflow.resource import Resource #type:ignore
-from llama_index.core.base.llms.types import ThinkingBlock, ContentBlock, TextBlock
+from llama_index.core.base.llms.types import ThinkingBlock, TextBlock
 
 
 from videodeepsearch.core.app_state import get_app_state, Appstate
@@ -35,33 +32,23 @@ from videodeepsearch.core.app_state import get_app_state, Appstate
 from videodeepsearch.agent.worker import GREETER_NAME, PLANNER_NAME, SUB_WORKER_NAME, ORCHESTRATION_NAME, FINAL_RESPONSE_AGENT
 
 from videodeepsearch.agent.worker.greeter.schema import NextAgentDirective
-from videodeepsearch.agent.worker.planner.schema import WorkersPlan
 from videodeepsearch.agent.worker.subworker.agent import run_worker_function_as_tools
 
 from videodeepsearch.agent.worker.suborchestrate.agent import ORCHESTRATION_NAME
 
-from videodeepsearch.tools.type.factory import ToolFactory
-from videodeepsearch.core.dependencies import get_tool_factory
-
+from videodeepsearch.tools.type.registry import get_registry_tools
 
 
 from videodeepsearch.agent.state.full_orc_state_tool import (
     set_add_message_to_chat_history,
-    set_reset_plan_state,
     set_state_from_user,
-    set_worker_plan,
     get_chat_history,
-    get_worker_plan,
     get_state_from_user
 )
 
-from videodeepsearch.agent.state.sub_orc_state_tool import (
-    set_worker_plan_sub
-)
+
 
 from videodeepsearch.agent.state.sub_orc_state_tool import(
-    sub_orchestration_state_update_findings,
-    sub_orchestration_state_update_tool_results,
     sub_orchestration_state_view_results_from_agent_tools,
     sub_orchestration_state_synthesize_final_answers,  
 )
@@ -82,7 +69,6 @@ from .orc_events import (
     PlannerInputEvent,
     PlanProposedEvent,
     FinalEvent,
-    PlanningAgentEvent
 )
 
 async def get_streaming_response( # with thinking
@@ -175,13 +161,18 @@ class VideoAgentWorkFlow(Workflow):
 
         user_message = ChatMessage(role='user', content=ev.user_demand)
         await set_state_from_user(ctx=ctx, user_id=ev.user_id, list_video_ids=ev.list_video_ids)
+        print(f"{ev.chat_history=}")
+        await set_add_message_to_chat_history(ctx=ctx, chat_messages=ev.chat_history)
         await set_add_message_to_chat_history(ctx=ctx, chat_messages=[user_message])
+
+        
         greeting_agent = agent_registry.spawn(
             name=GREETER_NAME,
             llm=app_state.llm_instance[GREETER_NAME]
         )  
 
         chat_history = await get_chat_history(ctx=ctx)
+        print(f"{chat_history=}")
         agent_response: AgentOutput = await greeting_agent.run( user_msg=user_message, chat_history=chat_history,)
         agent_decision = NextAgentDirective.model_validate(agent_response.structured_response)    
 
@@ -210,24 +201,18 @@ class VideoAgentWorkFlow(Workflow):
             ChatMessage(role=MessageRole.ASSISTANT, content=passing_message)
         ]
 
-
         if next_agent == "planner": 
-            await set_reset_plan_state(ctx=ctx) # sort of brittle, change later
             return PlannerInputEvent(
                 user_msg=ev.user_demand,
                 planner_demand=passing_message
             )
         
         elif next_agent == "orchestrator":
-            worker_plan = await get_worker_plan(ctx=ctx)
-            
-            
-
             return PlanProposedEvent(
                 user_msg=ev.user_demand,
                 agent_response=passing_message,
-                worker_plan=cast(WorkersPlan, worker_plan),
             )
+        
         return FinalResponseEvent(passing_messages=passing_messages)
         
     @step
@@ -250,6 +235,18 @@ class VideoAgentWorkFlow(Workflow):
         llm = app_state.llm_instance[FINAL_RESPONSE_AGENT]
         final_response_message = await get_streaming_response(ctx=ctx, current_llm_input=chat_message, llm=llm, agent_name="FINAL_RESPONSE_AGENT")
 
+        final_agent_output = AgentOutput(
+            response=final_response_message,
+            structured_response=None,
+            current_agent_name=FINAL_RESPONSE_AGENT,
+            tool_calls=[],
+            retry_messages=[]
+        )
+
+        ctx.write_event_to_stream(
+            final_agent_output
+        )
+        
         await set_add_message_to_chat_history(ctx=ctx, chat_messages=[final_response_message])
 
         chat_history = await get_chat_history(ctx=ctx)
@@ -258,7 +255,6 @@ class VideoAgentWorkFlow(Workflow):
             chat_history=chat_history
         )
 
-    
     @step
     async def planning(
         self,
@@ -289,7 +285,7 @@ class VideoAgentWorkFlow(Workflow):
             name=PLANNER_NAME,
             llm=app_state.llm_instance[PLANNER_NAME]
         )
-
+        
         handler: WorkflowHandler = planning_agent.run(user_msg=message, chat_history = chat_history)
 
         async for event in handler.stream_events():
@@ -299,40 +295,18 @@ class VideoAgentWorkFlow(Workflow):
         
         agent_output: AgentOutput = await handler
         
-        full_response = WorkersPlan.model_validate(agent_output.structured_response)
-
-        plan_summary = full_response.plan_summary
-        plan_detail = full_response.plan_detail
-        reason = full_response.reason
-
-        plan_detail_str = json.dumps([p.model_dump(mode="json") for p in plan_detail], indent=2)
-
-        output_planner = PLANNER_AGENT_OUTPUT.format(
-            user_request=user,
-            plan_summary=plan_summary
-        )
-
+        full_chat_resp = agent_output.response
+        full_response_text = full_chat_resp.content
         ctx.write_event_to_stream(
-            PlanningAgentEvent(
-                reason=f"My reasoning though would be: {reason}",
-                plan_summary=plan_summary,
-                plan_detail=[p.model_dump(mode="json") for p in plan_detail]
+            AgentProgressEvent(
+                agent_name=PLANNER_NAME,
+                answer=full_response_text
             )
         )
-
-        messages = [
-            ChatMessage(role=MessageRole.ASSISTANT, content=output_planner),
-            ChatMessage(role=MessageRole.ASSISTANT, content=plan_detail_str),
-            ChatMessage(role=MessageRole.ASSISTANT, content=reason)
-        ]
-
-        await set_add_message_to_chat_history(ctx=ctx, chat_messages=messages)
-        await set_worker_plan(ctx=ctx, worker_plan=full_response)
-
-
+        await set_add_message_to_chat_history(ctx=ctx, chat_messages=[full_chat_resp])
 
         return FinalResponseEvent(
-            passing_messages=messages
+            passing_messages=[full_chat_resp]
         )           
     
     @step
@@ -346,13 +320,14 @@ class VideoAgentWorkFlow(Workflow):
     ) -> FinalResponseEvent: 
         
         user_id, list_video_ids = await get_state_from_user(ctx=ctx)
-        plan: WorkersPlan = ev.worker_plan
+        chat_history = await get_chat_history(ctx=ctx)
 
         sub_orchestrate_state = create_sub_orchestrator_initial_state(user_query=f"Passing message from agent: {ev.agent_response}\n\n The main user demand: {ev.user_msg}")
+
         async with ctx.store.edit_state() as state:
             state[SUB_ORCHESTRATOR_STATE_KEY] = sub_orchestrate_state
 
-        await set_worker_plan_sub(ctx=ctx, worker_plan=plan)
+        worker_llm = Appstate().llm_instance[SUB_WORKER_NAME]
         
         ctx.write_event_to_stream(
             AgentProgressEvent(
@@ -361,78 +336,32 @@ class VideoAgentWorkFlow(Workflow):
             )    
         )
 
-        list_of_worker_functool: list[FunctionTool] = []
-
-        for plan_blueprint in plan.plan_detail:
-            worker_llm = app_state.llm_instance[SUB_WORKER_NAME]
-
-            findings_schema = create_schema_from_function(
-                name=f"sub_orc_update_findings_{plan_blueprint.name}",
-                func=sub_orchestration_state_update_findings,
-                ignore_fields=["parent_ctx"],
-            )
-            tool_results_schema = create_schema_from_function(
-                name=f"sub_orc_update_tool_results_{plan_blueprint.name}",
-                func=sub_orchestration_state_update_tool_results,
-                ignore_fields=["parent_ctx"],
-            )
-
-            additional_tools = [
-                FunctionTool.from_defaults(
-                    async_fn=sub_orchestration_state_update_findings,
-                    fn_schema=findings_schema,
-                    name=f"update_findings_{re.sub(r'[^a-zA-Z0-9_]+', '_', plan_blueprint.name)}",
-                    partial_params={
-                        'parent_ctx': ctx,
-                        'worker_name': plan_blueprint.name,
-                    },
-                ),
-                FunctionTool.from_defaults(
-                    async_fn=sub_orchestration_state_update_tool_results,
-                    fn_schema=tool_results_schema,
-                    name=f"update_tool_results_{re.sub(r'[^a-zA-Z0-9_]+', '_', plan_blueprint.name)}",
-                    partial_params={
-                        'parent_ctx': ctx,
-                        'worker_name': plan_blueprint.name,
-                    }
-                )
-            ]
-
-            worker_rename_func = re.sub(r"[^a-zA-Z0-9_]+", "_", plan_blueprint.name)
-            worker_schema_fn = create_schema_from_function(
-                name=f"run_worker_{worker_rename_func}",
-                func=run_worker_function_as_tools,
-                ignore_fields=[
-                    "ctx",
-                    "parent_ctx",
-                    "agent_name",
-                    "user_message",
-                    "additional_tools",
-                    "llm",
-                    "user_id",
-                    "list_video_ids",
-                    "verbose",
-                    "timeout",
-                ],
-            )
-            agent_as_tool = FunctionTool.from_defaults(
-                async_fn=run_worker_function_as_tools,
-                fn_schema=worker_schema_fn,
-                name=f"run_{worker_rename_func}",
-                partial_params={
-                    "ctx": ctx,
-                    "parent_ctx": ctx,
-                    "agent_name": plan_blueprint.name,
-                    "user_message": ev.user_msg,
-                    "additional_tools": [],
-                    "llm": worker_llm,
-                    "user_id": user_id,
-                    "list_video_ids":list_video_ids
-                }
-            )
-            list_of_worker_functool.append(agent_as_tool)
-
-
+        worker_schema_fn = create_schema_from_function(
+            name=f"run_worker_as_tool",
+            func=run_worker_function_as_tools,
+            ignore_fields=[
+                "ctx",
+                "parent_ctx",
+                "user_message",
+                "llm",
+                "user_id",
+                "list_video_ids",
+                "verbose",
+                "timeout",
+            ],
+        )
+        agent_as_tool = FunctionTool.from_defaults(
+            async_fn=run_worker_function_as_tools,
+            fn_schema=worker_schema_fn,
+            partial_params={
+                "ctx": ctx,
+                "parent_ctx": ctx,
+                "user_message": ev.user_msg,
+                "llm": worker_llm,
+                "user_id": user_id,
+                "list_video_ids":list_video_ids
+            }
+        )
 
         synth_schema = create_schema_from_function(
             name="sub_orc_synthesize_final_answers",
@@ -456,12 +385,12 @@ class VideoAgentWorkFlow(Workflow):
                     fn_schema=view_results_schema,
                     partial_params={'parent_ctx': ctx},
                 )
-            ]  + list_of_worker_functool
+            ]  + [agent_as_tool] + get_registry_tools()
         
         ctx.write_event_to_stream(
             AgentProgressEvent(
                 agent_name=ORCHESTRATION_NAME,
-                answer=f"Starting orchestration with {len(list_of_worker_functool)} workers"
+                answer=f"Starting orchestration"
             )
         )
         
@@ -470,9 +399,12 @@ class VideoAgentWorkFlow(Workflow):
             llm=app_state.llm_instance[ORCHESTRATION_NAME],
             tools=full_orchestration_tool
         )
+
+        print(f"{chat_history=}")
                 
         handler: WorkflowHandler = orchestration_agent.run(
             user_msg=ev.user_msg,
+            chat_history=chat_history
         )
 
         async for event in handler.stream_events():

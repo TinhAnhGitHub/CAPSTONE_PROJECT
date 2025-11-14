@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from typing import AsyncIterator, Literal, cast
-
+from collections import defaultdict
+import time
 from core.artifact.persist import ArtifactPersistentVisitor
 from core.artifact.schema import ASRArtifact, AutoshotArtifact, SegmentCaptionArtifact
 from core.clients.base import BaseMilvusClient, BaseServiceClient
@@ -12,11 +13,10 @@ from prefect_agent.service_llm.schema import LLMRequest, LLMResponse, LLMSingleR
 from pydantic import BaseModel
 from tqdm import tqdm
 
-from task.common.util import cleanup_temp_file, fetch_object_from_s3
+from task.common.util import cleanup_temp_file, fetch_object_from_s3, get_video_bytes
 
 from .prompt import SEGMENT_CAPTION_PROMPT
-from .util import extract_images, return_related_asr_with_shot
-
+from .util import return_related_asr_with_shot, extract_segment
 
 class LLMCaptionSettings(BaseModel):
     model_name: str
@@ -114,26 +114,34 @@ class SegmentCaptionLLMTask(BaseTask[
         logger.info("Prepared %d segment caption artifacts", len(result))
         return result
 
-    async def _process_single_artifact(self, artifact: SegmentCaptionArtifact) -> LLMSingleRequest:
-        prompt = SEGMENT_CAPTION_PROMPT.format(
-            asr=artifact.related_asr
-        )
-        local_video_path = await fetch_object_from_s3(
-            artifact.related_video_minio_url,
-            self.visitor.minio_client,
-            suffix=artifact.related_video_extension,
-        )
+    async def _process_single_artifact(self, artifacts: list[SegmentCaptionArtifact]) -> list[LLMSingleRequest]:
 
-        try:
-            image_per_segments = cast(int, self.kwargs.get('image_per_segments'))
-            image_encode = extract_images(local_video_path, artifact.start_frame, artifact.end_frame, image_per_segments)
-            request = LLMSingleRequest(
-                prompt=prompt,
-                image_base64=image_encode
-            )
-            return request
-        finally:
-            cleanup_temp_file(local_video_path)
+        video2segment: dict[str, list[SegmentCaptionArtifact]] = defaultdict(list)
+        image_per_segments = cast(int, self.kwargs.get('image_per_segments'))
+
+        for artifact in artifacts:
+            video_path = artifact.related_video_minio_url
+            video2segment[video_path].append(artifact)
+        
+        results = []
+
+        for video_path, list_artifact in video2segment.items():
+            video_url = list_artifact[0].related_video_minio_url
+            video_bytes = await get_video_bytes(s3_url=video_url, storage=self.visitor.minio_client)
+
+            segments = [(ar.start_frame, ar.end_frame) for ar in list_artifact]
+            image_encode_list = extract_segment(video_bytes, segments, image_per_segments)
+
+            for artifact, image_base64 in zip(list_artifact, image_encode_list):
+                prompt = SEGMENT_CAPTION_PROMPT.format(
+                    asr=artifact.related_asr
+                )
+                request = LLMSingleRequest(
+                    prompt=prompt,
+                    image_base64=image_base64
+                )
+                results.append(request)
+        return results
 
     async def execute(self, input_data: list[SegmentCaptionArtifact], client: BaseServiceClient | None| BaseMilvusClient) -> AsyncIterator[tuple[SegmentCaptionArtifact, str | None]]:
 
@@ -147,7 +155,8 @@ class SegmentCaptionLLMTask(BaseTask[
 
         bs = cast(int, self.kwargs.get('batch_size'))
         logger.info("Starting segment caption execution for %d artifacts", len(input_data))
-
+        
+        
         while input_data:
             artifact = input_data.pop(0)
 
@@ -164,11 +173,12 @@ class SegmentCaptionLLMTask(BaseTask[
             batches.append(batch[:])
 
         for batch in tqdm(batches, desc='Calling LLM...'):
-            single_request = [
-                await self._process_single_artifact(artifact=seg_artifact) for seg_artifact in batch
-            ]
+            start_time = time.time()
+            llm_requests = await self._process_single_artifact(artifacts=batch) 
+            end_time = time.time()
+            print(f"Duration of processing a single request: {end_time - start_time}")
             request = LLMRequest(
-                llm_requests=single_request,
+                llm_requests=llm_requests,
                 metadata={}
             )
             response = await client.make_request(

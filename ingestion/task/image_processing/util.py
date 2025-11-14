@@ -1,91 +1,73 @@
 import asyncio
-import cv2
+import av
+import io
+from pathlib import Path
 import numpy as np
 from urllib.parse import urlparse
 from typing import Any, List, Tuple
-
-def get_segment_frame_indices(start: int, end: int, n: int) -> list[int]:
-    """Return n evenly spaced frame indices between start and end."""
-    if n <= 0 or end <= start:
-        return []
-    total = end - start
-    return [start + (i + 1) * total // (n + 1) for i in range(n)]
-
+import subprocess
+from PIL import Image
+import decord
 
 
 def parse_s3_url(s3_url: str) -> tuple[str, str]:
     parsed = urlparse(s3_url)
     return parsed.netloc, parsed.path.lstrip("/")
 
-def _read_frame_sequential(video_path: str, frame_index: int) -> tuple[bool, np.ndarray | None]:
-    """Read frames sequentially up to frame_index; returns (success, frame)."""
-    cap = cv2.VideoCapture(video_path)
-    try:
-        if not cap.isOpened():
-            return False, None
-        for _ in range(frame_index + 1):
-            ok, frame = cap.read()
-            if not ok:
-                return False, None
-        return True, frame #type:ignore
-    finally:
-        cap.release()
+class FastFrameReader:
+    """High-performance random-access frame extractor using PyAV FFmpeg bindings."""
+
+    def __init__(self, video_bytes: bytes):
+        self.video_bytes = video_bytes
+        self.buffer = io.BytesIO(video_bytes)
+        self.container = av.open(self.buffer)
+        self.stream = self.container.streams.video[0]
+        self.fps = float(self.stream.average_rate)  # type: ignore
+        if self.fps <= 0:
+            raise RuntimeError("Invalid FPS detected in video.")
 
 
-def read_frame_sync(video_path: str, frame_index: int) -> bytes:
-    """Blocking: read a specific frame from a video and return it encoded as WebP."""
-    cap = cv2.VideoCapture(video_path)
-    try:
-        if not cap.isOpened():
-            raise RuntimeError(f"Failed to open video at {video_path}")
+    def get_frame(self, frame_index: int) -> bytes:
+        ts_seconds = frame_index / self.fps
+        seek_ts = int(ts_seconds * av.time_base)
+        self.buffer.seek(0)
+        self.container.seek(seek_ts, stream=self.stream)#type:ignore
+        for frame in self.container.decode(video=0):#type:ignore
+            if frame.pts is None:
+                continue
+            pts_frame = int(frame.pts * self.fps * float(self.stream.time_base))#type:ignore
 
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if frame_index < 0 or frame_index >= total:
-            raise ValueError(f"Frame index {frame_index} out of range (0-{total - 1})")
+            if pts_frame >= frame_index:
+                return self._encode_webp(frame)
 
-        ok = True
-        frame: np.ndarray | None = None
+        raise RuntimeError(f"Could not decode requested frame {frame_index}.")
 
-        if frame_index == 0:
-            ok, frame = cap.read()
-        else:
-            ok = cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-            if ok:
-                ok, frame = cap.read()
+    def _encode_webp(self, frame: av.VideoFrame) -> bytes:
+        rgb = frame.to_ndarray(format="rgb24")
+        img = Image.fromarray(rgb)
 
-        if not ok or frame is None:
-            ok, frame = _read_frame_sequential(video_path, frame_index)
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=80)  
+        return buf.getvalue()
+    
 
-        if not ok or frame is None:
-            raise RuntimeError(f"Failed to read frame at index {frame_index}")
-    finally:
-        cap.release()
+def extract_frames(video_bytes: bytes, indices: List[int]) -> List[bytes]:
+    reader = FastFrameReader(video_bytes)
+    results = []
+    for idx in sorted(indices):
+        img_bytes = reader.get_frame(idx)
+        results.append(img_bytes)
+    return results
 
-    success, img = cv2.imencode(".webp", frame, [cv2.IMWRITE_WEBP_QUALITY, 90])
-    if not success:
-        raise RuntimeError(f"Failed to encode frame {frame_index} as WebP")
-
-    return img.tobytes()
-
-
-async def read_frame(video_path: str, frame_index: int) -> bytes:
-    """Async wrapper for frame extraction by frame index."""
+async def extract_frames_async(video_bytes: bytes, indices: List[int]) -> List[bytes]:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, read_frame_sync, video_path, frame_index)
+    return await loop.run_in_executor(None, extract_frames, video_bytes, indices)
 
 
-async def extract_frames_from_segments(
-    video_path: str,
-    segments: List[Tuple[int, int]],
-    n_per_segment: int
-) -> List[Tuple[int, bytes]]:
-    all_indices = []
-    for start, end in segments:
-        all_indices.extend(
-            get_segment_frame_indices(start,end, n_per_segment)
-        )
-    all_indices = sorted(set(all_indices))
-    tasks = [read_frame(video_path, idx) for idx in all_indices]
-    frames = await asyncio.gather(*tasks)
 
-    return list(zip(all_indices, frames))
+def get_segment_frame_indices(start: int, end: int, n: int) -> List[int]:
+    if n <= 0 or end <= start:
+        return []
+
+    total = end - start
+    return [start + (i + 1) * total // (n + 1) for i in range(n)]

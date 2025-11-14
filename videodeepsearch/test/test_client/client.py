@@ -32,7 +32,7 @@ class WorkflowClient:
                     "video_ids": video_ids,
                     "user_demand": user_demand,
                     "chat_history": [message.model_dump(mode='json') for message in chat_history],
-                    "session_id": session_id,
+                    # "session_id": session_id,
                 }
 
                 await websocket.send(json.dumps(request_payload))

@@ -127,8 +127,8 @@ async def run_interactive_session(test_session_dir: Path, user_id: str, list_vid
 
 if __name__ == "__main__":
     test_session_dir = Path('../local')
-    user_id = 'anonymous'
-    list_video_ids = ['video1_111', 'video2_222']
+    user_id = 'string123'
+    list_video_ids = ['vid_e71c93a5b2']
 
     try:
         asyncio.run(run_interactive_session(test_session_dir=test_session_dir, user_id=user_id, list_video_ids=list_video_ids))

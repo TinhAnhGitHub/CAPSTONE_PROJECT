@@ -1,11 +1,13 @@
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from async_lru import alru_cache
 from enum import Enum
 from threading import Lock
 import logging
 import httpx
 from task import VideoIngestionTask, AutoshotProcessingTask, ASRProcessingTask, ImageProcessingTask, SegmentCaptionLLMTask, ImageCaptionLLMTask, ImageEmbeddingMilvusTask, ImageEmbeddingTask, TextSegmentCaptionMilvusTask, TextCaptionSegmentEmbeddingTask, TextImageCaptionEmbeddingTask
+from throttler import throttle
 
 
 logger = logging.getLogger(__name__)
@@ -61,6 +63,30 @@ class HTTPProgressTracker:
         self.base_url =base_url
         self.endpoint = endpoint
     
+
+    async def trigger_http_not_throttle(self, video_id:str):
+        with self._lock:
+            progress = self._progress.get(video_id)
+            if not progress:
+                return None
+            payload = progress.model_dump(mode='json')
+        try:
+            async with httpx.AsyncClient(base_url="http://100.120.22.90:8010") as client:
+                response = await client.post(
+                    self.endpoint.format(video_id=video_id),
+                    json=payload
+                )
+                response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as exc:
+            # print(
+            #     "Failed to send progress update for",
+            #     video_id,
+            #     exc,
+            # )
+            return None
+
+    @throttle(rate_limit=5, period=1.0)
     async def _trigger_http(self, video_id:str):
         with self._lock:
             progress = self._progress.get(video_id)
@@ -69,8 +95,6 @@ class HTTPProgressTracker:
             payload = progress.model_dump(mode='json')
         try:
             async with httpx.AsyncClient(base_url="http://100.120.22.90:8010") as client:
-                print(f"{self.endpoint.format(video_id=video_id)}")
-                print(f"{self.base_url}")
                 response = await client.post(
                     self.endpoint.format(video_id=video_id),
                     json=payload
@@ -78,11 +102,11 @@ class HTTPProgressTracker:
                 response.raise_for_status()
             return response.json()
         except httpx.HTTPError as exc:
-            print(
-                "Failed to send progress update for",
-                video_id,
-                exc,
-            )
+            # print(
+            #     "Failed to send progress update for",
+            #     video_id,
+            #     exc,
+            # )
             return None
 
     async def start_video(self, video_id: str) -> None:

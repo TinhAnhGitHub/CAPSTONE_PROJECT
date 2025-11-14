@@ -1,7 +1,6 @@
 from llama_index.core.llms import LLM
 from videodeepsearch.agent.base import register_agent, AgentConfig
 from videodeepsearch.tools.type.registry import get_registry_tools
-from .schema import WorkersPlan
 from .prompt import PLANNER_PROMPT, PLANNER_DESCRIPTION
 from videodeepsearch.agent.worker.custom import CustomFunctionAgent
 
@@ -18,7 +17,6 @@ def create_planner_config(
         system_prompt=PLANNER_PROMPT,
         llm=llm,
         tools=get_registry_tools(), #type:ignore
-        output_cls=WorkersPlan,
         type_of_agent=CustomFunctionAgent,
         streaming=True
     )

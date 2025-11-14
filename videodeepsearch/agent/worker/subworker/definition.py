@@ -22,14 +22,8 @@ from llama_index.core.objects import ObjectRetriever
 from llama_index.core.workflow import Event
 from llama_index.core.prompts import RichPromptTemplate
 from llama_index.core.base.llms.types import ThinkingBlock, TextBlock
-
 from videodeepsearch.agent.orc_events import AgentDecision
-
 from .prompt import MAKE_DECISION_PROMPT
-
-
-
-
 
 from llama_index.llms.google_genai import GoogleGenAI
 """
@@ -379,6 +373,10 @@ class WorkerCodeVideoAgent(BaseWorkflowAgent):
             "tools": tools,
             "allow_parallel_tool_calls": self.allow_parallel_tool_calls,
         }
+
+        print(f"TOOL IN WOKERAGENT: {tools}")
+        for tool in tools:
+            print(tool.metadata)
         response = await self.llm.astream_chat_with_tools(  # type: ignore
             **chat_kwargs
         )

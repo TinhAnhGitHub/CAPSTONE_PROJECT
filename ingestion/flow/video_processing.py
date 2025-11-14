@@ -27,7 +27,7 @@ from task.video_proc.main import VideoInput
 from task.llm_segment_caption.main import ShotASRInput
 
 from core.config.logging import run_logger
-
+from prefect.cache_policies import NO_CACHE
 
 from core.clients.autoshot_client import AutoshotClient
 from core.clients.asr_client import ASRClient
@@ -59,7 +59,9 @@ from task.milvus_persist_task.main import (
 
 
 
-GPU_TASK_TAG = 'gpu-heavy'
+VIDEO_REGISTRY = 'video_registry'
+AUTOSHOT_TASK = 'autoshot-task'
+ASR_TASK = 'asr-task'
 LLM_TASK_TAG = 'llm-service'
 EMBED_TASK_TAG = 'embedding-service'
 PERSIST_TASK_TAG = "milvus-persist"
@@ -69,6 +71,8 @@ PERSIST_TASK_TAG = "milvus-persist"
 @task(
     name='Video registry',
     description="This task will take uploaded videos, and persist into the tracker + minio S3",
+    tags=[VIDEO_REGISTRY],
+    cache_policy=NO_CACHE
 )
 async def entry_video_ingestion(
     video_uploads: VideoInput,
@@ -103,7 +107,8 @@ async def entry_video_ingestion(
 @task(
     name="Autoshot Processing",
     description="Given a list of videos, detect the shot  segment boundary",
-    tags=[GPU_TASK_TAG],
+    tags=[AUTOSHOT_TASK],
+    cache_policy=NO_CACHE
 )
 async def autoshot_task(
     videos: list[VideoArtifact],
@@ -156,8 +161,9 @@ async def autoshot_task(
 @task(
     name="ASR Processing",
     description="Given a list of videos, extracting the corresponding ASR",
-    tags=[GPU_TASK_TAG],
-    log_prints=True
+    tags=[ASR_TASK],
+    log_prints=True,
+    cache_policy=NO_CACHE
     
 )
 async def asr_task(
@@ -204,8 +210,8 @@ async def asr_task(
 @task(
     name='Image Extraction',
     description="Extract frames from video segments",
-    tags=["image-processing"],
-    log_prints=True
+    log_prints=True,
+    cache_policy=NO_CACHE
 )
 async def image_processing_task(
     autoshots: list[AutoshotArtifact],
@@ -247,6 +253,7 @@ async def image_processing_task(
     name='Segmentation Caption Generation',
     description="Generate captions for video segments using LLM",
     tags=[LLM_TASK_TAG],
+    cache_policy=NO_CACHE
 )
 async def segment_caption_task(
     autoshots: list[AutoshotArtifact],
@@ -303,6 +310,7 @@ async def segment_caption_task(
     name='Image Caption Generation',
     description='Generate captions for individual images using LLM',
     tags=[LLM_TASK_TAG],
+    cache_policy=NO_CACHE
 )
 async def image_caption_task(
     images: list[ImageArtifact] | PrefectFuture,
@@ -345,6 +353,7 @@ async def image_caption_task(
     name='Image Embedding generation',
     description='Generate embeddings for images',
     tags=[EMBED_TASK_TAG],
+    cache_policy=NO_CACHE
 )
 async def image_embedding_task(
     images: list[ImageArtifact] | PrefectFuture,
@@ -389,6 +398,7 @@ async def image_embedding_task(
     name="segment_caption_embedding",
     description="Generate embeddings for image captions",
     tags=[EMBED_TASK_TAG],
+    cache_policy=NO_CACHE
 )
 async def  segment_text_caption_embedding_task(
     segment_captions: list[SegmentCaptionArtifact] | PrefectFuture,
@@ -434,6 +444,7 @@ async def  segment_text_caption_embedding_task(
     name='text caption embedding',
     description="Generate embedding from text",
     tags=[EMBED_TASK_TAG],
+    cache_policy=NO_CACHE
 )
 async def text_image_caption_embedding_task(
     captions: list[ImageCaptionArtifact] |PrefectFuture,
@@ -479,6 +490,7 @@ async def text_image_caption_embedding_task(
     name='Image embedding Milvus Persist',
     description='Persist image embedding into milvus',
     tags=[PERSIST_TASK_TAG],
+    cache_policy=NO_CACHE
 )
 async def image_embedding_milvus_persist_task(
     image_caption_embeddings: tuple[list[ImageEmbeddingArtifact], list[TextCaptionEmbeddingArtifact]] | PrefectFuture,
@@ -521,6 +533,7 @@ async def image_embedding_milvus_persist_task(
     name='Text Segment Caption Milvus Persist',
     description='Persist segment caption embeddings into Milvus vector database',
     tags=[PERSIST_TASK_TAG],
+    cache_policy=NO_CACHE
 )
 async def text_segment_caption_milvus_persist_task(
     text_segment_embeddings: list[TextCapSegmentEmbedArtifact] | PrefectFuture,
@@ -859,6 +872,12 @@ async def video_processing_flow(
             text_segment_embeddings=text_segment_embeddings
         )
         segment_caption_milvus_result = segment_caption_milvus_future.result()
+
+        progress_client = AppState().progress_client
+        for video_id, _ in video_files:
+            await progress_client.trigger_http_not_throttle(video_id=video_id) 
+
+        
         
 
         run_logger.info("Stage 5: Aggregating results")

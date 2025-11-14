@@ -7,7 +7,7 @@ import io
 from videodeepsearch.tools.clients.postgre.client import PostgresClient
 from videodeepsearch.tools.clients.minio.client import StorageClient
 from ingestion.prefect_agent.service_asr.core.schema import  ASRResult
-from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact, ASRArtifact,AutoshotArtifact
+from ingestion.core.artifact.schema import SegmentCaptionArtifact, ImageCaptionArtifact, ASRArtifact
 from typing import Annotated, Literal, cast
 import cv2
 
@@ -138,9 +138,6 @@ async def get_all_segment_info_from_video_interface(
             )
         )
     return result
-
-
-
 
 @tool_registry.register(
     category="Interaction/Segment",
@@ -326,8 +323,8 @@ async def extract_frames_by_time_window(
         )
     )
     fps = video_interface.fps
-    start_frame = timecode_to_frame(start_time, fps)
-    end_frame = timecode_to_frame(end_time, fps)
+    start_frame = int(timecode_to_frame(start_time, fps))
+    end_frame = int(timecode_to_frame(end_time, fps))
 
     cap = cv2.VideoCapture(video_tmp_path)
     if not cap.isOpened():
@@ -335,7 +332,7 @@ async def extract_frames_by_time_window(
 
     frames_data = []
     frame_index = start_frame
-
+    
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
     while frame_index <= end_frame:
@@ -419,7 +416,7 @@ async def extract_frame_time(
         )
     )
     fps = video_interface.fps
-    frame_index  = timecode_to_frame(time_str=timestamp, fps=fps)
+    frame_index  = float(timecode_to_frame(time_str=timestamp, fps=fps))
 
     cap = cv2.VideoCapture(video_tmp_path)
     if not cap.isOpened():
@@ -455,7 +452,7 @@ async def extract_frame_time(
 
     return ImageObjectInterface(
         related_video_id=video_interface.video_id,
-        frame_index=frame_index,
+        frame_index=int(frame_index),
         caption_info=None,
         minio_path=s3_url,
         timestamp=timestamp_hms,

@@ -4,7 +4,7 @@ from typing import BinaryIO, Any, Literal
 from datetime import datetime
 import hashlib
 from abc import ABC, abstractmethod
-
+from uuid import uuid4
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -31,19 +31,15 @@ class BaseArtifact(ABC, BaseModel):
     def minio_url_path(self) -> str:
         raise NotImplementedError
 
-    @property
-    def artifact_id(self) -> str:
-        raise NotImplementedError
-
 class VideoArtifact(BaseArtifact):
     artifact_type: str 
     video_id: str
     video_minio_url: str
     video_extension: str
-    
     object_name:str
     user_bucket: str
     fps: float
+
 
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
@@ -55,6 +51,9 @@ class VideoArtifact(BaseArtifact):
         return await visitor._check_exist(self, self.user_bucket, check_minio=False)
 
     @property
+    def artifact_id(self):
+        return self.video_id
+    @property
     def object_key(self):
         return self.object_name
     
@@ -62,9 +61,7 @@ class VideoArtifact(BaseArtifact):
     def minio_url_path(self):
         return self.video_minio_url
 
-    @property
-    def artifact_id(self) -> str:
-       return self.video_id
+  
 
 class AutoshotArtifact(BaseArtifact):
     """
@@ -75,9 +72,9 @@ class AutoshotArtifact(BaseArtifact):
     related_video_minio_url: str
     related_video_extension: str
     related_video_fps: float
-
     user_bucket: str
 
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
 
@@ -92,11 +89,7 @@ class AutoshotArtifact(BaseArtifact):
     def object_key(self) -> str:
         return f"autoshot/{self.related_video_id}.json"
 
-    @property
-    def artifact_id(self) -> str:
-        base_string = f"{self.related_video_id}:{self.related_video_id}:AutoshotArtifact"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
-    
+ 
     @property
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
@@ -110,7 +103,7 @@ class ASRArtifact(BaseArtifact):
     related_video_fps: float
 
     user_bucket: str
-
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
     
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
@@ -126,11 +119,6 @@ class ASRArtifact(BaseArtifact):
         return f"asr/{self.related_video_id}.json"
 
     @property
-    def artifact_id(self) -> str:
-        base_string = f"{self.related_video_id}:{self.related_video_id}:AutoshotArtifact:{self.user_bucket}"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
-
-    @property
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
 
@@ -143,13 +131,13 @@ class ImageArtifact(BaseArtifact):
     related_video_extension: str
     related_video_fps: float
     timestamp: str
-
-
     autoshot_artifact_id: str
-
     user_bucket: str
     metadata: dict
     content_type: str
+
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
+
 
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
@@ -169,11 +157,6 @@ class ImageArtifact(BaseArtifact):
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
 
-    @property
-    def artifact_id(self) -> str:
-        checksum = self.metadata.get("checksum_md5", "")
-        base_string = f"{self.related_video_id}:{self.frame_index}:{self.content_type}:{checksum}:{self.timestamp}"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
 
 class SegmentCaptionArtifact(BaseArtifact):
     
@@ -194,6 +177,8 @@ class SegmentCaptionArtifact(BaseArtifact):
     related_video_minio_url: str
     user_bucket: str
 
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
+
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
 
@@ -213,10 +198,6 @@ class SegmentCaptionArtifact(BaseArtifact):
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
 
-    @property
-    def artifact_id(self) -> str:
-        base_string = f"{self.related_video_id}:{self.start_frame}:{self.end_frame}:{self.start_timestamp}:{self.end_timestamp}:{self.related_asr}:{self.user_bucket}"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
 
     @property
     def lineage_parents(self) -> list[str]:
@@ -233,6 +214,8 @@ class ImageCaptionArtifact(BaseArtifact):
     user_bucket: str
     image_minio_url: str
     image_id: str
+
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
 
 
     def __post_init__(self):
@@ -253,10 +236,6 @@ class ImageCaptionArtifact(BaseArtifact):
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
 
-    @property
-    def artifact_id(self) -> str:
-        base_string = f"{self.image_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}:image_caption:{self.time_stamp}"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
     
 class ImageEmbeddingArtifact(BaseArtifact):
     artifact_type: str
@@ -269,6 +248,8 @@ class ImageEmbeddingArtifact(BaseArtifact):
 
     extension: str
     image_id: str
+
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
@@ -288,10 +269,6 @@ class ImageEmbeddingArtifact(BaseArtifact):
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
 
-    @property
-    def artifact_id(self) -> str:
-        base_string = f"{self.image_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}:{self.time_stamp}"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
 
 class TextCaptionEmbeddingArtifact(BaseArtifact):
     artifact_type: str
@@ -304,6 +281,8 @@ class TextCaptionEmbeddingArtifact(BaseArtifact):
     caption_id: str
     image_id: str
     image_minio_url: str
+
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
@@ -323,12 +302,7 @@ class TextCaptionEmbeddingArtifact(BaseArtifact):
     @property
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
-    
-    @property
-    def artifact_id(self) -> str:
-        base_string = f"{self.caption_id}:{self.related_video_id}:{self.frame_index}:{self.user_bucket}:{self.time_stamp}"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()
-    
+
 class TextCapSegmentEmbedArtifact(BaseArtifact):
     artifact_type: str
     
@@ -343,6 +317,8 @@ class TextCapSegmentEmbedArtifact(BaseArtifact):
     related_segment_caption_url: str
     user_bucket:str
     segment_cap_id: str
+
+    artifact_id: str = Field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self):
         self.artifact_type = self.__class__.__name__
@@ -362,7 +338,3 @@ class TextCapSegmentEmbedArtifact(BaseArtifact):
     def minio_url_path(self)->str:
         return f"s3://{self.user_bucket}/{self.object_key}"
 
-    @property
-    def artifact_id(self) -> str:
-        base_string = f"{self.segment_cap_id}:{self.related_video_id}:{self.start_frame}:{self.end_frame}:{self.user_bucket}"
-        return hashlib.sha512(base_string.encode("utf-8")).hexdigest()

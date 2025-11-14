@@ -4,7 +4,6 @@ from llama_index.core.workflow import Context
 from llama_index.core.agent.workflow import ToolCallResult
 from llama_index.core.llms import TextBlock
 from .sub_orchestration import SUB_ORCHESTRATOR_STATE_KEY,SubOrchestrationState, Evidence
-from videodeepsearch.agent.worker.planner.schema import WorkersPlan
 
 
 async def get_typed_state(ctx: Context) -> SubOrchestrationState:
@@ -39,10 +38,6 @@ def with_state(auto_save: bool=True):
     return decorator
 
 
-
-@with_state()
-async def set_worker_plan_sub(state: SubOrchestrationState, worker_plan: WorkersPlan):
-    state.worker_plans = worker_plan
 
 
 

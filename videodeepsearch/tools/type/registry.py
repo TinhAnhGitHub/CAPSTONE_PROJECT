@@ -233,7 +233,7 @@ class ToolRegistry:
 
     def generate_docs_all_functions(self) -> str:
         """
-        IMPORTANT: MUST USE THIS TOOL. Generating all the documentation related to the system tools' capability
+        IMPORTANT: MUST USE THIS TOOL. Generating all the documentation related to the system tools' capability. 
         """
         lines = ["# Tool Registry Documentation\n"]
         

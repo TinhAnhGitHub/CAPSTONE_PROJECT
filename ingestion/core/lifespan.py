@@ -26,7 +26,6 @@ async def ensure_prefect_deployment_exists() -> None:
         async with get_client() as client:
             await client.read_deployment_by_name(DEPLOY_IDENTIFIER)
             run_logger.info(f"Deployment {DEPLOY_IDENTIFIER} exists")
-            return
     except ObjectNotFound:
         run_logger.info(f"Prefect deployment missing: {DEPLOY_IDENTIFIER}")
     
@@ -42,12 +41,15 @@ async def ensure_prefect_deployment_exists() -> None:
         PREFECT_FILE_PATH
     ]
 
+
     try:
+        
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
+        print("jojo")
     except FileNotFoundError as e:
         raise RuntimeError("uv command is not available to create Prefect deployment") from e
 
@@ -58,13 +60,30 @@ async def ensure_prefect_deployment_exists() -> None:
             f"Prefec deployment failed: {err_output}"
         )
     
+    worker_pool_cmds = [
+        ["uv", "run", "prefect", "work-pool", "create", "--type", "process", "local-pool"],
+        ["uv", "run", "prefect", "concurrency-limit", "create", "llm-service", "3"],
+        ["uv", "run", "prefect", "concurrency-limit", "create", "embedding-service", "3"],
+        ["uv", "run", "prefect", "concurrency-limit", "create", "autoshot-task", "1"],
+        ["uv", "run", "prefect", "concurrency-limit", "create", "asr-task", "1"],
+        ["uv", "run", "prefect", "concurrency-limit", "create", "video-registry", "1"],
+    ]
+    for cmd in worker_pool_cmds:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            run_logger.warning(f"⚠️ Work pool command failed:\n{stderr.decode().strip() or stdout.decode().strip()}")
+        else:
+            run_logger.info(f"✅ Ran: {' '.join(cmd)}")
+        
+    
     run_logger.info(
         f"Prefect deployment ensurted for : {DEPLOY_IDENTIFIER}: {stdout.decode().strip()}"
     )
-    
-
-
-
 
 
 @asynccontextmanager
@@ -85,7 +104,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         minio_client=storage_client,
         tracker=tracker
     )    
-
     base_client_config = ClientConfig(
         timeout_seconds=consule_conf.timeout_seconds,
         max_retries=consule_conf.max_retries,
@@ -94,31 +112,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         consul_host=consule_conf.host,
         consul_port=consule_conf.port,
     )
-
-    
-
-    # ========================================================================
-    # Task Configurations
-    # ========================================================================
-    # video_ingestion_task = VideoIngestionTask(artifact_visitor=visitor)
-    # autoshot_task = AutoshotProcessingTask(artifact_visitor=visitor, model_name=tautoshot_conf.model_name, device=tautoshot_conf.device)
-
-    # asr_task = ASRProcessingTask(artifact_visitor=visitor, model_name=tasr_conf.model_name, device=tasr_conf.device)
-
-    # image_processing_task = ImageProcessingTask(artifact_visitor=visitor,num_img_per_segment=timage_processing_conf.num_img_per_segment)
-
-    # segment_caption_task = SegmentCaptionLLMTask(artifact_visitor=visitor, image_per_segments=tllm_conf.image_per_segments, model_name=tllm_conf.model_name, device=tllm_conf.device)
-
-    # image_caption_task = ImageCaptionLLMTask(artifact_visitor=visitor, model_name=tllm_conf.model_name, device=tllm_conf.device)
-
-    # image_embedding_task = ImageEmbeddingTask(artifact_visitor=visitor, batch_size=t_i_embed_conf.batch_size, model_name=t_i_embed_conf.model_name, device=t_i_embed_conf.device)
-
-    # text_image_caption_task = TextImageCaptionEmbeddingTask(artifact_visitor=visitor, batch_size=t_t_embed_conf.batch_size, model_name=t_i_embed_conf.model_name, device=t_i_embed_conf.device)
-    # text_segment_caption_task = TextCaptionSegmentEmbeddingTask(artifact_visitor=visitor)
-    # image_embed_milvus_task = ImageEmbeddingMilvusTask(artifact_visitor=visitor, ingest_batch_size=500)
-    # segment_caption_milvus_task = TextSegmentCaptionMilvusTask(artifact_visitor=visitor, ingest_batch_size=500)
-
-
     image_milvus_client = ImageMilvusClient(
         host=milvus_settings.host,
         port=milvus_settings.port,
@@ -160,33 +153,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.artifact_deleter = deleter
     app.state.video_status = video_status
     app.state.base_client_config=base_client_config
-
     state.base_client_config = base_client_config
-    # state.video_ingestion_task = video_ingestion_task
-    # state.autoshot_task = autoshot_task
-    # state.asr_task = asr_task
-    # state.image_processing_task = image_processing_task
-    # state.segment_caption_llm_task = segment_caption_task
-    # state.image_caption_llm_task = image_caption_task
-    # state.image_embedding_task = image_embedding_task
-    # state.text_image_caption_embedding_task = text_image_caption_task
-    # state.text_caption_segment_embedding_task = text_segment_caption_task
-
-    # state.image_embedding_milvus_task = image_embed_milvus_task
-    # state.text_segment_caption_milvus_task = segment_caption_milvus_task    
-
-
-    # state.image_milvus_client = image_milvus_client
-    # state.seg_milvus_client = seg_milvus_client
-
-    
-    # state.progress_client = HTTPProgressTracker(
-    #     base_url=tracker_conf.base_url,
-    #     endpoint=tracker_conf.endpoint,
-    # )
-
-
-
     yield
     await tracker.close()
 

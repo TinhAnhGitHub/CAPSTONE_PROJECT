@@ -11,7 +11,6 @@ from llama_index.core.workflow import StartEvent, StopEvent, Event
 from llama_index.core.llms import ChatMessage
 from llama_index.core.tools import FunctionTool
 
-from videodeepsearch.agent.worker.planner.schema import WorkersPlan
 
 class UserInputEvent(StartEvent):
     user_id: str = Field(..., description="Unique identifier for the user")
@@ -76,10 +75,8 @@ class PlanProposedEvent(Event):
         ..., 
         description="Planner's response and reasoning"
     )
-    worker_plan: WorkersPlan = Field(
-        ..., 
-        description="Detailed execution plan with worker assignments"
-    )
+
+
 class AgentProgressEvent(Event):
     """
     Real-time progress update from an agent.
