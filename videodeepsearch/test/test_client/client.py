@@ -69,4 +69,4 @@ class WorkflowClient:
             Console().print(f"\n[bold red]✗ WebSocket error:[/bold red] {e}")
             raise
         
-        return new_chat_history
+        return new_chat_history #type:ignore

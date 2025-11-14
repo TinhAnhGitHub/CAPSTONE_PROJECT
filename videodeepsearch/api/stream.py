@@ -57,7 +57,7 @@ def _json_safe(obj: Any, _seen: set[int] | None = None) -> Any:
             if sk in {"parent_ctx", "tool_factory", "code_execute_env"}:
                 safe_dict[sk] = '<omitted>'
                 continue
-            
+
 
 @router.websocket("/start_workflow")
 async def start_workflow_ws(
@@ -74,7 +74,8 @@ async def start_workflow_ws(
         "chat_history": [
             {"role": "user", "content": "previous question"},
             {"role": "assistant", "content": "previous answer"}
-        ]
+        ],
+        "session_id":"123"
     }
     """
     await websocket.accept()

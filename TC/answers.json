@@ -1,0 +1,568 @@
+[
+  {
+    "q_id": 1,
+    "question": "Có 1 video chiếu hiệp 1 của 1 trận bóng rổ. Dựa vào video đó, nói tôi biết: Vào khúc trọng tài tung bóng bắt đầu trận, đội giành được bóng trước mặc áo màu gì?",
+    "final": "Dựa trên hình ảnh thu được, đội mặc áo xanh dương",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là QA không xác định để lấy thông tin về đội và màu áo"
+      },
+      {
+        "agent": "planner",
+        "response": "Khởi tạo Agent tìm kiếm segment qua query \"bắt đầu hiệp 1 bóng rổ\", từ đó sample frame đầu tiên. Nếu frame có nội dung \"tuyển thủ bắt, dẫn banh\" sẽ là frame quyết định để tìm ra màu áo",
+        "reason": "Thông tin về màu áo là visual nhưng từ \"đầu tiên\" lại là textual"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 2,
+    "question": "Có 1 video chiếu hiệp 1 của 1 trận bóng rổ. Dựa vào video đó, nói tôi biết: Một hiệp kéo dài bao lâu?",
+    "final": "Một hiệp kéo dài 10 phút",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Tôi sẽ pass câu hỏi cho planner. Đây là dạng QA"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 3,
+    "question": "Có 1 video chiếu hiệp 1 của 1 trận bóng rổ. Dựa vào video đó, nói tôi biết: Tỉ số cuối cùng của hiệp đó là bao nhiêu? Đội nào thắng hiệp đó ?",
+    "final": "Tỉ số là 2 - 13 nghiêng về Đội Bóng rổ Đại học Tôn Đức Thắng",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Text Retriever với nội dung tỉ số nằm trong video"
+      },
+      {
+        "agent": "planner",
+        "response": "lấy segment liên quan đến query \"hiệp 1 kết thúc, tỉ số nghiêng về\"",
+        "reason": "Kết quả trận đấu chắc chắn sẽ được tường thuật thông qua ASR"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 4,
+    "question": "Dựa vào nội dung của các video, những sự kiện đáng chú ý nào đã diễn ra ngày 6/11 ?",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là Textual Retriever với nhiệm vụ lấy những nội dung văn bản liên quan tới 6/11 và tóm tắt"
+      },
+      {
+        "agent": "planner",
+        "response": "Lấy tất cả segment với query ngày 6/11, rồi tóm tắt lại các segment",
+        "reason": ""
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 5,
+    "question": "Dựa vào nội dung của các video, những sự kiện đáng chú ý nào đã diễn ra ngày 5/11 ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 6,
+    "question": "Dựa vào nội dung của các video, những sự kiện đáng chú ý nào đã diễn ra ngày 4/11 ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 7,
+    "question": "Tình hình bão số 13 gần đây nhất ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 8,
+    "question": "Có 1 video chiếu hiệp 1 của 1 trận bóng rổ. Dựa vào video đó, nói tôi biết: giải đấu đó tên là gì",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 9,
+    "question": "hãy cho tôi biết video nào, đoạn nào nhắc tới hậu quả của bão Kalmaegi",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 10,
+    "question": "Có 1 video chiếu hiệp 1 của 1 trận bóng rổ. Dựa vào video đó, nói tôi biết: điểm cuối cùng của hiệp đó được ghi vào phút thứ bao nhiêu ?",
+    "final": "Dựa vào OCR từ khung ảnh lúc ghi điểm, điểm cuối được ghi khi hiệp đấu còn lại 2 phút",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 11,
+    "question": "Vào ngày 6.11, có những mô hình AI nào đã được công bố ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 12,
+    "question": "Bố của Nhật Anh là 1 siêu anh hùng. Đó là siêu anh hùng gì ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 13,
+    "question": "Nhật Anh cũng là siêu anh hùng. Đó là siêu anh hùng gì ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 14,
+    "question": "Vì sao Nhật Anh là siêu anh hùng mà lại đi tù ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 15,
+    "question": "Đâu là nơi đầu tiên trên thế giới ban hành đạo luật AI",
+    "final": "Dựa trên nội dung văn bản, Châu Âu là nơi đầu tiên trên thế giới ban hành đạo luật AI",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 16,
+    "question": "Cho tôi thấy bức ảnh toàn cảnh của Thành Phố Hồ chí minh từ trên cao nhìn xuống",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 17,
+    "question": "Cho tôi xem cảnh quân dân Việt nam hành quân nơi đồng quê",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Visual Retrieval với nội dung thuần hình ảnh"
+      },
+      {
+        "agent": "planner",
+        "response": "Khởi tạo Visual Agent sử dụng get_images_from_caption_query(\\\"quân dân hành quân nơi đồng quê\\\") để trích xuất hình ảnh",
+        "reason": "Cần retrieve hình ảnh visual query rõ ràng, dùng segment hay multimodal analysis chưa chắc hiệu quả"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 18,
+    "question": "Cho tôi xem cảnh quân dân Việt nam hành quân nơi rừng thiêng nước độc ",
+    "final": "Dựa trên thông tin từ visual query, hình ảnh được lấy ở frame 00:00:20 của video \"13_Chiến thắng Điện Biên Phủ năm 1954 - 56 ngày đêm chấn động địa cầu ｜ Phim tài liệu KC chống Pháp_merged\"",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là Visual Query với nội dung thuần hình ảnh"
+      },
+      {
+        "agent": "planner",
+        "response": "Khởi tạo Visual Agent sử dụng get_images_from_caption_query(\"quân dân hành quân nơi rừng rậm\") để trích xuất hình ảnh",
+        "reason": "Cần retrieve hình ảnh visual query rõ ràng, dùng segment hay multimodal analysis chưa chắc hiệu quả"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 19,
+    "question": "Cho tôi xem cảnh quân dân Việt nam kéo pháo ",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 20,
+    "question": "Tổng quát về tương quan lực lượng giữa Việt Nam và Pháp trong chiến dịch Điện Biên Phủ",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 21,
+    "question": "Chiến dịch Điện Biên Phủ kéo dài bao lâu ?",
+    "final": "Dựa vào tiêu đề video và nội dung văn bản, trận Điện Biên Phủ kéo dài 56 ngày",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là dạng Textual Retrieval lấy nội dung là thời gian trong nội dung ASR"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent nhằm tìm segment từ query \"chiến dịch Điện Biên Phủ\"",
+        "reason": "Đây là thông tin ASR từ video thuyết minh, không cần Visual query"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 22,
+    "question": "Điện Biên Phủ là 1 chiến dịch khốc liệt. Hãy cho tôi một vài bức thể hiện cái bom đạn khói lửa giáng xuống những người lính Việt Nam",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 23,
+    "question": "Điện Biên Phủ là kháng chiến toàn dân. Cho tôi xem cảnh nông dân tham gia đào hầm giúp các chiến sĩ",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 24,
+    "question": "Ông Giáp đã có nhận định về quân Pháp ở Điện Biên Phủ. Nhận định đó là gì ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 25,
+    "question": "AI đã dấn thân vào rất nhiều lĩnh vực, đó là những lĩnh vực nào",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 26,
+    "question": "Có 1 con game rất nổi tiếng gần đây được tạo bởi 1 sinh viên. Sinh viên đó học trường nào ?",
+    "final": "Dựa trên nội dung ASR, sinh viên học Bách Khoa",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Textual Retrieval lấy ASR phỏng vấn"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent kiếm segment từ query(\"sinh viên làm game nổi tiếng\")",
+        "reason": "Hình ảnh thường chỉ hiện tên sinh viên nên không dùng Visual query"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 27,
+    "question": "Có 1 con game rất nổi tiếng gần đây được tạo bởi 1 sinh viên. Hãy tóm tắt nội dung game ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 28,
+    "question": "Có 1 con game rất nổi tiếng gần đây được tạo bởi 1 sinh viên. Con game đó tên gì ?",
+    "final": "Dựa trên nội dung ASR, game tên \"Quán Phở Anh Hai\"",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Textual Retrieval lấy ASR phỏng vấn"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent kiếm segment từ query(\"sinh viên làm game nổi tiếng\"), từ đó trích xuất tên game",
+        "reason": "Thông tin hoàn toàn lấy đc từ Textual Retrieval, không cần Visual"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 29,
+    "question": "Tôi muốn sống ở 1 thành phố gần biển, thanh bình ít xô bồ. Vậy giữa Nha Trang và Đà Nẵng đâu là lựa chọn tốt hơn ?",
+    "final": "Dựa trên nội dung ASR, Đà nẵng là nơi thanh bình hơn, trong khi Nha Trang thương mại hóa hơn",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi Textual Retrieval lấy thông tin về tên Thành phố"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent tìm kiếm segment từ query(\"Nha Trang, Đà Nẵng, thanh bình\")",
+        "reason": "Thông tin mang tính quan điểm không thể dùng Visual Querry"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 30,
+    "question": "Ở Đà Nẵng có 1 cây cầu nơi các cặp đôi yêu nhau hay tới. Cây cầu đó tên gì và vì sao lại thu hút cặp đôi ?",
+    "final": "Cây cầu tên là \"Cầu Cá chép hóa Rồng\", thu hút các cặp đôi do các cặp đôi đến để móc khóa hình trái tim",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng QA Text Retrieval"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent kiếm segment từ query(\"cây cầu nơi các cặp đôi yêu nhau hay tới\"), rồi từ segment trích xuất các cặp đôi làm gì ở đó",
+        "reason": "Đây là QA Text Retrieval vì thường các câu hỏi vì sao cần suy ra từ nội dung"
+      },
+      {
+        "agent": "",
+        "response": ""
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 31,
+    "question": "Video tài liệu về chiến dịch Điện Biên Phủ được làm bởi nhà sản xuất nào ?",
+    "final": "Video được biên tập và sản xuất bởi Nhân dân film",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng QA không xác định, do thông tin về nhà làm phim có thể không được nhắc đến mà thay vào đó là để dưới dạng logo"
+      },
+      {
+        "agent": "planner",
+        "response": "Khởi tạo 2 agent: 1 Textual Agent tìm kiếm segment từ query \"Chiến Tranh Điện Biên Phủ\" sau đó tìm các segment có chứa nội dung hoặc keyword \"được sản xuất bởi\"; 1 Visual Agent tìm kiếm segment liên quan tới nội dung \"Chiến Tranh Điện Biên Phủ\" sau đó lấy frame đầu tiên để kiếm logo hãng làm phim",
+        "reason": "Thông tin có thể xuất hiện dưới cả hai dạng, cần 2 worker agent để orchestrator tổng hợp thông tin"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 32,
+    "question": "Chiến lợi phẩm thu được trong chiến dịch Điện Biên Phủ được nhắc đến ở video là gì",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 33,
+    "question": "Có 1 video nói về một mối nguy hiểm khi hành nghề. Trong video có cảnh người phụ nữ bị hành hung và ném xuống sông. Kiếm cho tôi cảnh đó",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 34,
+    "question": "Có 1 video nói về một mối nguy hiểm khi hành nghề. Trong video có cảnh người phụ nữ bị hành hung và ném xuống sông. Vì sao video lại nhắc đến vụ việc đó ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 35,
+    "question": "Gần đây có 1 con game rất nổi tiếng. Nhân vật trong game làm nghề gì ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 36,
+    "question": "Trong 1 phóng sự về thiệt hại gây ra do bão Kalmaegi, tìm cho tôi khung cảnh 1 chiếc xe trắng bị bão cuốn đè lên 1 chiếc xe đen",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 37,
+    "question": "Trong 1 phóng sự về thiệt hại gây ra do bão Kalmaegi, tìm cho tôi khung cảnh những chiếc xe bị ngập trong nước lũ",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 38,
+    "question": "Vào ngày 5 tháng 11, công an đã bắt giữ 1 nhóm đối tượng chuyên sản xuất, buôn bán hàng giả. Cho hỏi công an đó trực thuộc tỉnh nào ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 39,
+    "question": "Vào ngày 5 tháng 11, công an đã bắt giữ 1 nhóm đối tượng chuyên sản xuất, buôn bán hàng giả. Cho hỏi các công ty tham gia vào phi vụ này tên là gì",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 40,
+    "question": "Vào ngày 5 tháng 11, công an đã bắt giữ 1 nhóm đối tượng chuyên sản xuất, buôn bán hàng giả. Cho hỏi sản phẩm bị làm giả là gì ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 41,
+    "question": "Vào ngày 5 tháng 11, công an đã bắt giữ 1 nhóm đối tượng chuyên sản xuất, buôn bán hàng giả. Cho tôi xem mặt mũi của các đối tượng",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Visual Retrieval với yêu cầu xuất hình ảnh"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_segment_from_event_query(\"nhóm đối tượng chuyên sản xuất, buôn bán hàng giả\"), sau đó extract_frame giữa segment đó để trích xuất hình ảnh",
+        "reason": "Cần thể hiện hình ảnh với nội dung sau: \"nhóm đối tượng chuyên sản xuất, buôn bán hàng giả\""
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 42,
+    "question": "Vào ngày 5 tháng 11, công an đã bắt giữ 1 nhóm đối tượng chuyên sản xuất, buôn bán hàng giả. Tìm cho tôi khung ảnh vợ của đối tượng mặc áo đen sọc trắng ngang",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Multimodal Retrieval lấy hình ảnh từ nhiều thông tin"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_image_from_multimodal_query() với 2 query, visual query là \"người phụ nữ mặc áo đen sọc trắng ngang\", textual query là \"Vào ngày 5 tháng 11, công an đã bắt giữ 1 nhóm đối tượng chuyên sản xuất, buôn bán hàng giả\"",
+        "reason": "Cần thể hiện hình ảnh với nội dung sau: \"mặc áo đen sọc trắng ngang\" thuộc cụ thể về 1 segment bản tin"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 43,
+    "question": "Bản tin sáng đề cập 1 trường hợp vi phạm giao thông bị bắt trong 1 trường trung học. Trường đó tên là gì ?",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Textual Retrieval với nội dung ASR"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_segment_from_event_query(\"Vi phạm giao thông bị bắt tại trường\"), sau đó từ các văn bản trích xuất thông tin liên quan tới tên trường",
+        "reason": "Tên trường là nội dung văn bản, khả năng sẽ không có tên trên OCR"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 44,
+    "question": "Bản tin sáng đề cập 1 trường hợp vi phạm giao thông bị bắt trong 1 trường trung học. Nam sinh đó tên là gì ?",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Textual Retrieval với nội dung ASR"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_segment_from_event_query(\"Vi phạm giao thông bị bắt trong trường\"), sau đó từ các văn bản trích xuất thông tin liên quan tới nam sinh",
+        "reason": "Tên nam sinh là nội dung văn bản, do không phải nam sinh được phỏng vấn nên sẽ không có tên trên OCR"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 45,
+    "question": "Vào ngày 5 tháng 11, công an đã bắt giữ 1 nhóm đối tượng chuyên sản xuất, buôn bán hàng giả. Tổng cộng có bao nhiêu đối tượng bị bắt ?",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Multimodal QA suy ra từ nhiều nguồn"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_segment_from_event_query(\"nhóm đối tượng chuyên sản xuất, buôn bán hàng giả\"), sau đó làm 2 việc: extract_frame giữa segment đó để trích xuất hình ảnh có phạm nhân, rồi dùng new_caption để QA từ ảnh đó về số lượng người; Gom lại tất cả những tên người mà không phải tên công an và đếm",
+        "reason": "Câu trả lời có thể nằm ở cả 2 tác vụ: object counting và phân tích ASR"
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 46,
+    "question": "Một nhóm lớn các học sinh đã quyết định lái xe lạng lách cầm hung khí nguy hiểm. Trước đó nhóm học sinh đã làm gì",
+    "final": "Dựa trên nội dung ASR, nhóm học sinh đánh bida",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Text Retrieval với nội dung ASR"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_segment_from_event_query(\"sau khi, trước đó, sau đó học sinh lái xe lạng lách, học sinh cầm hung khí nguy hiểm\")",
+        "reason": "Cần lấy thông tin về hoạt động trước 1 event khác thông qua các nội dung như \"sau khi, trước đó, sau đó\""
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 47,
+    "question": "Tổng giám đốc trung tâm xuất khẩu nga tên là gì. Cho tôi xem mặt",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 48,
+    "question": "Tìm cho tôi khung cảnh bộ trưởng bộ quốc phòng Canada ngồi cạnh bộ trưởng Philipines, trong 1 video bảng tin sáng. Bộ trưởng bộ Quốc phòng Canada mặc áo màu gì ?",
+    "final": "",
+    "stream": [],
+    "token": []
+  },
+  {
+    "q_id": 49,
+    "question": "Cho tôi xem hình ảnh của báu vật lịch sử trị giá tỷ đô ?",
+    "final": "",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Visual Retrieval với yêu cầu xuất hình ảnh"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_segment_from_event_query(\"Báu vật lịch sử trị giá tỷ đô\"), sau đó extract_frame giữa segment đó để trích xuất hình ảnh",
+        "reason": "Cần thể hiện hình ảnh với nội dung sau: \"Báu vật lịch sử trị giá tỷ đô\""
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 50,
+    "question": "Báu vật lịch sử trị giá tỷ đô được bán trong chợ đen là gì ?",
+    "final": "Dựa vào nội dung văn bản, báu vật được nhắc đến là chiếc vương miện",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi dạng Text Retrieval với nội dung ASR"
+      },
+      {
+        "agent": "planner",
+        "response": "1 agent sử dụng get_segment_from_event_query(\"Báu vật lịch sử trị giá tỷ đô\")",
+        "reason": "Thông tin về tên vật phẩm là thông tin dạng văn bản với nội dung sau: \"Báu vật lịch sử trị giá tỷ đô\""
+      }
+    ],
+    "token": []
+  },
+  {
+    "q_id": 51,
+    "question": "Có 1 bảng tin tên là 'Những vụ trộm bảo tàng táo tợn trong lịch sử', ai là người biên tập những bảng tin đó ?",
+    "final": "Dựa vào OCR bảng tin, bảng tin được biên tập bởi \"An Ngọc\"",
+    "stream": [
+      {
+        "agent": "greeter",
+        "response": "Đây là câu hỏi Multimodal QA, với nội dung cả về hình ảnh lẫn ASR"
+      },
+      {
+        "agent": "planner",
+        "response": "Tìm segment thông qua query('Những vụ trộm bảo tàng táo tợn trong lịch sử được biên tập bởi'). Nếu không có thông tin, extract_frame thuộc segment đó để tìm các OCR bảng tin dạng như \"Biên Tập:\"",
+        "reason": "Do đây là câu hỏi hướng đến video tin tức nhưng không phải trực tiếp nội dung tin tức nên có thể không có trong ASR, cần tận dụng visual info từ bảng tin"
+      }
+    ],
+    "token": []
+  }
+]

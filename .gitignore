@@ -10,7 +10,6 @@ uv.lock
 *.so
 .env
 # Keyframes
-
 # Extra file
 script.sh
 local/*
