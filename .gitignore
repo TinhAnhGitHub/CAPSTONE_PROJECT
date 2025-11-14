@@ -2,8 +2,7 @@
 __pycache__/
 *.py[codz]
 *$py.class
-agent/__pycache__/
-agent/tools/__pycache__/
+
 .python-version
 script.sh
 uv.lock
@@ -11,8 +10,6 @@ uv.lock
 *.so
 .env
 # Keyframes
-agent/tools/keyframes/
-agent/keyframes/
 # Extra file
 script.sh
 local/*
