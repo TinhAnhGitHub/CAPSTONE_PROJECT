@@ -53,16 +53,6 @@ class AutoshotProcessingTask(BaseTask[list[VideoArtifact], AutoshotArtifact]):
         logger.info("Starting autoshot execution for %d artifacts", len(input_data))
 
         for artifact in input_data:
-            exist = await artifact.accept_check_exist(self.visitor)
-            if exist:
-                logger.debug(
-                    "Autoshot artifact already exists for video %s; skipping inference",
-                    artifact.related_video_id,
-                )
-            
-                yield artifact, None
-                continue
-            
             logger.info(
                 "Submitting autoshot request for video %s at %s",
                 artifact.related_video_id,

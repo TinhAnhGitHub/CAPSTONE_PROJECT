@@ -1,7 +1,8 @@
 from __future__ import annotations
 from pydantic import Field, BaseModel
-
 from abc import ABC, abstractmethod
+
+from videodeepsearch.tools.schema.result import ArtifactVisitor, ReturnType
 
 class BaseArtifact(BaseModel, ABC):
     """
@@ -12,11 +13,9 @@ class BaseArtifact(BaseModel, ABC):
     minio_path: str
 
     @abstractmethod
-    def expose_answer_to_agent(self) -> str:
-        """
-        All artifacts must implement this function to expose a part of the artifact -> save token
-        There will be a tool for the agent to view all the information of the artifact if necessary.
-        """
+    def accept(self, visitor: ArtifactVisitor[ReturnType]) -> ReturnType:
+        """Accept a visitor for processing"""
+        pass
 
 class VideoInterface(BaseArtifact):
     """
@@ -26,9 +25,10 @@ class VideoInterface(BaseArtifact):
     type_artifact: str = "VideoInterface"
     fps: float
     duration: str
+    def accept(self, visitor: ArtifactVisitor[ReturnType]) -> ReturnType:
+        return visitor.visit_video(self)
 
-    def expose_answer_to_agent(self) -> str:
-        return self.video_id
+    
 
 class SegmentObjectInterface(BaseArtifact):
     """
@@ -36,7 +36,6 @@ class SegmentObjectInterface(BaseArtifact):
     """
     type_artifact: str = "SegmentObjectInterface"
     
-
     related_video_id: str = Field(..., description="Unique identifier of the video containing this segment.")
     start_frame_index: int = Field(..., description="Index of the first frame in the segment.")
     end_frame_index: int = Field(..., description="Index of the last frame in the segment.")
@@ -60,24 +59,8 @@ class SegmentObjectInterface(BaseArtifact):
             "If `None`, the segment was not produced by a semantic search process."
         ),
     )
-    
-    def expose_answer_to_agent(self) -> str:
-        info = (
-            f"Video ID: {self.related_video_id} | "
-            f"Start: {self.start_time} | "
-            f"End: {self.end_time}"
-        )
-        if self.segment_caption_query is not None:
-            info += f" | Retrieved via query: '{self.segment_caption_query}'"
-        else:
-            info += " | Segment not retrieved via semantic similarity search"
-
-        if self.score is not None:
-            info += f" | Score: {self.score:.4f}"
-        else:
-            info += " | No similarity score available"
-
-        return info
+    def accept(self, visitor: ArtifactVisitor[ReturnType]) -> ReturnType:
+        return visitor.visit_segment(self)
         
 class ImageObjectInterface(BaseArtifact):
     """
@@ -90,7 +73,7 @@ class ImageObjectInterface(BaseArtifact):
     timestamp: str = Field(..., description="Timestamp of this frame in the video (e.g., '00:00:12.87').")
     caption_info: str | None= Field(None, description="Descriptive caption summarizing the image content.")
 
-    score: float | None | str  = Field(
+    score: float | None = Field(
         None,
         description=(
             "Normalized similarity score between this image and the retrieval query. "
@@ -108,31 +91,8 @@ class ImageObjectInterface(BaseArtifact):
         ),
     )
 
-    def expose_answer_to_agent(self) -> str:
-        info = (
-            f"Video ID: {self.related_video_id} | "
-            f"Frame Index: {self.frame_index} | "
-            f"Timestamp: {self.timestamp}"
-        )
-
-        if self.query:
-            query_str = (
-                ", ".join(self.query) if isinstance(self.query, list) else str(self.query)
-            )
-            info += f" | Retrieved via query: '{query_str}'"
-        else:
-            info += " | Image not retrieved via semantic similarity search"
-
-        if self.score is not None:
-            try:
-                score_val = float(self.score)
-                info += f" | Score: {score_val:.4f}"
-            except (ValueError, TypeError):
-                info += f" | Score: {self.score}"
-        else:
-            info += " | No similarity score available"
-
-        return info
+    def accept(self, visitor: ArtifactVisitor[ReturnType]) -> ReturnType:
+        return visitor.visit_image(self)
         
 
 ARTIFACT_MODELS = (VideoInterface, SegmentObjectInterface, ImageObjectInterface)

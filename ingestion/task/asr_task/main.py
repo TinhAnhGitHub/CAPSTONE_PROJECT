@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import AsyncIterator
+
 from core.pipeline.base_task import BaseTask
 from core.artifact.persist import ArtifactPersistentVisitor
 from core.artifact.schema import ASRArtifact, VideoArtifact
@@ -47,16 +48,6 @@ class ASRProcessingTask(BaseTask[list[VideoArtifact], ASRArtifact]):
         logger.info("Starting ASR execution for %d artifacts", len(input_data))
         
         for artifact in input_data:
-            exist = await artifact.accept_check_exist(self.visitor)
-            
-            if exist:
-                logger.debug(
-                    "ASR artifact already exists for video %s; skipping inference",
-                    artifact.related_video_id,
-                )
-                yield artifact, None
-                continue
-            
             request = ASRInferenceRequest(
                 video_minio_url=artifact.related_video_minio_url,
                 metadata={}

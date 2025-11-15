@@ -1,10 +1,10 @@
 from __future__ import annotations
-
+import time
 import asyncio
 import io
 import json
 from typing import AsyncIterator, BinaryIO, Literal, cast
-
+from tqdm.asyncio import tqdm
 from core.artifact.persist import ArtifactPersistentVisitor
 from core.artifact.schema import (
     ImageCaptionArtifact,
@@ -80,11 +80,6 @@ class TextImageCaptionEmbeddingTask(BaseTask[
 
         bs = cast(int, self.kwargs.get('batch_size'))
         for artifact in input_data:
-            exists = await artifact.accept_check_exist(self.visitor) 
-            if exists:
-                yield artifact, None
-                continue
-            
             batch.append(artifact)
             if len(batch) == bs:
                 batches.append(batch[:])
@@ -92,8 +87,12 @@ class TextImageCaptionEmbeddingTask(BaseTask[
                 
         if batch:
             batches.append(batch[:])
+        
+        logger.info(f"There is a total of {len(batches)} for the image caption embedding")
 
-        for batch in batches:
+        for batch in tqdm(batches, desc="Processing text image embedding..."):
+            print(f"Start gathering image caption for te")
+            start_time = time.time()
             caption_dict_paths = await asyncio.gather(
                 *[
                     fetch_object_from_s3(
@@ -104,6 +103,9 @@ class TextImageCaptionEmbeddingTask(BaseTask[
                     for artifact in batch
                 ]
             )
+            end_time = time.time()
+            duration = end_time - start_time
+            logger.info(f"Image caption embedding duration takes: {duration}")
 
             caption_str: list[str] = []
             try:
@@ -118,8 +120,6 @@ class TextImageCaptionEmbeddingTask(BaseTask[
                 texts=caption_str,
                 metadata={}
             )
-            logger.debug("Submitting text embedding request for batch of %d captions", len(caption_str))
-
             response = await client.make_request(
                 method='POST',
                 endpoint=client.inference_endpoint,
@@ -128,11 +128,12 @@ class TextImageCaptionEmbeddingTask(BaseTask[
             
             parsed = TextEmbeddingResponse.model_validate(response)
             embedding_captions = parsed.embeddings
-
-            for artifact, embedding in zip(batch, embedding_captions):
+            
+            
+            for artifact, embedding in tqdm(zip(batch, embedding_captions), desc="Persiting image caption embedding..."):
                 buffer = io.BytesIO(json.dumps(embedding).encode("utf-8"))
                 buffer.seek(0)
-                logger.debug("Generated embedding for caption artifact %s", artifact.caption_id)
+                logger.debug("Generated embedding for caption artifact  artifact.caption_id")
                 yield artifact, buffer
     
     async def postprocess(self, output_data: tuple[TextCaptionEmbeddingArtifact, BinaryIO | None]):
@@ -197,10 +198,6 @@ class TextCaptionSegmentEmbeddingTask(
         batches: list[list[TextCapSegmentEmbedArtifact]]  = []
         bs = cast(int, self.kwargs.get('batch_size'))
         for artifact in input_data:
-            exists = await artifact.accept_check_exist(self.visitor) 
-            if exists:
-                yield artifact, None
-                continue
             
             batch.append(artifact)
             if len(batch) == bs:
@@ -211,6 +208,8 @@ class TextCaptionSegmentEmbeddingTask(
             batches.append(batch[:])
 
         for batch in batches:
+            print(f"Start gathering segment captoin for te")
+            start_time = time.time()
             caption_dict_paths = await asyncio.gather(
                 *[
                     fetch_object_from_s3(
@@ -221,6 +220,9 @@ class TextCaptionSegmentEmbeddingTask(
                     for artifact in batch
                 ]
             )
+            end_time = time.time()
+            duration = end_time - start_time
+            print(f"Segment caption embedding duration takes: {duration}")
 
             caption_str: list[str] = []
             try:
@@ -248,7 +250,7 @@ class TextCaptionSegmentEmbeddingTask(
             parsed = TextEmbeddingResponse.model_validate(response)
             embedding_captions = parsed.embeddings
 
-            for artifact, embedding in zip(batch, embedding_captions):
+            for artifact, embedding in tqdm(zip(batch, embedding_captions), desc="Persiting segment caption embedding..."):
                 buffer = io.BytesIO(json.dumps(embedding).encode("utf-8"))
                 buffer.seek(0)
                 logger.debug(

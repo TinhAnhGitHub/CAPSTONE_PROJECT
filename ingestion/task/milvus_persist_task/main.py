@@ -79,21 +79,6 @@ class ImageEmbeddingMilvusTask(
         
 
         for image_artifact, text_artifact in tqdm(input_data, desc='Preparing batch...'):
-            
-            exists = await client.exists(  # type: ignore[attr-defined]
-                id_= image_artifact.image_id,
-                related_video_id=image_artifact.related_video_id,
-                user_bucket=image_artifact.user_bucket
-            )
-
-            if exists:
-                logger.debug(
-                    "Image embedding %s already persisted; skipping",
-                    image_artifact.image_id,
-                )
-                yield image_artifact, text_artifact
-                continue
-            
             image_embedding_bytes = await fetch_object_from_s3_bytes(image_artifact.minio_url_path, self.visitor.minio_client)
             text_caption_embedding_bytes = await fetch_object_from_s3_bytes(
                 text_artifact.minio_url_path, self.visitor.minio_client

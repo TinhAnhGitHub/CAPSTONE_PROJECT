@@ -1,10 +1,8 @@
 from fastapi import HTTPException, APIRouter, Depends, status, Query
 from pydantic import BaseModel, Field
 from core.management.cleanup import ArtifactDeleter, DeletionResult
-from core.management.status import VideoStatusInfo
 from core.dependencies.application import (
     get_artifact_deleter,
-    get_video_status_manager
 )
 from core.config.logging import run_logger
 
@@ -106,35 +104,7 @@ async def delete_video_stage(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete stage artifacts: {str(e)}"
         )
-
-@router.get(
-    "/videos/{video_id}/status",
-    response_model=VideoStatusInfo,
-    status_code=status.HTTP_200_OK,
-    summary="Get video processing status",
-    description="Retrieve detailed processing status for a video by ID or name"
-)
-async def get_video_status(
-    video_id: str,
-    status_manager=Depends(get_video_status_manager)
-) -> VideoStatusInfo:
-    """Get the current processing status of a video."""
     
-    try:
-        video_status = await status_manager.get_video_status(video_id)
-        if video_status is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Video '{video_id}' not found"
-            )
-        return video_status
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve status: {str(e)}"
-        )
-    
-
 
 
 @router.post(

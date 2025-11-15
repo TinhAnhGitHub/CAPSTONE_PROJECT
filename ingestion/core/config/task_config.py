@@ -48,6 +48,7 @@ class ASRTaskConfig(BaseSettings):
 class ImageProcessingTaskConfig(BaseSettings):
     """Configuration for image extraction task."""
     num_img_per_segment: int = Field(default=3, ge=1)
+    upload_concurrency: int = Field(default=4, ge=1)
     model_config = SettingsConfigDict(
         env_prefix="IMAGE_",
         case_sensitive=False,

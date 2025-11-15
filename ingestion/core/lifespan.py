@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 import os
 from typing import AsyncIterator, cast
 from fastapi import FastAPI
-from core.management.status import VideoStatusManager
 from core.clients.base import ClientConfig
 from core.config.storage import minio_settings, postgre_settings, milvus_settings
 from core.config.task_config import consule_conf
@@ -141,17 +140,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     deleter = ArtifactDeleter(tracker=tracker, storage=storage_client, image_client=image_milvus_client,text_seg_client=seg_milvus_client)
     
 
-    video_status = VideoStatusManager(
-        storage=storage_client,
-        tracker=tracker,
-        image_client=image_milvus_client,text_seg_client=seg_milvus_client
-    )
 
     app.state.storage_client = storage_client
     app.state.artifact_tracker = tracker
     app.state.artifact_visitor = visitor
     app.state.artifact_deleter = deleter
-    app.state.video_status = video_status
     app.state.base_client_config=base_client_config
     state.base_client_config = base_client_config
     yield

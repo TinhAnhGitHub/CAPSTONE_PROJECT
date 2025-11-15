@@ -1,13 +1,8 @@
 import asyncio
 import av
 import io
-from pathlib import Path
-import numpy as np
 from urllib.parse import urlparse
-from typing import Any, List, Tuple
-import subprocess
 from PIL import Image
-import decord
 
 
 def parse_s3_url(s3_url: str) -> tuple[str, str]:
@@ -29,15 +24,19 @@ class FastFrameReader:
 
     def get_frame(self, frame_index: int) -> bytes:
         ts_seconds = frame_index / self.fps
-        seek_ts = int(ts_seconds * av.time_base)
-        self.buffer.seek(0)
+        seek_ts = int(ts_seconds / self.stream.time_base)
+
+
         self.container.seek(seek_ts, stream=self.stream)#type:ignore
-        for frame in self.container.decode(video=0):#type:ignore
+
+        for frame in self.container.decode(video=0):
             if frame.pts is None:
                 continue
-            pts_frame = int(frame.pts * self.fps * float(self.stream.time_base))#type:ignore
 
-            if pts_frame >= frame_index:
+            ts_sec = frame.pts * self.stream.time_base
+            frame_number = int(ts_sec * self.fps)
+
+            if frame_number >= frame_index:
                 return self._encode_webp(frame)
 
         raise RuntimeError(f"Could not decode requested frame {frame_index}.")
@@ -51,7 +50,7 @@ class FastFrameReader:
         return buf.getvalue()
     
 
-def extract_frames(video_bytes: bytes, indices: List[int]) -> List[bytes]:
+def extract_frames(video_bytes: bytes, indices: list[int]) -> list[bytes]:
     reader = FastFrameReader(video_bytes)
     results = []
     for idx in sorted(indices):
@@ -59,13 +58,13 @@ def extract_frames(video_bytes: bytes, indices: List[int]) -> List[bytes]:
         results.append(img_bytes)
     return results
 
-async def extract_frames_async(video_bytes: bytes, indices: List[int]) -> List[bytes]:
+async def extract_frames_async(video_bytes: bytes, indices: list[int]) -> list[bytes]:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, extract_frames, video_bytes, indices)
 
 
 
-def get_segment_frame_indices(start: int, end: int, n: int) -> List[int]:
+def get_segment_frame_indices(start: int, end: int, n: int) -> list[int]:
     if n <= 0 or end <= start:
         return []
 

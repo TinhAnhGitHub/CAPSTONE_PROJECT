@@ -71,18 +71,23 @@ class FastFrameReader:
 
     def get_frame(self, frame_index: int) -> bytes:
         ts_seconds = frame_index / self.fps
-        seek_ts = int(ts_seconds * av.time_base)
-        self.buffer.seek(0)
+        seek_ts = int(ts_seconds / self.stream.time_base)
+
+
         self.container.seek(seek_ts, stream=self.stream)#type:ignore
-        for frame in self.container.decode(video=0):#type:ignore
+
+        for frame in self.container.decode(video=0):
             if frame.pts is None:
                 continue
-            pts_frame = int(frame.pts * self.fps * float(self.stream.time_base))#type:ignore
 
-            if pts_frame >= frame_index:
+            ts_sec = frame.pts * self.stream.time_base
+            frame_number = int(ts_sec * self.fps)
+
+            if frame_number >= frame_index:
                 return self._encode_webp(frame)
 
         raise RuntimeError(f"Could not decode requested frame {frame_index}.")
+
 
     def _encode_webp(self, frame: av.VideoFrame) -> bytes:
         rgb = frame.to_ndarray(format="rgb24")

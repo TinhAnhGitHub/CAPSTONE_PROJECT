@@ -30,7 +30,7 @@ class ArtifactPersistentVisitor:
 
     async def _check_exist(self, artifact: "BaseArtifact", bucket_name: str, check_minio:bool=True) -> bool:
         try:
-            artifact_id = artifact.artifact_id
+            artifact_id = artifact.artifact_id #type:ignore
             metadata = await self.tracker.get_artifact(artifact_id)
             if not metadata:
                 return False
@@ -56,7 +56,7 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=artifact.video_minio_url,
             user_id=artifact.user_bucket,
-            parent_artifact_id=None,
+            lineage_parents=[],
             created_at=datetime.now(),
             artifact_metadata=upload_file
         )
@@ -83,7 +83,7 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=minio_url,
             user_id=artifact.user_bucket,
-            parent_artifact_id=artifact.related_video_id,
+            lineage_parents=[artifact.related_video_id],
             created_at=datetime.now(),
             artifact_metadata={}
         )
@@ -102,7 +102,7 @@ class ArtifactPersistentVisitor:
             artifact_type=artifact.artifact_type,
             minio_url=minio_url,
             user_id=artifact.user_bucket,
-            parent_artifact_id=artifact.related_video_id,
+            lineage_parents=[artifact.related_video_id],
             created_at=datetime.now(),
             artifact_metadata={}
         )
@@ -119,12 +119,11 @@ class ArtifactPersistentVisitor:
             content_type=artifact.content_type,
             metadata=artifact.metadata
         )
-
         artifact_metadata = ArtifactMetadata(
             artifact_id=artifact.artifact_id,
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
-            parent_artifact_id=artifact.autoshot_artifact_id,
+            lineage_parents=[artifact.autoshot_artifact_id],
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -145,7 +144,6 @@ class ArtifactPersistentVisitor:
             artifact_id=artifact.artifact_id,
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
-            parent_artifact_id=artifact.autoshot_artifact_id,
             lineage_parents=artifact.lineage_parents,
             user_id=artifact.user_bucket,
             artifact_metadata={}
@@ -171,7 +169,7 @@ class ArtifactPersistentVisitor:
             artifact_id=artifact.artifact_id,
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
-            parent_artifact_id=artifact.image_id,
+            lineage_parents=[artifact.image_id],
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -198,7 +196,7 @@ class ArtifactPersistentVisitor:
             artifact_id=artifact.artifact_id,
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
-            parent_artifact_id=artifact.image_id,
+            lineage_parents=[artifact.image_id],
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -219,7 +217,7 @@ class ArtifactPersistentVisitor:
             artifact_id=artifact.artifact_id,
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
-            parent_artifact_id=artifact.caption_id,
+            lineage_parents=[artifact.caption_id],
             user_id=artifact.user_bucket,
             artifact_metadata={}
         )
@@ -240,7 +238,7 @@ class ArtifactPersistentVisitor:
             artifact_id=artifact.artifact_id,
             artifact_type=artifact.artifact_type,
             minio_url=artifact.minio_url_path,
-            parent_artifact_id=artifact.segment_cap_id,
+            lineage_parents=[artifact.segment_cap_id],
             user_id=artifact.user_bucket,
             artifact_metadata={}            
         )

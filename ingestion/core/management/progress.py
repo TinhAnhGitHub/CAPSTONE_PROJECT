@@ -1,13 +1,12 @@
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from datetime import datetime
-from async_lru import alru_cache
 from enum import Enum
 from threading import Lock
 import logging
+import time
 import httpx
 from task import VideoIngestionTask, AutoshotProcessingTask, ASRProcessingTask, ImageProcessingTask, SegmentCaptionLLMTask, ImageCaptionLLMTask, ImageEmbeddingMilvusTask, ImageEmbeddingTask, TextSegmentCaptionMilvusTask, TextCaptionSegmentEmbeddingTask, TextImageCaptionEmbeddingTask
-from throttler import throttle
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +61,8 @@ class HTTPProgressTracker:
         self._lock = Lock()
         self.base_url =base_url
         self.endpoint = endpoint
+        self._throttle_period_seconds = 5.0
+        self._last_trigger_time: float | None = None
     
 
     async def trigger_http_not_throttle(self, video_id:str):
@@ -86,12 +87,15 @@ class HTTPProgressTracker:
             # )
             return None
 
-    @throttle(rate_limit=5, period=1.0)
     async def _trigger_http(self, video_id:str):
+        now = time.monotonic()
         with self._lock:
             progress = self._progress.get(video_id)
             if not progress:
                 return None
+            if self._last_trigger_time and (now - self._last_trigger_time) < self._throttle_period_seconds:
+                return None
+            self._last_trigger_time = now
             payload = progress.model_dump(mode='json')
         try:
             async with httpx.AsyncClient(base_url="http://100.120.22.90:8010") as client:
@@ -189,4 +193,3 @@ class HTTPProgressTracker:
 
 
             
-

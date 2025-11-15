@@ -42,18 +42,14 @@ class ArtifactDeleter:
         
         visited.add(parent_id)
 
-        query = select(ArtifactSchema.artifact_id).where(
-            ArtifactSchema.parent_artifact_id == parent_id
-        )
-        result = await session.execute(query)
-        child_ids = {row[0] for row in result.all()}
-
-        for child_id in child_ids:
-            descendants = await self.get_all_descendants(
-                session, child_id, visited
+        result = await session.execute(
+            select(ArtifactLineageSchema.child_artifact_id).where(
+                ArtifactLineageSchema.parent_artifact_id == parent_id
             )
-            visited.update(descendants)
-        
+        )
+        child_ids = set(result.scalars().all())
+        for child_id in child_ids:
+            await self.get_all_descendants(session, child_id, visited)
         return visited
 
     async def delete_by_related_video_id(self, related_video_id: str):
@@ -79,9 +75,8 @@ class ArtifactDeleter:
                 total += deleted
 
             except Exception as e:
-                err = f"{client.__name__}: {e}"
                 logger.exception("milvus_dynamic_delete_error", error=str(e))
-                errors.append(err)
+                errors.append(str(e))
         
         status_dict = {
             'success': len(errors) == 0,
@@ -129,6 +124,8 @@ class ArtifactDeleter:
                 artifacts = artifacts_result.scalars().all()
 
                 for artifact in artifacts:
+                    if artifact.artifact_type == "VideoArtifact":
+                        continue
                     try:
                         bucket, object_key = parse_s3_url(artifact.minio_url)
                         

@@ -159,11 +159,6 @@ class SegmentCaptionLLMTask(BaseTask[
         
         while input_data:
             artifact = input_data.pop(0)
-
-            exists = await artifact.accept_check_exist(self.visitor)
-            if exists:
-                yield artifact, None
-                continue
             batch.append(artifact)
             
             if len(batch) == bs:
@@ -188,7 +183,7 @@ class SegmentCaptionLLMTask(BaseTask[
             )
             parsed = LLMResponse.model_validate(response)
 
-            for artifact, response in zip(batch,parsed.responses):
+            for artifact, response in tqdm(zip(batch,parsed.responses), desc="Persisting segment caption..."):
                 caption = response.answer
                 yield artifact, caption
     

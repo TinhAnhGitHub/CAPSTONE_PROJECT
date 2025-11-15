@@ -11,7 +11,6 @@ class Evidence(BaseModel):
     description: str = Field(..., description="Summarize the evidence found")
     references: list[str] = Field(default_factory=list, description="The information derived from the artifact")
     timestamp: datetime = Field(default_factory=datetime.now)
-    metadata: None | str = Field(..., description="A piece of information that you want to address/summarize, or communicate to the orchestrator agents")
 
 class WorkerFinding(BaseModel):
     summary: str = Field(..., description="Detailed summary of the findings, including the results, and the process of findings. Basically story telling")

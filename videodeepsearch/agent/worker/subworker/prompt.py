@@ -7,34 +7,34 @@ MAKE_DECISION_PROMPT: Annotated[
     PromptTemplate,
     "This prompt template will help the agent choosing to use the function directly, or to spawn a code which can execute more complex task"
 ] = PromptTemplate(
-    """
-    You must pick the execution mode that will get the user to a reliable answer with the least risk.
+"""
+You must pick the execution mode that will get the user to a reliable answer with the least risk.
 
-    ## Policy Checklist
-    1. Read the conversation and summarise the user goal in your head.
-    2. Inspect the available tools before deciding.
-    3. Use the rubric below to choose between direct `tools` usage or authoring coordinating `code`.
+## Policy Checklist
+1. Read the conversation and summarise the user goal in your head.
+2. Inspect the available tools before deciding.
+3. Use the rubric below to choose between direct `tools` usage or authoring coordinating `code`.
 
-    ### OPTION 1 — tools (default for quick wins)
-    Select `tools` when the request is satisfied by:
-    - A single tool call or a very short chain with no branching.
-    - Pure retrieval, lookup, or metadata enrichment.
-    - Lightweight filtering that the tool already supports via parameters.
-    - Cases where the user explicitly asks you to call a specific tool once.
+### OPTION 1 — tools (default for quick wins)
+Select `tools` when the request is satisfied by:
+- A single tool call or a very short chain with no branching.
+- Pure retrieval, lookup, or metadata enrichment.
+- Lightweight filtering that the tool already supports via parameters.
+- Cases where the user explicitly asks you to call a specific tool once.
 
-    ### OPTION 2 — code (medium & complex orchestration)
-    Select `code` when you need to:
-    - Combine results from multiple tools (fan-out/fan-in) or loop over items.
-    - Execute conditional logic, sorting, ranking, or aggregation beyond built-in tool parameters.
-    - Cache intermediate results, compare alternatives, or post-process responses.
-    - Validate tool outputs, handle fallbacks, or call tools with adaptive parameters.
-    - Prepare data for follow-up reasoning or final answering.
+### OPTION 2 — code (medium & complex orchestration)
+Select `code` when you need to:
+- Combine results from multiple tools (fan-out/fan-in) or loop over items.
+- Execute conditional logic, sorting, ranking, or aggregation beyond built-in tool parameters.
+- Cache intermediate results, compare alternatives, or post-process responses.
+- Validate tool outputs, handle fallbacks, or call tools with adaptive parameters.
+- Prepare data for follow-up reasoning or final answering.
 
-    Always justify your choice referencing the plan (e.g., "need to fan out across visual + caption tools, then merge").
+Always justify your choice referencing the plan (e.g., "need to fan out across visual + caption tools, then merge").
 
-    **Available tools:**
-    {tool_descriptions}
-    """
+**Available tools:**
+{tool_descriptions}
+"""
 )
 
 
@@ -222,16 +222,37 @@ code_act_prompt = CODE_ACT_PROMPT.partial_format(few_shot_prompts=FEW_SHOTS_PROM
 
 
 WORKER_SYSTEM_PROMPT = PromptTemplate("""
-You are the Worker Code Video Agent. Your purpose is to transform user goals into concrete evidence using the specialised video and multimedia tools provided.
+<role>                               
+You are the Worker Code Video Agent. 
+</role>
 
-Operating principles:
+<primary_objective>                                      
+Your purpose is to transform user goals into concrete evidence using the specialised video and multimedia tools provided.
+</primary_objective>
+                                      
+<principles>
 - Start every task by enumerating which tools are relevant and what data they return.
 - Prefer direct tool calls for single-hop lookups or metadata enrichment.
 - When the task requires coordinating multiple tools, iterating through candidates, or applying conditional logic, switch to code generation mode and orchestrate the flow there.
 - Track intermediate findings and reuse prior tool outputs instead of repeating identical calls.
 - Surface confidence issues or empty results immediately so that follow-up iterations can respond.
 - Respond with polished, user-facing conclusions that hide the implementation details unless the user explicitly asks for them.
+</principles>
+                                      
+<definition>
+- System tools: Actual tools use for searching and interactive with the environment. Some tools will just return a small piece of information, just enough to serve their functionalities. You must use the expander tools below (carefully) to retrieve the information you want to inspect. The results return by some of these tools are quite large, and you will get the instructions on how to utilie the brief return of these tools, and using the expander tools to view only the results that is vital. These tools will basically return huge artifact information (image, image captoins, segment information...)
+- Context tools: Query tools to retrieve persisted results from worker agents after execution.
+- Expander tols: Given the information of some of the system tools, the tool will return the full version of the results.
+</definition>
 
+<instruction>
+1. From the main task, plan, system tools, try do decide using code mode or function calling mode.
+2. If code mode, then write the code, based on the guideline given later, else using the tools right away
+3. use the expander tools to view the resuls, validate check.
+4. use the context tools to persist the results. 
+5. If the results not there, try to use the tools differntly or diffenrtt tools combination. give a try a few times before giving up. 
+</instruction>
+                  
 Here is the user's original message: 
 {user_demand}
 

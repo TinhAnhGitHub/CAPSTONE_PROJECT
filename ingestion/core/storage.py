@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import os
 import json
 from datetime import timedelta
 from io import BytesIO
@@ -23,11 +23,11 @@ class StorageError(RuntimeError):
 class StorageClient:
     def __init__(self, settings: MinioSettings ) -> None:
         self.settings = settings 
-        timeout = Timeout(connect=5.0, read=120.0)  
+        timeout = Timeout(connect=5.0, read=20.0)  
         self._http_client = urllib3.PoolManager(
-            maxsize=50,
+            maxsize=200,
             timeout=timeout,
-            block=True,
+            block=False,
         )
         self.client = Minio(
             endpoint=f"{settings.host}:{settings.port}",
@@ -38,15 +38,16 @@ class StorageClient:
         )
 
     def _ensure_bucket(self, bucket: str) -> None:
+        
         try:
-            if not self.client.bucket_exists(bucket):
+            exists = self.client.bucket_exists(bucket)
+            if not exists:
                 logger.info(f"Bucket named: {bucket} does not exist, creating")
                 self.client.make_bucket(bucket)
+    
         except S3Error as exc:
             logger.error("MinIO bucket check failed for %s: %s", bucket, exc)
             raise StorageError(f"Failed to ensure bucket {bucket}: {exc}") from exc
-
-
 
     def upload_fileobj(
         self,
@@ -60,18 +61,28 @@ class StorageClient:
         """Upload a file-like object to the specified bucket and return an s3 URI."""
 
         self._ensure_bucket(bucket)
+        length = -1
         try:
-            self.client.put_object(
-                bucket_name=bucket,
-                object_name=object_name,
-                data=file_obj,
-                length=-1,
-                part_size=10 * 1024 * 1024,
-                content_type=content_type,
-                metadata=metadata, #type:ignore
-            )
+            current_pos = file_obj.tell()
+            file_obj.seek(0, os.SEEK_END)
+            end_pos = file_obj.tell()
+            length = end_pos - current_pos
+            file_obj.seek(current_pos)
+        except:
+            length = -1
+        
+        put_kwargs: dict[str, Any] = dict(
+            bucket_name=bucket,
+            object_name=object_name,
+            data=file_obj,
+            length=length,
+            content_type=content_type,
+            metadata=metadata,  # type: ignore
+        )
+        try:
+            self.client.put_object(**put_kwargs)
             uri = f"s3://{bucket}/{object_name}"
-            logger.info("Uploaded object %s", uri)
+            logger.info(f"Uploaded object {uri}")
             return uri
         except S3Error as exc:
             logger.exception("Failed to upload %s to bucket %s", object_name, bucket)

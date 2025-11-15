@@ -1,7 +1,7 @@
 import json
 from io import BytesIO
 from typing import AsyncIterator, cast
-from tqdm import tqdm
+from tqdm.asyncio import tqdm
 import time
 from core.artifact.persist import ArtifactPersistentVisitor
 from core.artifact.schema import AutoshotArtifact, ImageArtifact
@@ -90,35 +90,24 @@ class ImageProcessingTask(BaseTask[list[AutoshotArtifact], ImageArtifact]):
     async def execute(self, input_data: dict[str, list[ImageArtifact]], client: BaseServiceClient | None| BaseMilvusClient ) -> AsyncIterator[tuple[ImageArtifact, bytes | None]]:
         logger = get_run_logger()
         logger.debug("Executing image extraction for %d videos", len(input_data))
+
+        
         for video_minio_path, img_artifacts in input_data.items():
             if not img_artifacts:  
                 continue
-            
-            not_process_images = []
-
-            for artifact in tqdm(img_artifacts, desc=f"Image processing for video {video_minio_path}... "):
-                exist =  await artifact.accept_check_exist(self.visitor)
-                if exist:
-                    yield artifact, None
-                    continue
-                not_process_images.append(artifact)
-
-            if not not_process_images:
-                continue
-
             local_video_bytes = await get_video_bytes(
                 video_minio_path,
                 self.visitor.minio_client,
             )
-            
             start_time = time.time()
-            indices = [artifact.frame_index for artifact in not_process_images]
-            print(f"Len indices: {len(indices)}")
+            print("Start image processing...")
+            indices = [artifact.frame_index for artifact in img_artifacts]
+            print(indices)
             frames = await extract_frames_async(local_video_bytes, indices)
             end_time = time.time()
-            print(f"Duration of processing a single request: {end_time - start_time}")
 
-            for artifact, frame_byte in zip(not_process_images, frames):
+            print(f"Time duration for image processing: {end_time- start_time}")
+            for artifact, frame_byte in tqdm(zip(img_artifacts, frames), desc="Uploading images..."):
                 yield artifact, frame_byte
             
             

@@ -5,40 +5,9 @@ import inspect
 from llama_index.core.tools import FunctionTool
 from dataclasses import dataclass
 
+from .helper import _format_model_doc
 
-def _format_model_doc(
-    model_cls: type[BaseModel], container: Optional[str] = None
-) -> str:
-    """
-    Generate a human-readable documentation string for a Pydantic model,
-    including type, description, default, title, and examples.
-    """
-    header = (
-        f"Returns a {container + ' of ' if container else ''}"
-        f"{model_cls.__name__} Pydantic BaseModel object with fields:\n"
-    )
 
-    lines = []
-    for name, field in model_cls.model_fields.items():
-        f_type = field.annotation
-        f_type_name = getattr(f_type, "__name__", str(f_type))
-        desc = f" — {field.description}" if field.description else ""
-        default = (
-            f" (default={field.default!r})"
-            if field.default not in (None, inspect._empty)
-            else ""
-        )
-        title = f" [title: {field.title}]" if getattr(field, "title", None) else ""
-        examples = ""
-        if getattr(field, "examples", None):
-            examples_list = field.examples if isinstance(field.examples, list) else [field.examples]
-            examples = f" [examples: {', '.join(map(str, examples_list))}]"
-
-        lines.append(
-            f"  - **{name}**: `{f_type_name}`{default}{title}{examples}{desc}"
-        )
-
-    return header + "\n".join(lines)
 
 @dataclass(frozen=True)
 class ToolMetadata:
@@ -111,7 +80,6 @@ class ToolMetadata:
             return _format_model_doc(ret_type)
         return f"Returns a `{getattr(ret_type, '__name__', str(ret_type))}` value."
     
-
     def get_user_params(self) -> Dict[str, inspect.Parameter]:
         """Get parameters that are NOT dependencies (what LLM controls)"""
         params = {}

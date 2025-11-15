@@ -301,7 +301,7 @@ async def segment_caption_task(
                 details={}
             )
         
-        await client.unload_model()
+        # await client.unload_model()
     logger.info("Completed segment caption generation with %d artifacts", len(results))
     return results
 
@@ -344,7 +344,7 @@ async def image_caption_task(
                 completed_items=video_id2current_items[video_id],
                 details={}
             )
-        await client.unload_model()
+        # await client.unload_model()
     logger.info("Completed image captioning with %d artifacts", len(results))
     return results  
 
@@ -704,6 +704,7 @@ async def video_processing_flow(
         state.image_processing_task = ImageProcessingTask(
             artifact_visitor=visitor,
             num_img_per_segment=timage_processing_conf.num_img_per_segment,
+            upload_concurrency=timage_processing_conf.upload_concurrency,
         )
         state.segment_caption_llm_task = SegmentCaptionLLMTask(
             artifact_visitor=visitor,
@@ -835,7 +836,6 @@ async def video_processing_flow(
         images_artifact_future = image_processing_task.submit(
             autoshots=autoshot_artifacts #type:ignore
         )
-        run_logger.debug(f'{images_artifact_future=}')
         
         image_captions_future = image_caption_task.submit(
             images=images_artifact_future 
@@ -876,9 +876,6 @@ async def video_processing_flow(
         progress_client = AppState().progress_client
         for video_id, _ in video_files:
             await progress_client.trigger_http_not_throttle(video_id=video_id) 
-
-        
-        
 
         run_logger.info("Stage 5: Aggregating results")
         manifest_future = aggregate_results_task.submit(

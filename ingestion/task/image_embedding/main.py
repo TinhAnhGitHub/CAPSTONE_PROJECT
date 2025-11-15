@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import time
 import asyncio
 import base64
 from tqdm import tqdm
@@ -85,22 +85,17 @@ class ImageEmbeddingTask(BaseTask[
         bs = cast(int,self.kwargs.get('batch_size'))
         while input_data:
             artifact = input_data.pop(0)
-
-            exists = await artifact.accept_check_exist(self.visitor)
-            if exists:
-                yield artifact, None
-                continue
-
             batch.append(artifact)
             
             if len(batch) == bs:
                 batches.append(batch[:])
                 batch.clear()
-        
         if batch:
             batches.append(batch[:])
 
         for batch in tqdm(batches, desc="Image embedding..."):
+            print(f"Start gathering images for ie")
+            start_time = time.time()
             images_local_paths = await asyncio.gather(
                 *[
                     fetch_object_from_s3(
@@ -111,6 +106,9 @@ class ImageEmbeddingTask(BaseTask[
                     for artifact in batch
                 ]
             )
+            end_time = time.time()
+            duration = end_time - start_time
+            print(f"Image embedding duration takes: {duration}")
             try:
                 batch_images_encode = [encode_image_base64(p) for p in images_local_paths]
             finally:
@@ -132,7 +130,7 @@ class ImageEmbeddingTask(BaseTask[
             embeddings = cast(list[list[float]], parsed.image_embeddings)
 
 
-            for artifact, embedding in zip(batch, embeddings):
+            for artifact, embedding in tqdm(zip(batch, embeddings), desc="Persiting the image embedding..."):
                 buffer = io.BytesIO(json.dumps(embedding).encode("utf-8"))
                 yield artifact, buffer
         
