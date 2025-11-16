@@ -189,9 +189,10 @@ class UserService:
         return groups
 
     async def create_user_group(self, user_id: str, group_name: str = "default"):
-        new_group = Group(user_id=user_id, name=group_name)
+        group_id = PydanticObjectId()
+        new_group = Group(id=group_id, user_id=user_id, name=group_name)
         await new_group.insert()
-        return new_group
+        return str(group_id)
 
     async def add_videos_to_user(
         self, user_id: str, files: list[File], group_id: str, session_id: str = None

@@ -1,47 +1,26 @@
-hi = {
-    "user_id": "68ce7607e98881acaf0499d6",
-    "video_ids": [None],
-    "user_demand": "chaha",
-    "chat_history": [
-        {
-            "role": "user",
-            "additional_kwargs": {},
-            "blocks": [
-                {
-                    "block_type": "text",
-                    "text": "can you tell me about the dog name in the video",
-                }
-            ],
-        },
-        {
-            "role": "user",
-            "additional_kwargs": {},
-            "blocks": [{"block_type": "text", "text": "hi"}],
-        },
-        {
-            "role": "user",
-            "additional_kwargs": {},
-            "blocks": [{"block_type": "text", "text": "hey there"}],
-        },
-        {
-            "role": "user",
-            "additional_kwargs": {},
-            "blocks": [{"block_type": "text", "text": "hello"}],
-        },
-        {
-            "role": "user",
-            "additional_kwargs": {},
-            "blocks": [{"block_type": "text", "text": "hi ther"}],
-        },
-        {
-            "role": "user",
-            "additional_kwargs": {},
-            "blocks": [{"block_type": "text", "text": "cu"}],
-        },
-        {
-            "role": "user",
-            "additional_kwargs": {},
-            "blocks": [{"block_type": "text", "text": "chaha"}],
-        },
-    ],
-}
+import time
+import random
+import throttle
+
+# allow more every 1 second
+delay = 1
+
+# limit to 3 calls
+limit = 3
+
+# only check values less than 5 against the limit
+key = lambda value: value < 5
+
+# or Static()
+valve = throttle.Valve()
+
+# make some quick calls
+for index in range(30):
+
+    item = random.randrange(0, 8)
+
+    allow = valve.check(delay, limit, item, key=key)
+
+    print(item, allow)
+
+    time.sleep(0.23)

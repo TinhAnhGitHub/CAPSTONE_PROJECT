@@ -7,23 +7,19 @@ import Group from './Group';
 import { PlusIcon } from '@heroicons/react/16/solid';
 import AddGroupButton from './AddGroupButton';
 import { useStore } from "@/stores/chat";
-import { useVideos } from '@/api/services/hooks/query';
+import { useCreateGroup, useGroups, useVideos } from '@/api/services/hooks/query';
 import { useEffect } from 'react';
 import socket from '@/api/socket';
+import { ensureGroupId } from '@/utils/ensure/ensureGroupId';
 
 export default function LibraryModal({ isModalOpen, closeModal }) {
     const group = useStore((state) => state.currentGroup);
+    const setCurrentGroup = useStore((state) => state.setCurrentGroup);
     const sessionId = useStore((state) => state.session_id);
     // get groups
-    const { data: groups = [] } = useQuery({
-        queryKey: ['groups'],
-        queryFn: async () => {
-            const res = await api.get('/api/user/groups');
-            console.log(res.data)
-            return res.data.groups
-        }
-    });
+    const { data: groups = [] } = useGroups();
     const queryClient = useQueryClient();
+    const createNewGroupMutation = useCreateGroup();
 
     useEffect(() => {
         socket.on('ingestion_status', (data)=> {
@@ -33,13 +29,20 @@ export default function LibraryModal({ isModalOpen, closeModal }) {
         })
     }, [queryClient])
 
+    useEffect(() => {
+        const result = ensureGroupId(groups, group, setCurrentGroup);
+        console.log("Ensure group result:", result);
+        if (result.status === "create") {
+            createNewGroupMutation.mutate();
+        }
+    }, [group])
 
     const { data: videos = [] } = useVideos(group, sessionId);
     return (
         <Modal isOpen={isModalOpen} onClose={closeModal} title="Library">
             <div className='flex'>
 
-                <div className='w-[20%] border-r border-gray-200 p-2'>
+                <div className='w-[20%] border-r border-gray-200 p-2 overflow-auto'>
                     <div className='flex items-center mb-2'>
                         <p className='font-semibold'>Groups</p>
                         <div className='ml-auto'>

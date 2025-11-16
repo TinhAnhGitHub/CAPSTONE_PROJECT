@@ -27,7 +27,6 @@ export default function VideoDropdownList({ video }) {
         }
     })
     function handleDelete(video) {
-        confirm("Are you sure to delete this video?") &&
             deleteVideoMutation.mutate(video);
     }
     return (

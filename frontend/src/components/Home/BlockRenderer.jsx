@@ -9,9 +9,10 @@ export default function BlockRenderer({ block, role }) {
         return <div
             className={clsx(
                 'max-w-[75%] px-4 py-2 my-2 rounded-lg text-sm whitespace-pre-wrap break-all',
+                "backdrop-blur-md shadow-lg border border-white/10",
                 role === 'user'
-                    ? 'bg-gray-700 text-white self-end' // user: right
-                    : 'bg-gray-200 text-black self-start' // bot: left
+                    ? 'bg-indigo-500/70 border-indigo-300/40 text-white self-end' // user: right
+                    : 'bg-slate-800/60 border-white/10 text-slate-50 self-start' // bot: left
             )}
         >
             {block?.text}

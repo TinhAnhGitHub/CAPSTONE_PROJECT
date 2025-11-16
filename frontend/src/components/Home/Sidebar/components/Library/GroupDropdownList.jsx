@@ -1,4 +1,5 @@
 import api from '@/api/api';
+import { useDeleteGroup } from '@/api/services/hooks/query';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import {
     ArchiveBoxXMarkIcon,
@@ -8,24 +9,14 @@ import {
     Square2StackIcon,
     TrashIcon,
 } from '@heroicons/react/16/solid'
-import { useMutation, useQueryClient } from 'react-query'
 
 export default function GroupDropdownList({ group }) {
-    const queryClient = useQueryClient();
-    const deleteGroupMutation = useMutation({
-        mutationFn: (groupId) => {
-            return api.delete(`/api/user/groups/${groupId}/delete`)
-        },
-        onSettled: () => {
-            queryClient.invalidateQueries('groups');
-        }
-    })
+    const deleteGroupMutation = useDeleteGroup();
     function handleDelete(groupId) {
-        confirm("Are you sure to delete this group?") &&
-            deleteGroupMutation.mutate(groupId);
+        deleteGroupMutation.mutate(groupId);
     }
     return (
-        <div className="h-5 w-5" onClick={(e) => {e.stopPropagation()}}>
+        <div className="h-5 w-5" onClick={(e) => { e.stopPropagation() }}>
             <Menu>
                 <MenuButton className="">
                     <EllipsisVerticalIcon className="h-5 w-5 text-gray-500" />

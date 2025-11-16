@@ -10,7 +10,7 @@ class AppSettings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
 
     # Mongo Settings:
-    MONGO_URI: str = Field("mongodb://localhost:27017", description="MongoDB connection string")
+    MONGO_URI: str = Field("mongodb://100.120.22.90:27017", description="MongoDB connection string")
     MONGO_DB: str = Field("mydatabase", description="Default database name")
 
     # chat settings

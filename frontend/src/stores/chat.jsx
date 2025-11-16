@@ -8,6 +8,18 @@ export const useStore = create(
             session_id: null, // new chat
             setSessionId: (session_id) => set({ session_id }),
             getSessionId: () => get().session_id,
+            ensureSessionId: () => {
+                let session_id = get().session_id;
+                if (session_id) return session_id;
+                    // get the first one in chatHistory
+                const chatHistory = get().chatHistory;
+                if (chatHistory.length > 0) {
+                    session_id = chatHistory[0]._id;
+                    set({ session_id });
+                    return session_id;
+                } 
+                return null;
+            },
 
             chatMessages: [],
             setChatMessages: (messages) => set({ chatMessages: messages }),

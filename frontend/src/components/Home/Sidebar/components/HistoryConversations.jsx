@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { messagesConversations } from '@/mockdata/messages'
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
@@ -8,16 +8,14 @@ import { useStore as useStoreChat } from "@/stores/chat";
 import clsx from 'clsx';
 import SessionDropdownList from './SessionDropdownList';
 import { PlusIcon } from '@heroicons/react/16/solid';
+import { useCreateNewChat } from '@/api/services/hooks/query';
 
 export default function HistoryConversations() {
   const chatHistory = useStoreChat((state) => state.chatHistory);
   const setChatHistory = useStoreChat((state) => state.setChatHistory);
   const setSessionId = useStoreChat((state) => state.setSessionId);
   const session_id = useStoreChat((state) => state.session_id);
-  const setChatMessages = useStoreChat((state) => state.setChatMessages);
-  const setWorkspaceVideos = useStoreChat((state) => state.setWorkspaceVideos);
   const user = useStore((state) => state.user);
-  const queryClient = useQueryClient();
 
   useQuery(
     {
@@ -35,26 +33,11 @@ export default function HistoryConversations() {
           }
         }
       },
-      enabled: !!user,
     }
   );
 
-  const createNewChatMutation = useMutation(
-    async () => {
-      const response = await api.post('/api/user/new-chat')
-      return response.data;
-    },
-    {
-      onSuccess: (data) => {
-        const newChatId = data.chat_session_id;
-        setSessionId(newChatId);
-      },
-      onSettled: () => {
-        // Refetch chat history
-        queryClient.invalidateQueries(['chatHistory']);
-      }
-    }
-  )
+  const createNewChatMutation = useCreateNewChat();
+
   function createNewChat() {
     createNewChatMutation.mutate();
   }
@@ -64,9 +47,16 @@ export default function HistoryConversations() {
     setSessionId(session_id);
   }
 
+  const ensureSessionId = useStoreChat((state) => state.ensureSessionId);
+  useEffect(() => {
+    if (!ensureSessionId()) {
+      createNewChat();
+    }
+  }, [session_id]);
+
   return (
     <div className='relative flex flex-col h-full '>
-      <div className='border-b border-gray-800 flex items-center justify-between sticky top-0 bg-black/90 p-2 '>
+      <div className='border-b border-gray-800 flex items-center justify-between sticky top-0 bg-black/90 px-2 py-1 '>
         <p className='text-sm p-2 text-gray-400/60'>Chats</p>
         <PlusIcon className="btn-icon" onClick={createNewChat} />
       </div>

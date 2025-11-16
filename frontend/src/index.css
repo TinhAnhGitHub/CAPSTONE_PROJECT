@@ -5,6 +5,10 @@ html {
     padding: 0;
     margin: 0;
 }
+body {
+    font: 16px/1.4 monospace, monospace;
+}
+
 @layer components {
     .btn-icon {
         @apply border border-gray-800 rounded-full size-8 flex items-center justify-center text-xl hover:bg-gray-100 cursor-pointer transition select-none;

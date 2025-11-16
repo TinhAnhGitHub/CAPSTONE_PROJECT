@@ -1,4 +1,6 @@
 import api from '@/api/api';
+import { useCreateNewChat, useDeleteSession } from '@/api/services/hooks/query';
+import { useStore } from '@/stores/chat';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import {
     ArchiveBoxXMarkIcon,
@@ -11,17 +13,9 @@ import {
 import { useMutation, useQueryClient } from 'react-query'
 
 export default function SessionDropdownList({ session }) {
-    const queryClient = useQueryClient();
-    const deleteSessionMutation = useMutation({
-        mutationFn: (session) => {
-            return api.delete(`/api/user/session/${session._id}/delete`);
-        },
-        onSettled: () => {
-            queryClient.invalidateQueries('chatHistory');
-        }
-    })
+    const deleteSessionMutation = useDeleteSession();
+
     function handleDelete(session) {
-        confirm("Are you sure to delete this session?") &&
             deleteSessionMutation.mutate(session);
     }
     return (
