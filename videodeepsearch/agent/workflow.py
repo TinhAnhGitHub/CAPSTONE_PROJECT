@@ -88,6 +88,9 @@ from .orc_events import (
 
 from phoenix.otel import register
 from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+from llama_index.core.evaluation import RelevancyEvaluator, EvaluationResult
+
+#from llama_index.llms.gemini import Gemini
 
 tracer_provider = register(
     project_name="VideoQA_v2",
@@ -97,6 +100,8 @@ LlamaIndexInstrumentor(tracer_provider=tracer_provider).instrument()
 
 
 
+def eval():
+    pass
 async def get_streaming_response( # with thinking
     ctx: Context,
     current_llm_input: list[ChatMessage],
@@ -253,6 +258,8 @@ class VideoAgentWorkFlow(Workflow):
         
         passing_messages = ev.passing_messages
         chat_message = [ChatMessage(role=MessageRole.ASSISTANT, content=OUTPUT_SYSTEM_PROMPT)] + passing_messages
+        
+
         ctx.write_event_to_stream(
             AgentProgressEvent(
                 agent_name=FINAL_RESPONSE_AGENT,
@@ -348,9 +355,6 @@ class VideoAgentWorkFlow(Workflow):
             worker_plan=full_response
         )
 
-        return FinalResponseEvent(
-            passing_messages=messages
-        )           
     @step
     async def execute_approved_plan(
         self,
@@ -438,7 +442,7 @@ class VideoAgentWorkFlow(Workflow):
                     "ctx": ctx,
                     "parent_ctx": ctx,
                     "agent_name": plan_blueprint.name,
-                    "user_message": ev.user_msg,
+                    "user_message": plan_blueprint.task,
                     "additional_tools": [],
                     "llm": worker_llm,
                     "user_id": user_id,
@@ -485,21 +489,33 @@ class VideoAgentWorkFlow(Workflow):
             llm=app_state.llm_instance[ORCHESTRATION_NAME],
             tools=full_orchestration_tool
         )
-                
+        msg = f"""
+            Execute this query: {ev.user_msg}. Use tools based STRICTLY on this plan:
+            {ev.worker_plan._get_string()}
+        """        
         handler: WorkflowHandler = orchestration_agent.run(
-            user_msg=ev.user_msg,
+            user_msg=msg,
         )
 
         async for event in handler.stream_events():
             if isinstance(event, StopEvent):
-                continue
+                break
             ctx.write_event_to_stream(event)
 
         
 
         agent_output: AgentOutput = await handler
+        
+        final_response = ChatMessage( content=agent_output.response.content, 
+                                     role =agent_output.response.role,
+                                     additional_kwargs={
+                                         "tools": [t.name for t in agent_output.tool_calls] or [],
+                                         "ent": agent_output.current_agent_name
+                                         }
+                                    )
+        
         final_response = cast(ChatMessage, agent_output.response)
-
+        await set_add_message_to_chat_history(ctx=ctx, chat_messages=[final_response])
         ctx.write_event_to_stream(
             AgentProgressEvent(
                 agent_name=ORCHESTRATION_NAME,

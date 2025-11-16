@@ -14,6 +14,9 @@ from client import WorkflowClient
 from session import SessionManager
 from event_handler import EventHandler
 
+from llama_index.core.evaluation import RelevancyEvaluator, EvaluationResult
+from llama_index.llms.gemini import Gemini
+
 
 import json
 
@@ -119,14 +122,30 @@ async def run_interactive_session(test_session_dir: Path, user_id: str, list_vid
                     border_style="green",
                     box=box.ROUNDED
                 ))
-                '''
-                res.append({
-                    "question": user_input,
-                    "result": final_chat_message[-1][]
-                })'''
+                try:
+                    evaluator_llm = Gemini(temperature = 0.0)
+                    relevancy_evaluator = RelevancyEvaluator(llm=evaluator_llm)
+                    response = final_chat_message[-1].content
+                    eval_result: EvaluationResult = await relevancy_evaluator.aevaluate_response(
+                        query=user_input, 
+                        response=response,    
+                    )
+                    res.append({
+                        "question": user_input,
+                        "result": res,
+                        "evaluation":{
+                            "passing":eval_result.passing,
+                            "score": eval_result.score,
+                            "feedback": eval_result.feedback
+                        }
+                    })
+                except Exception as e:
+                    res.append({"error": e})
+                with open("test.json", "w", encoding="utf-8") as f:
+                    json.dump(res, f, ensure_ascii=False, indent=4)
             else:
                 console.print("\n[yellow]⚠[/yellow] Workflow completed without final response", style="dim")
-        
+
         except KeyboardInterrupt:
             console.print("\n\n[yellow]⚠ Interrupted by user[/yellow]")
             break

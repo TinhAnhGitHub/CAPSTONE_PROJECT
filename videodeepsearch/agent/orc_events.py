@@ -57,7 +57,7 @@ class   PlannerInputEvent(Event):
     Stage: Planning
     """
     user_msg: str = Field(..., description="Original user message")
-    planner_demand: str = Field(
+    planner_demand: str = Field( 
         ..., 
         description="Specific planning requirements from greeter agent"
     )
@@ -105,6 +105,16 @@ class FinalEvent(StopEvent):
     workflow_response: str
     chat_history: list[ChatMessage]
 
+class EvaluationCompleteEvent(Event):
+    """
+    A custom event fired when an agent or step evaluation is complete.
+    This event carries the results of the evaluation.
+    """
+    agent_name: str
+    passing: bool
+    score: float
+    feedback: str
+    eval_result_json: str  # For the full, raw result
 
 class AgentDecision(Event):
     name:str

@@ -33,7 +33,8 @@ from videodeepsearch.agent.orc_events import (
     AgentDecision,
     PlanningAgentEvent,
     FinalEvent,
-    StopEvent
+    StopEvent,
+    EvaluationCompleteEvent
 )
 
 
@@ -358,16 +359,20 @@ class EventHandler:
                 box=box.ROUNDED
             ))
 
-    def _handle_other(self,data : StopEvent ):
-        
+    def _handle_stop(self,data : StopEvent ):
         self.console.print(Panel(
                 f"[yellow] Culprit: \n{vars(data)}[/yellow]",
                 title="[bold magenta]📊 Structured Output Stream[/bold magenta]",
                 border_style="magenta",
                 box=box.ROUNDED
             ))
-
-
+    def _handle_eval(self, data : EvaluationCompleteEvent):
+        self.console.print(Panel(
+                f"[yellow] Culprit: \n{vars(data)}[/yellow]",
+                title="[bold magenta]📊 Structured Output Stream[/bold magenta]",
+                border_style="magenta",
+                box=box.ROUNDED
+            ))
     def handle_event(self, event_data: dict) -> str :
         event_type = event_data['event_type']
 
@@ -387,7 +392,8 @@ class EventHandler:
             ToolCall.__name__: self._handle_tool_call,
             ToolCallResult.__name__: self._handle_tool_call_result,
             AgentStreamStructuredOutput.__name__: self._handle_agent_stream_structured_output,
-            StopEvent.__name__ : self._handle_other,
+            StopEvent.__name__ : self._handle_stop,
+            EvaluationCompleteEvent.__name__: self._handle_eval
         }
 
         handler = handler_map[event_type]
@@ -407,7 +413,9 @@ class EventHandler:
             AgentStream.__name__: AgentStream,
             ToolCall.__name__: ToolCall,
             ToolCallResult.__name__: ToolCallResult,
-            AgentStreamStructuredOutput.__name__: AgentStreamStructuredOutput
+            AgentStreamStructuredOutput.__name__: AgentStreamStructuredOutput,
+            StopEvent.__name__ : StopEvent,
+            EvaluationCompleteEvent.__name__: EvaluationCompleteEvent
         }
         event_class = event_class_map[event_type]
         instance_event = event_class(**event_payload)
