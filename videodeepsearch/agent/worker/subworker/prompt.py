@@ -23,7 +23,7 @@ MAKE_DECISION_PROMPT: Annotated[
     - Cases where the user explicitly asks you to call a specific tool once.
 
     ### OPTION 2 — code (medium & complex orchestration)
-    Select `code` when you need to:
+    Select `code` when you need to: 
     - Combine results from multiple tools (fan-out/fan-in) or loop over items.
     - Execute conditional logic, sorting, ranking, or aggregation beyond built-in tool parameters.
     - Cache intermediate results, compare alternatives, or post-process responses.

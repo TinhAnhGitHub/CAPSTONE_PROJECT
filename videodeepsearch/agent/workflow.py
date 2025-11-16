@@ -2,7 +2,7 @@
 The main agent that we will call uponn
 """
 import re
-from llama_index.llms.google_genai import GoogleGenAI
+#from llama_index.llms.google_genai import GoogleGenAI
 from typing import Annotated, cast
 import json
 from pydantic import BaseModel
@@ -84,6 +84,18 @@ from .orc_events import (
     FinalEvent,
     PlanningAgentEvent
 )
+
+
+from phoenix.otel import register
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+
+tracer_provider = register(
+    project_name="VideoQA_v2",
+    auto_instrument=True,
+    endpoint="http://localhost:6006/v1/traces")
+LlamaIndexInstrumentor(tracer_provider=tracer_provider).instrument()
+
+
 
 async def get_streaming_response( # with thinking
     ctx: Context,
@@ -199,11 +211,14 @@ class VideoAgentWorkFlow(Workflow):
         )
 
         format_response = GREETING_AGENT_DECISION_OUTPUT.format(agent=next_agent, reason=reason, passing_message=passing_message)
-        chat_history.append(ChatMessage(role=MessageRole.ASSISTANT, content=format_response))
+        chat_history.append(ChatMessage(role=MessageRole.ASSISTANT, 
+                                        content=format_response,
+                                        additional_kwargs={"ent": "greeter"})
+                            )
         
         await set_add_message_to_chat_history(
             ctx=ctx,
-            chat_messages=[ChatMessage(role=MessageRole.ASSISTANT, content=format_response)]
+            chat_messages=[ChatMessage(role=MessageRole.ASSISTANT, content=format_response, additional_kwargs={"ent": "greeter"})]
         )
 
         passing_messages = [
@@ -220,8 +235,6 @@ class VideoAgentWorkFlow(Workflow):
         
         elif next_agent == "orchestrator":
             worker_plan = await get_worker_plan(ctx=ctx)
-            
-            
 
             return PlanProposedEvent(
                 user_msg=ev.user_demand,
@@ -250,7 +263,7 @@ class VideoAgentWorkFlow(Workflow):
         llm = app_state.llm_instance[FINAL_RESPONSE_AGENT]
         final_response_message = await get_streaming_response(ctx=ctx, current_llm_input=chat_message, llm=llm, agent_name="FINAL_RESPONSE_AGENT")
 
-        await set_add_message_to_chat_history(ctx=ctx, chat_messages=[final_response_message])
+        await set_add_message_to_chat_history(ctx=ctx, chat_messages=[final_response_message] )
 
         chat_history = await get_chat_history(ctx=ctx)
         return FinalEvent(
@@ -266,7 +279,7 @@ class VideoAgentWorkFlow(Workflow):
         ev: PlannerInputEvent,
         app_state: Annotated[Appstate, Resource(get_app_state)],
         agent_registry: Annotated[AgentRegistry, Resource(get_global_agent_registry)]
-    ) -> FinalResponseEvent:
+    ) ->PlanProposedEvent | FinalResponseEvent:
     
         user = ev.user_msg
         message_demand = ev.planner_demand
@@ -321,7 +334,7 @@ class VideoAgentWorkFlow(Workflow):
         )
 
         messages = [
-            ChatMessage(role=MessageRole.ASSISTANT, content=output_planner),
+            ChatMessage(role=MessageRole.ASSISTANT, content=output_planner, additional_kwargs={"ent": "planner"}),
             ChatMessage(role=MessageRole.ASSISTANT, content=plan_detail_str),
             ChatMessage(role=MessageRole.ASSISTANT, content=reason)
         ]
@@ -329,12 +342,15 @@ class VideoAgentWorkFlow(Workflow):
         await set_add_message_to_chat_history(ctx=ctx, chat_messages=messages)
         await set_worker_plan(ctx=ctx, worker_plan=full_response)
 
-
+        return PlanProposedEvent(
+            user_msg=user,
+            agent_response=output_planner,
+            worker_plan=full_response
+        )
 
         return FinalResponseEvent(
             passing_messages=messages
         )           
-    
     @step
     async def execute_approved_plan(
         self,
@@ -342,7 +358,6 @@ class VideoAgentWorkFlow(Workflow):
         ev: PlanProposedEvent,
         app_state: Annotated[Appstate, Resource(get_app_state)],
         agent_registry: Annotated[AgentRegistry, Resource(get_global_agent_registry)]
-
     ) -> FinalResponseEvent: 
         
         user_id, list_video_ids = await get_state_from_user(ctx=ctx)

@@ -1,7 +1,6 @@
 from typing import List, Sequence
 from pydantic import BaseModel
 from llama_index.core.agent.workflow import AgentStream
-from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.core.agent.workflow import FunctionAgent, ReActAgent
 from llama_index.core.workflow import Context
 from llama_index.core.tools import AsyncBaseTool

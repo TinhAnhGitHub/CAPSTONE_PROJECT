@@ -10,7 +10,6 @@ from rich.syntax import Syntax
 import json
 from pydantic import BaseModel
 
-from llama_index.core.workflow import StopEvent
 from llama_index.core.agent.workflow import (
     AgentInput,
     AgentSetup,
@@ -34,6 +33,7 @@ from videodeepsearch.agent.orc_events import (
     AgentDecision,
     PlanningAgentEvent,
     FinalEvent,
+    StopEvent
 )
 
 
@@ -358,6 +358,16 @@ class EventHandler:
                 box=box.ROUNDED
             ))
 
+    def _handle_other(self,data : StopEvent ):
+        
+        self.console.print(Panel(
+                f"[yellow] Culprit: \n{vars(data)}[/yellow]",
+                title="[bold magenta]📊 Structured Output Stream[/bold magenta]",
+                border_style="magenta",
+                box=box.ROUNDED
+            ))
+
+
     def handle_event(self, event_data: dict) -> str :
         event_type = event_data['event_type']
 
@@ -376,7 +386,8 @@ class EventHandler:
             AgentStream.__name__: self._handle_agent_stream,
             ToolCall.__name__: self._handle_tool_call,
             ToolCallResult.__name__: self._handle_tool_call_result,
-            AgentStreamStructuredOutput.__name__: self._handle_agent_stream_structured_output
+            AgentStreamStructuredOutput.__name__: self._handle_agent_stream_structured_output,
+            StopEvent.__name__ : self._handle_other,
         }
 
         handler = handler_map[event_type]

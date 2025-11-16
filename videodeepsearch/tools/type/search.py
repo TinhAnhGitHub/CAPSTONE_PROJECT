@@ -98,13 +98,13 @@ async def get_images_from_caption_query(
     ],
     top_k_each_request: Annotated[int, "Number of top-matching images to retrieve based on caption embedding similarity."],
     top_k_final:Annotated[int, "Number of top-matching images to retrieve based on caption embedding similarity."],
-    weights: Annotated[list[float] | None, "If provided, expects two weights [dense, sparse] for hybrid search."],
+    
     
     list_video_id: Annotated[list[str], "List of video IửodDs to restrict the search domain (auto-provided)."],
     user_id: Annotated[str, "User identifier for context or permissions (auto-provided)."],
-    
     visual_milvus_client: Annotated[ImageMilvusClient, "Milvus client for caption-based embedding search (auto-provided)."],
     external_client: Annotated[ExternalEncodeClient, "External encoding client for generating caption embeddings (auto-provided)."],
+    weights: Annotated[list[float] ,  "If provided, expects two weights [dense, sparse] for hybrid search."] = [0.3,0.7] ,
 ) -> list[ImageObjectInterface]:
     """
     Retrieve images semantically related to a **caption-based query**.

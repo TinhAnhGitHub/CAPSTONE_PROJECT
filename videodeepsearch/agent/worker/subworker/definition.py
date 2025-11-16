@@ -31,9 +31,8 @@ from .prompt import MAKE_DECISION_PROMPT
 
 
 
-from llama_index.llms.google_genai import GoogleGenAI
 """
-This agent will use the LLM instance from llama_index.llms.google_genai import GoogleGenAI
+This agent will use the LLM instance from llama_index.llms.google_genai import Gemini
 
 streaming function achat
 

@@ -1,0 +1,487 @@
+ # Tool Registry Documentation                                                                                                                                                              │
+│                                                                                                                                                                                            │
+│ ### `get_video_from_segment`                                                                                                                                                               │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `segment_interface: <class 'videodeepsearch.tools.schema.artifact.SegmentObjectInterface'>`                                                                                              │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client                                                                                                                                                 │
+│ **Tags:** video, metadata, context                                                                                                                                                         │
+│ Output return: Returns a VideoInterface Pydantic BaseModel object with fields:                                                                                                             │
+│   - **type_artifact**: `str` (default='VideoInterface')                                                                                                                                    │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **video_id**: `str` (default=PydanticUndefined)                                                                                                                                        │
+│   - **fps**: `float` (default=PydanticUndefined)                                                                                                                                           │
+│   - **duration**: `str` (default=PydanticUndefined)                                                                                                                                        │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_video_from_image`                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `image_interface: <class 'videodeepsearch.tools.schema.artifact.ImageObjectInterface'>`                                                                                                  │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client                                                                                                                                                 │
+│ **Tags:** video, metadata, context                                                                                                                                                         │
+│ Output return: Returns a VideoInterface Pydantic BaseModel object with fields:                                                                                                             │
+│   - **type_artifact**: `str` (default='VideoInterface')                                                                                                                                    │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **video_id**: `str` (default=PydanticUndefined)                                                                                                                                        │
+│   - **fps**: `float` (default=PydanticUndefined)                                                                                                                                           │
+│   - **duration**: `str` (default=PydanticUndefined)                                                                                                                                        │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_asr_from_video`                                                                                                                                                                   │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                                  │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** asr, transcript, multimodal, video                                                                                                                                               │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_all_segment_info_from_video_interface`                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video_interface: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                        │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** segment, metadata, caption, structure                                                                                                                                            │
+│ Output return: Returns a list of SegmentObjectInterface Pydantic BaseModel object with fields:                                                                                             │
+│   - **type_artifact**: `str` (default='SegmentObjectInterface')                                                                                                                            │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **related_video_id**: `str` (default=PydanticUndefined) — Unique identifier of the video containing this segment.                                                                      │
+│   - **start_frame_index**: `int` (default=PydanticUndefined) — Index of the first frame in the segment.                                                                                    │
+│   - **end_frame_index**: `int` (default=PydanticUndefined) — Index of the last frame in the segment.                                                                                       │
+│   - **start_time**: `str` (default=PydanticUndefined) — Start time of the segment in HH:MM:SS.sss format.                                                                                  │
+│   - **end_time**: `str` (default=PydanticUndefined) — End time of the segment in HH:MM:SS.sss format.                                                                                      │
+│   - **caption_info**: `str` (default=PydanticUndefined) — Semantic or descriptive caption summarizing the segment's content.                                                               │
+│   - **score**: `float | None` — Normalized similarity score (e.g., cosine similarity) between this segment and the query. Higher scores indicate stronger semantic alignment. If `None`,   │
+│ the segment was obtained outside of semantic retrieval (e.g., via procedural or scan-based tools).                                                                                         │
+│   - **segment_caption_query**: `str | None` — The textual or multimodal query that retrieved this segment. If `None`, the segment was not produced by a semantic search process.           │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_segments`                                                                                                                                                                         │
+│ Given a current segment, return the next segments, based on the hop size                                                                                                                   │
+│ Args:                                                                                                                                                                                      │
+│     current_segment:                                                                                                                                                                       │
+│     hop (int): the hop size                                                                                                                                                                │
+│     include_within_range (bool): If True, then all the range within hop is included, else just return the destination segment                                                              │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `current_segment: <class 'videodeepsearch.tools.schema.artifact.SegmentObjectInterface'>`                                                                                                │
+│ - `hop: typing.Annotated`                                                                                                                                                                  │
+│ - `include_within_range: <class 'bool'>`                                                                                                                                                   │
+│ - `forward_or_backward: typing.Literal['forward', 'backward']`                                                                                                                             │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** segment, navigation, context, video                                                                                                                                              │
+│ Output return: Returns a `videodeepsearch.tools.schema.artifact.SegmentObjectInterface | list` value.                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_images`                                                                                                                                                                           │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `image: <class 'videodeepsearch.tools.schema.artifact.ImageObjectInterface'>`                                                                                                            │
+│ - `hop: <class 'int'>`                                                                                                                                                                     │
+│ - `include_within_range: <class 'bool'>`                                                                                                                                                   │
+│ - `forward_or_backward: typing.Literal['forward', 'backward']`                                                                                                                             │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** image, navigation, context, video                                                                                                                                                │
+│ Output return: Returns a `videodeepsearch.tools.schema.artifact.ImageObjectInterface | list` value.                                                                                        │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `extract_frames_by_time_window`                                                                                                                                                        │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video_interface: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                        │
+│ - `start_time: typing.Annotated`                                                                                                                                                           │
+│ - `end_time: typing.Annotated`                                                                                                                                                             │
+│ - `fps_sample_rate: typing.Annotated`                                                                                                                                                      │
+│ - `agent_bucket: <class 'str'>`                                                                                                                                                            │
+│ - `agent_object_folder: <class 'str'>`                                                                                                                                                     │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** video, frame, extract, sampling                                                                                                                                                  │
+│ Output return: Returns a list of ImageObjectInterface Pydantic BaseModel object with fields:                                                                                               │
+│   - **type_artifact**: `str` (default='ImageObjectInterface')                                                                                                                              │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **related_video_id**: `str` (default=PydanticUndefined) — Identifier of the video that this image belongs to.                                                                          │
+│   - **frame_index**: `int` (default=PydanticUndefined) — Frame index within the source video.                                                                                              │
+│   - **timestamp**: `str` (default=PydanticUndefined) — Timestamp of this frame in the video (e.g., '00:00:12.87').                                                                         │
+│   - **caption_info**: `str | None` — Descriptive caption summarizing the image content.                                                                                                    │
+│   - **score**: `float | None | str` — Normalized similarity score between this image and the retrieval query. Higher scores imply stronger semantic correlation. If `None`, the image was  │
+│ generated or retrieved outside of a semantic search process.                                                                                                                               │
+│   - **query**: `list | None` — The search query or queries that led to the retrieval of this image. Can be a single text query or a list for multimodal inputs (e.g., visual + textual).   │
+│ If `None`, the image was not semantically retrieved.                                                                                                                                       │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `extract_frame_time`                                                                                                                                                                   │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video_interface: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                        │
+│ - `timestamp: typing.Annotated`                                                                                                                                                            │
+│ - `agent_bucket: <class 'str'>`                                                                                                                                                            │
+│ - `agent_object_folder: <class 'str'>`                                                                                                                                                     │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** video, frame, extract, single                                                                                                                                                    │
+│ Output return: Returns a `None | videodeepsearch.tools.schema.artifact.ImageObjectInterface` value.                                                                                        │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `frame_to_timecode`                                                                                                                                                                    │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `frame_index: <class 'int'>`                                                                                                                                                             │
+│ - `fps: <class 'float'>`                                                                                                                                                                   │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:**                                                                                                                                                                 │
+│ **Tags:** timecode, frame, conversion                                                                                                                                                      │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `timecode_to_frame_func`                                                                                                                                                               │
+│ Convert a timecode string (HH:MM:SS.sss) into a frame index given a frame rate (FPS).                                                                                                      │
+│                                                                                                                                                                                            │
+│ Args:                                                                                                                                                                                      │
+│     timecode (str): Timecode string, e.g., "00:01:23.456" or "01:10:05.003".                                                                                                               │
+│     fps (float): Frames per second. Must be > 0.                                                                                                                                           │
+│                                                                                                                                                                                            │
+│ Returns:                                                                                                                                                                                   │
+│     int: The corresponding frame index (rounded to nearest integer).                                                                                                                       │
+│                                                                                                                                                                                            │
+│ Raises:                                                                                                                                                                                    │
+│     ValueError: If the timecode format is invalid or FPS <= 0.                                                                                                                             │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `timecode: <class 'str'>`                                                                                                                                                                │
+│ - `fps: <class 'float'>`                                                                                                                                                                   │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:**                                                                                                                                                                 │
+│ **Tags:** timecode, frame, conversion                                                                                                                                                      │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `from_index_to_time`                                                                                                                                                                   │
+│ Return the exact timestamp (in ISO 8601 format) for a given frame index.                                                                                                                   │
+│ Args:                                                                                                                                                                                      │
+│     video (VideoObject): The reference video object.                                                                                                                                       │
+│     frame_index (int): The frame index to convert.                                                                                                                                         │
+│ Returns:                                                                                                                                                                                   │
+│     str: ISO-format timestamp corresponding to the frame position.                                                                                                                         │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                                  │
+│ - `frame_index: <class 'int'>`                                                                                                                                                             │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:**                                                                                                                                                                 │
+│ **Tags:** time, frame, conversion, video                                                                                                                                                   │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `from_range_index_to_range_time`                                                                                                                                                       │
+│ Convert a frame range into a corresponding time range.                                                                                                                                     │
+│ Args:                                                                                                                                                                                      │
+│     video (VideoInterface): The reference video object.                                                                                                                                    │
+│     start_frame_index (int): The first frame index in the range.                                                                                                                           │
+│     end_frame_index (int): The last frame index in the range.                                                                                                                              │
+│ Returns:                                                                                                                                                                                   │
+│     Tuple: Start and end timestamps (ISO 8601 format).                                                                                                                                     │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                                  │
+│ - `start_frame_index: <class 'int'>`                                                                                                                                                       │
+│ - `end_frame_index: <class 'int'>`                                                                                                                                                         │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:**                                                                                                                                                                 │
+│ **Tags:** time, frame, conversion, video                                                                                                                                                   │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `from_time_to_index`                                                                                                                                                                   │
+│ Return the frame index corresponding to a given timestamp.                                                                                                                                 │
+│ Args:                                                                                                                                                                                      │
+│     video (VideoInterface): The reference video object.                                                                                                                                    │
+│     time (str): Timestamp in ISO 8601 format (e.g., '2025-10-24T12:34:56.789Z').                                                                                                           │
+│ Returns:                                                                                                                                                                                   │
+│     int: Frame index closest to the given time.                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                                  │
+│ - `time: <class 'str'>`                                                                                                                                                                    │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:**                                                                                                                                                                 │
+│ **Tags:** time, frame, conversion, video                                                                                                                                                   │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `from_range_time_to_range_index`                                                                                                                                                       │
+│ Convert a time range into a corresponding frame index range.                                                                                                                               │
+│ Args:                                                                                                                                                                                      │
+│     video (VideoInterface): The reference video object.                                                                                                                                    │
+│     start_time (str): Start timestamp in ISO 8601 format.                                                                                                                                  │
+│     end_time (str): End timestamp in ISO 8601 format.                                                                                                                                      │
+│ Returns:                                                                                                                                                                                   │
+│     Tuple: Start and end frame indices.                                                                                                                                                    │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `video: <class 'videodeepsearch.tools.schema.artifact.VideoInterface'>`                                                                                                                  │
+│ - `start_time: <class 'str'>`                                                                                                                                                              │
+│ - `end_time: <class 'str'>`                                                                                                                                                                │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:**                                                                                                                                                                 │
+│ **Tags:** time, frame, conversion, video                                                                                                                                                   │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `read_image`                                                                                                                                                                           │
+│ Read image, return base64 and mime/type                                                                                                                                                    │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `image_interface: <class 'videodeepsearch.tools.schema.artifact.ImageObjectInterface'>`                                                                                                  │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** minio_client                                                                                                                                                    │
+│ **Tags:** minio, image, read, binary                                                                                                                                                       │
+│ Output return: Returns a ImageRepresentation Pydantic BaseModel object with fields:                                                                                                        │
+│   - **base64_str**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **mime_type**: `str` (default=PydanticUndefined)                                                                                                                                       │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `read_segment`                                                                                                                                                                         │
+│ Fetch a video segment and return its extension and bytes.                                                                                                                                  │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `segment_interface: <class 'videodeepsearch.tools.schema.artifact.SegmentObjectInterface'>`                                                                                              │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** minio_client, postgres_client                                                                                                                                   │
+│ **Tags:** minio, postgres, segment, read, video                                                                                                                                            │
+│ Output return: Returns a VideoRepresentation Pydantic BaseModel object with fields:                                                                                                        │
+│   - **video_bytes**: `bytes` (default=PydanticUndefined)                                                                                                                                   │
+│   - **mime_type**: `str` (default=PydanticUndefined)                                                                                                                                       │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_related_asr_from_image`                                                                                                                                                           │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `image_object_interface: typing.Annotated`                                                                                                                                               │
+│ - `window_seconds: typing.Annotated`                                                                                                                                                       │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** asr, context, multimodal, postgres, minio                                                                                                                                        │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_related_asr_from_segment`                                                                                                                                                         │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `segment_interface: <class 'videodeepsearch.tools.schema.artifact.SegmentObjectInterface'>`                                                                                              │
+│ - `window_seconds: typing.Annotated`                                                                                                                                                       │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** postgres_client, minio_client                                                                                                                                   │
+│ **Tags:** asr, context, multimodal, postgres, minio                                                                                                                                        │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_images_from_visual_query`                                                                                                                                                         │
+│ Retrieve visually similar images based on a **visual query**.                                                                                                                              │
+│ This function performs a semantic search over a visual embedding index (e.g., Milvus)                                                                                                      │
+│ using a descriptive visual query, such as *"a sunset over mountains with orange clouds"*.                                                                                                  │
+│                                                                                                                                                                                            │
+│ (auto-provided): Ignore this parameters                                                                                                                                                    │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `visual_query: typing.Annotated`                                                                                                                                                         │
+│ - `top_k: typing.Annotated`                                                                                                                                                                │
+│ - `list_video_id: typing.Annotated[list, 'List of video IDs to search within (auto-provided at runtime).']`                                                                                │
+│ - `user_id: typing.Annotated`                                                                                                                                                              │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** visual_milvus_client, external_client                                                                                                                           │
+│ **Tags:** visual, semantic, image                                                                                                                                                          │
+│ Output return: Returns a list of ImageObjectInterface Pydantic BaseModel object with fields:                                                                                               │
+│   - **type_artifact**: `str` (default='ImageObjectInterface')                                                                                                                              │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **related_video_id**: `str` (default=PydanticUndefined) — Identifier of the video that this image belongs to.                                                                          │
+│   - **frame_index**: `int` (default=PydanticUndefined) — Frame index within the source video.                                                                                              │
+│   - **timestamp**: `str` (default=PydanticUndefined) — Timestamp of this frame in the video (e.g., '00:00:12.87').                                                                         │
+│   - **caption_info**: `str | None` — Descriptive caption summarizing the image content.                                                                                                    │
+│   - **score**: `float | None | str` — Normalized similarity score between this image and the retrieval query. Higher scores imply stronger semantic correlation. If `None`, the image was  │
+│ generated or retrieved outside of a semantic search process.                                                                                                                               │
+│   - **query**: `list | None` — The search query or queries that led to the retrieval of this image. Can be a single text query or a list for multimodal inputs (e.g., visual + textual).   │
+│ If `None`, the image was not semantically retrieved.                                                                                                                                       │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_images_from_caption_query`                                                                                                                                                        │
+│ Retrieve images semantically related to a **caption-based query**.                                                                                                                         │
+│                                                                                                                                                                                            │
+│ This function performs a semantic search using **caption embeddings** instead of raw image embeddings.                                                                                     │
+│ The query is encoded into the same embedding space as stored image captions,                                                                                                               │
+│ allowing text-to-image retrieval that aligns with descriptive annotations rather than pure visual features.                                                                                │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `caption_query: typing.Annotated`                                                                                                                                                        │
+│ - `top_k_each_request: typing.Annotated`                                                                                                                                                   │
+│ - `top_k_final: typing.Annotated`                                                                                                                                                          │
+│ - `weights: typing.Annotated[list | None, 'If provided, expects two weights  for hybrid search.']`                                                                                         │
+│ - `list_video_id: typing.Annotated[list, 'List of video IửodDs to restrict the search domain (auto-provided).']`                                                                           │
+│ - `user_id: typing.Annotated`                                                                                                                                                              │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** visual_milvus_client, external_client                                                                                                                           │
+│ **Tags:** caption, semantic, image                                                                                                                                                         │
+│ Output return: Returns a list of ImageObjectInterface Pydantic BaseModel object with fields:                                                                                               │
+│   - **type_artifact**: `str` (default='ImageObjectInterface')                                                                                                                              │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **related_video_id**: `str` (default=PydanticUndefined) — Identifier of the video that this image belongs to.                                                                          │
+│   - **frame_index**: `int` (default=PydanticUndefined) — Frame index within the source video.                                                                                              │
+│   - **timestamp**: `str` (default=PydanticUndefined) — Timestamp of this frame in the video (e.g., '00:00:12.87').                                                                         │
+│   - **caption_info**: `str | None` — Descriptive caption summarizing the image content.                                                                                                    │
+│   - **score**: `float | None | str` — Normalized similarity score between this image and the retrieval query. Higher scores imply stronger semantic correlation. If `None`, the image was  │
+│ generated or retrieved outside of a semantic search process.                                                                                                                               │
+│   - **query**: `list | None` — The search query or queries that led to the retrieval of this image. Can be a single text query or a list for multimodal inputs (e.g., visual + textual).   │
+│ If `None`, the image was not semantically retrieved.                                                                                                                                       │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_segments_from_event_query`                                                                                                                                                        │
+│ Retrieve temporally localized video segments that semantically match a **natural-language event query**.                                                                                   │
+│ This performs dense or hybrid (dense + sparse) embedding search over segment-level captions.                                                                                               │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `event_query: typing.Annotated`                                                                                                                                                          │
+│ - `top_k_each_request: typing.Annotated`                                                                                                                                                   │
+│ - `top_k_final: typing.Annotated`                                                                                                                                                          │
+│ - `weights: typing.Annotated[list | None, 'If provided, expects two weights  for hybrid reranking.']`                                                                                      │
+│ - `list_video_id: typing.Annotated[list, 'Video IDs to constrain the search domain (auto-provided).']`                                                                                     │
+│ - `user_id: typing.Annotated`                                                                                                                                                              │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** segment_milvus_client, external_client                                                                                                                          │
+│ **Tags:** event, semantic, segment                                                                                                                                                         │
+│ Output return: Returns a list of SegmentObjectInterface Pydantic BaseModel object with fields:                                                                                             │
+│   - **type_artifact**: `str` (default='SegmentObjectInterface')                                                                                                                            │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **related_video_id**: `str` (default=PydanticUndefined) — Unique identifier of the video containing this segment.                                                                      │
+│   - **start_frame_index**: `int` (default=PydanticUndefined) — Index of the first frame in the segment.                                                                                    │
+│   - **end_frame_index**: `int` (default=PydanticUndefined) — Index of the last frame in the segment.                                                                                       │
+│   - **start_time**: `str` (default=PydanticUndefined) — Start time of the segment in HH:MM:SS.sss format.                                                                                  │
+│   - **end_time**: `str` (default=PydanticUndefined) — End time of the segment in HH:MM:SS.sss format.                                                                                      │
+│   - **caption_info**: `str` (default=PydanticUndefined) — Semantic or descriptive caption summarizing the segment's content.                                                               │
+│   - **score**: `float | None` — Normalized similarity score (e.g., cosine similarity) between this segment and the query. Higher scores indicate stronger semantic alignment. If `None`,   │
+│ the segment was obtained outside of semantic retrieval (e.g., via procedural or scan-based tools).                                                                                         │
+│   - **segment_caption_query**: `str | None` — The textual or multimodal query that retrieved this segment. If `None`, the segment was not produced by a semantic search process.           │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `get_images_from_multimodal_query`                                                                                                                                                     │
+│ Perform **multimodal image retrieval** using combined:                                                                                                                                     │
+│   - Visual embeddings (image encoder)                                                                                                                                                      │
+│   - Caption dense embeddings (text encoder)                                                                                                                                                │
+│   - Caption sparse (BM25 or keyword) search                                                                                                                                                │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `visual_query: typing.Annotated`                                                                                                                                                         │
+│ - `caption_query: typing.Annotated`                                                                                                                                                        │
+│ - `top_k_each_request: typing.Annotated`                                                                                                                                                   │
+│ - `top_k_final: typing.Annotated`                                                                                                                                                          │
+│ - `weights: typing.Annotated[list, 'Expects three weights  for reranking.']`                                                                                                               │
+│ - `list_video_id: typing.Annotated[list, 'Restrict search to these videos (auto-provided).']`                                                                                              │
+│ - `user_id: typing.Annotated`                                                                                                                                                              │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** visual_milvus_client, external_client                                                                                                                           │
+│ **Tags:** multimodal, visual, caption, image                                                                                                                                               │
+│ Output return: Returns a list of ImageObjectInterface Pydantic BaseModel object with fields:                                                                                               │
+│   - **type_artifact**: `str` (default='ImageObjectInterface')                                                                                                                              │
+│   - **minio_path**: `str` (default=PydanticUndefined)                                                                                                                                      │
+│   - **related_video_id**: `str` (default=PydanticUndefined) — Identifier of the video that this image belongs to.                                                                          │
+│   - **frame_index**: `int` (default=PydanticUndefined) — Frame index within the source video.                                                                                              │
+│   - **timestamp**: `str` (default=PydanticUndefined) — Timestamp of this frame in the video (e.g., '00:00:12.87').                                                                         │
+│   - **caption_info**: `str | None` — Descriptive caption summarizing the image content.                                                                                                    │
+│   - **score**: `float | None | str` — Normalized similarity score between this image and the retrieval query. Higher scores imply stronger semantic correlation. If `None`, the image was  │
+│ generated or retrieved outside of a semantic search process.                                                                                                                               │
+│   - **query**: `list | None` — The search query or queries that led to the retrieval of this image. Can be a single text query or a list for multimodal inputs (e.g., visual + textual).   │
+│ If `None`, the image was not semantically retrieved.                                                                                                                                       │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `enhance_visual_query`                                                                                                                                                                 │
+│ Enhance a visual query using contrastive prompt engineering.                                                                                                                               │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `raw_query: typing.Annotated`                                                                                                                                                            │
+│ - `variants: typing.Annotated[list, 'List of desired visual variations']`                                                                                                                  │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** llm_as_tools                                                                                                                                                    │
+│ **Tags:** enhancement, visual, query, contrastive                                                                                                                                          │
+│ Output return: Returns a list of `str` values.                                                                                                                                             │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `enhance_textual_query`                                                                                                                                                                │
+│ Tăng cường câu truy vấn văn bản để tạo phiên bản giàu ngữ nghĩa hơn cho embedding hoặc mô tả hình ảnh.                                                                                     │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `raw_query: typing.Annotated`                                                                                                                                                            │
+│ - `variants: typing.Annotated[list, 'Danh sách các biến thể ngữ nghĩa hoặc bối cảnh']`                                                                                                     │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** llm_as_tools                                                                                                                                                    │
+│ **Tags:** enhancement, caption, semantic, query                                                                                                                                            │
+│ Output return: Returns a list of `str` values.                                                                                                                                             │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                                                                                                                                                                            │
+│ ### `caption_new_image`                                                                                                                                                                    │
+│                                                                                                                                                                                            │
+│ **User Parameters:**                                                                                                                                                                       │
+│ - `raw_inference_image: <class 'videodeepsearch.tools.schema.artifact.ImageObjectInterface'>`                                                                                              │
+│ - `related_asr: str | None`                                                                                                                                                                │
+│ - `focus_prompt: <class 'str'>`                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ **Required Dependencies:** llm_as_tools, minio_client                                                                                                                                      │
+│ **Tags:** caption, image, multimodal, asr, focus, retrieval                                                                                                                                │
+│ Output return: Returns a `str` value.                                                                                                                                                      │
+│                                                                                                                                                                                            │
+│                                                                                                                                                                                            │
+│ ##########                                                                                                                                                                                 │
+│                                         

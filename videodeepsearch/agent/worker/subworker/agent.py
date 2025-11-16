@@ -15,6 +15,7 @@ from videodeepsearch.agent.state.sub_orchestration import SubOrchestrationState
 from videodeepsearch.agent.state.sub_orc_state_tool import get_typed_state
 from videodeepsearch.core.app_state import Appstate
 
+from llama_index.core.evaluation import RelevancyEvaluator, EvaluationResult
 SUB_WORKER_NAME = "SUB_WORKER_AGENT"
 
 async def run_worker_function_as_tools(
