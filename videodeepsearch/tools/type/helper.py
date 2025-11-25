@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 from datetime import datetime
 import tempfile
 import os
+import inspect
 import re
 from pydantic import BaseModel
 
