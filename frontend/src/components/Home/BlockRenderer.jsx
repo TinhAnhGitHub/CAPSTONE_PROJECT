@@ -1,6 +1,11 @@
 import clsx from "clsx";
 import ImageViewer from "./Chat/ImageViewer";
 import VideoPlayer from "./Chat/VideoPlayer";
+import Markdown from "react-markdown";
+
+function handleCopyText(text){
+    navigator.clipboard.writeText(text);
+}
 
 export default function BlockRenderer({ block, role }) {
     if (block.block_type === 'text') {
@@ -15,7 +20,8 @@ export default function BlockRenderer({ block, role }) {
                     : 'bg-slate-800/60 border-white/10 text-slate-50 self-start' // bot: left
             )}
         >
-            {block?.text}
+            <Markdown>{block?.text}</Markdown>
+            {role === 'assistant' && <div onClick={() => handleCopyText(block?.text)}> copy icon </div>}
         </div>
     }
 

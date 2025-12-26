@@ -13,6 +13,7 @@ import addBlockToMessages from '@/utils/chat/addBlockToMessages';
 import BlockRenderer from './BlockRenderer';
 import { useVideos } from '@/api/services/hooks/query';
 import SendButton from './SendButton';
+import AppBar from '../Appbar';
 
 export default function Chat() {
   const {
@@ -35,7 +36,7 @@ export default function Chat() {
   const userId = user?.id;
 
   const [agentProgess, setAgentProgress] = useState(false);
-  const [thinkingMessage, setThinkingMessage] = useState('');
+  const [thinkingMessage, setThinkingMessage] = useState('CAgent is thinking...');
 
 
   const queryClient = useQueryClient();
@@ -79,11 +80,11 @@ export default function Chat() {
     const handleResponse = (msg) => {
       setThinkingMessage('');
       const prev = useStoreChat.getState().chatMessages;
-      
+
       const newBlock = parseChunkToBlock("text", msg.content_delta);
       if (!newBlock) return;
 
-      const updated =  addBlockToMessages(prev, 'assistant', newBlock);
+      const updated = addBlockToMessages(prev, 'assistant', newBlock);
       setChatMessages(updated);
 
       requestAnimationFrame(() => {
@@ -138,6 +139,13 @@ export default function Chat() {
   useEffect(() => {
     // if keyboard a-z or 0-9 is pressed, focus the chat input
     const handleKeyDown = (e) => {
+      // Don't steal focus if user is already typing in an input/textarea
+      const activeEl = document.activeElement;
+      const isTyping = activeEl?.tagName === 'INPUT' || 
+                       activeEl?.tagName === 'TEXTAREA' || 
+                       activeEl?.isContentEditable;
+      if (isTyping) return;
+
       const key = e.key || e.keyCode;
       if ((key.length === 1 && key.match(/[a-z0-9]/i)) || (key >= 48 && key <= 90)) {
         chatRef.current?.focus();
@@ -169,6 +177,7 @@ export default function Chat() {
 
   return (
     <div className='h-screen w-full flex flex-col justify-between'>
+      <AppBar />
       <div className="flex flex-col w-full  h-[90vh] gap-12 px-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto">
         {/*  hiện tại chưa handle block, hard code! */}
         {chatMessages.map((m, i) => (
@@ -179,7 +188,10 @@ export default function Chat() {
           </div>
         ))}
 
-        {thinkingMessage && <div className='animate-pulse text-white flex flex-col pt-12'>{thinkingMessage}</div>}
+        {thinkingMessage && <div className='flex pt-12 gap-2'>
+          <div>loading icon</div>
+          <div className='animate-pulse text-white flex flex-col '>{thinkingMessage}</div>
+        </div>}
         {agentProgess && <div className='animate-pulse text-white flex flex-col pt-12'>...</div>}
         <div ref={bottomRef}></div>
       </div>
@@ -213,7 +225,7 @@ export default function Chat() {
           placeholder="Ask the agent..."
         />
 
-          <SendButton control={control} handlePrompt={handlePrompt} />
+        <SendButton control={control} handlePrompt={handlePrompt} />
       </div>
     </div>
   )

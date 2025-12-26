@@ -9,10 +9,17 @@ import clsx from 'clsx';
 import SessionDropdownList from './SessionDropdownList';
 import { PlusIcon } from '@heroicons/react/16/solid';
 import { useCreateNewChat } from '@/api/services/hooks/query';
+import ChatHistory from './ChatHistory';
 
 export default function HistoryConversations() {
-  const chatHistory = useStoreChat((state) => state.chatHistory);
-  const setChatHistory = useStoreChat((state) => state.setChatHistory);
+  // const chatHistory = useStoreChat((state) => state.chatHistory);
+  // const setChatHistory = useStoreChat((state) => state.setChatHistory);
+  const [chatHistory, setChatHistory] = useState([{
+    _id: 'testsession1',
+  }, {
+    _id: 'testsession2',
+  }
+  ]);
   const setSessionId = useStoreChat((state) => state.setSessionId);
   const session_id = useStoreChat((state) => state.session_id);
   const user = useStore((state) => state.user);
@@ -42,9 +49,17 @@ export default function HistoryConversations() {
     createNewChatMutation.mutate();
   }
 
-  function selectConversation(session_id) {
-    // set session id 
-    setSessionId(session_id);
+
+  function handleEditChat(chatId, newName) {
+    // Update local state optimistically
+    setChatHistory(prev => 
+      prev.map(chat => 
+        chat._id === chatId ? { ...chat, name: newName } : chat
+      )
+    );
+    
+    // TODO: Call API to persist the change
+    // api.patch(`/api/chat/${chatId}`, { name: newName });
   }
 
   const ensureSessionId = useStoreChat((state) => state.ensureSessionId);
@@ -63,17 +78,12 @@ export default function HistoryConversations() {
       <div className='flex flex-col scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto'>
         {
           chatHistory.map((conv, idx) => (
-            <div key={idx}
-              className={clsx('relative m-1 py-2 px-4 hover:bg-gray-800 cursor-pointer rounded-lg',
-                (session_id === conv._id) ? 'bg-gray-800' : '',
-                "group"
-              )}
-              onClick={() => selectConversation(conv._id)}>
-              <div className='text-sm '>{conv?._id?.slice(0, 8)}</div>
-              <div className='absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-gray-600 cursor-pointer hidden group-hover:block has-data-open:block'>
-                <SessionDropdownList session={conv} />
-              </div>
-            </div>
+            <ChatHistory
+              key={conv._id || idx}
+              conv={conv}
+              session_id={session_id}
+              onEdit={handleEditChat}
+            />
           ))
         }
       </div>

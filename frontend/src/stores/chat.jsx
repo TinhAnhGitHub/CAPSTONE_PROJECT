@@ -11,13 +11,13 @@ export const useStore = create(
             ensureSessionId: () => {
                 let session_id = get().session_id;
                 if (session_id) return session_id;
-                    // get the first one in chatHistory
+                // get the first one in chatHistory
                 const chatHistory = get().chatHistory;
                 if (chatHistory.length > 0) {
                     session_id = chatHistory[0]._id;
                     set({ session_id });
                     return session_id;
-                } 
+                }
                 return null;
             },
 
@@ -42,6 +42,10 @@ export const useStore = create(
 
             currentGroup: null,
             setCurrentGroup: (group) => set({ currentGroup: group }),
+
+            sidebarOpen: false,
+            setSidebarOpen: (open) => set({ sidebarOpen: open }),
+            toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
         }),
         {
             name: "chatState", // key in localStorage

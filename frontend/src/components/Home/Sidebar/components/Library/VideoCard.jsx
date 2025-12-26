@@ -25,14 +25,14 @@ export default function VideoCard({ video }) {
     const handleToggleSelect = async (video_id, session_id) => {
         selectMutation.mutate({video_id, session_id});
     }
-    
+    const handleFailed = () => {
+        // call api to re-ingest
+    }
     return (
         <div className={clsx("relative mb-4 rounded-lg hover:shadow-lg p-2 cursor-pointer transition",
             !ingested(video.ingested_status) && "opacity-50 !cursor-not-allowed hover:shadow-none"
             )}
-            onClick={() => {
-                if (!ingested(video.ingested_status)) return;
-                handleToggleSelect(video._id, session_id)}}>
+            >
             <div className='relative'>
                 <img
                     src={video.thumbnail || "/images/testImage.png"}
@@ -52,9 +52,18 @@ export default function VideoCard({ video }) {
                     <VideoDropdownList video={video} />
                 </div>
             </div>
-            <div className='absolute top-2 right-2 rounded-full p-1 '>
+            <div className='absolute top-2 right-2 rounded-full p-1 '
+                onClick={() => {
+                    if (!ingested(video.ingested_status)) return;
+                    handleToggleSelect(video._id, session_id)
+                }}>
                 <SelectedIcon selected={video.selected} />
-            </div>
+            </div >
+            {video.failed && <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-600 text-white px-2 py-1 rounded-md'
+                onClick={handleFailed}
+            >
+                Failed Icon
+            </div>}
         </div>
     )
 }

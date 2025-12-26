@@ -143,6 +143,12 @@ async def handle_stream_chat(socket_id, data: dict):
                             await sio.emit("full_response", {
                                 "content": data,
                             })
+                            await sio.emit(
+                                "test",
+                                {
+                                    "content": agent_reponse,
+                                },
+                            )
                             # lưu vào db
                         elif (msg_type == "ToolCall"):
                             pass

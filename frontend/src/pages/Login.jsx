@@ -33,12 +33,13 @@ export default function Login() {
     return (
         <div className="bg-black/80 h-screen w-screen flex items-center justify-center">
             <div className="bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl w-full max-w-md">
-                <h1 className="text-3xl font-bold text-center text-white mb-6">Login</h1>
+                <h1 className="text-3xl font-bold text-center text-white mb-6">Sign in</h1>
                 <div className="flex justify-center">
                     <button
                         onClick={() => googleLogin()}
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700"
                     >
+                        
                         Sign in with Google
                     </button>
                 </div>
