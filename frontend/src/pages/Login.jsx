@@ -20,7 +20,7 @@ export default function Login() {
             login(userInfo, data.access_token);
             navigate('/');
         },
-        onError: errorResponse => console.log(errorResponse),
+        onError: errorResponse => console.error(errorResponse),
     });
 
     useEffect(() => {

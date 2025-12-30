@@ -6,78 +6,86 @@ from datetime import datetime
 from abc import abstractmethod, ABC
 from llama_index.core.base.llms.types import (
     MessageRole,
-    ImageBlock,
-    ContentBlock,
+    # ContentBlock,
     TextBlock,
-    VideoBlock,
+    # ImageBlock,
+    AudioBlock,
+    DocumentBlock,
+    CachePoint,
+    CitableBlock,
+    CitationBlock,
 )
+from llama_index.core.bridge.pydantic import (
+    AnyUrl,
+    Field,
+    FilePath,
+)
+
+from llama_index.core.tools import ToolOutput
 
 from app.core.config import settings
 
 
-# T = TypeVar("T", bound="ChatBlock")
-# class ChatBlock(BaseModel, ABC):
-#     """
-#     BaseClass for any message block
-#     """
+class ToolCallBlock(BaseModel):
+    """All tool calls are surfaced."""
 
-#     block_type: Any
-
-#     @abstractmethod
-#     def __str__(self) -> str:
-#         """String representation of the message block"""
-
-#     @classmethod
-#     @abstractmethod
-#     def from_str_cls(cls: Type[T], raw: str) -> T:
-#         """
-#         Reconstruct object from a string
-#         """
+    block_type: Literal["tool_call"] = "tool_call"
+    tool_name: str
+    tool_kwargs: dict
+    tool_call_id: str
 
 
-# class TextBlock(ChatBlock):
-#     block_type: Literal["text"] = "text"
-#     text_content: str = Field(
-#         ..., description="The main content of the text message block"
-#     )
+class VideoBlock(BaseModel):
+    """A representation of video data to directly pass to/from the LLM."""
 
-#     def __str__(self) -> str:
-#         return self.text_content
-
-#     @classmethod
-#     def from_str_cls(cls, raw: str) -> TextBlock:
-#         return cls(text_content=raw)
+    block_type: Literal["video"] = "video"
+    video: bytes | None = None
+    path: FilePath | None = None
+    url: list[AnyUrl | str] | None = None
+    video_mimetype: str | None = None
+    detail: str | None = None
+    fps: int | None = None
 
 
-# class ImageBlock(ChatBlock):
-#     block_type: Literal["image"] = "image"
-#     image_urls: list[str] = Field(..., description="List of image URLs")
+class ImageBlock(BaseModel):
+    """A representation of image data to directly pass to/from the LLM."""
 
-#     def __str__(self) -> str:
-#         return "\n".join(self.image_urls)
-
-#     @classmethod
-#     def from_str_cls(cls, raw: str) -> ImageBlock:
-#         urls = [url.strip() for url in raw.split(",") if url.strip()]
-#         return cls(image_urls=urls)
+    block_type: Literal["image"] = "image"
+    image: bytes | None = None
+    path: FilePath | None = None
+    url: list[AnyUrl | str] | None = None
+    image_mimetype: str | None = None
+    detail: str | None = None
 
 
-# class VideoBlock(ChatBlock):
-#     block_type: Literal["video"] = "video"
-#     video_urls: list[str] = Field(..., description="The URL of the video")
+class ToolCallResultBlock(BaseModel):
+    """Tool call result."""
 
-#     def __str__(self) -> str:
-#         return "\n".join(self.video_urls)
-
-#     @classmethod
-#     def from_str_cls(cls, raw: str) -> "VideoBlock":
-#         urls = [url.strip() for url in raw.split(",") if url.strip()]
-#         return cls(video_urls=urls)
+    block_type: Literal["tool_call_result"] = "tool_call_result"
+    tool_name: str
+    tool_kwargs: dict
+    tool_id: str
+    tool_output: ToolOutput
+    return_direct: bool
 
 
-# CONTENT_BLOCK = Annotated[
-#     Union[TextBlock, ImageBlock, VideoBlock], Field(discriminator="block_type")
-# ]
+# Extended content block that includes custom types
+ContentBlock = Annotated[
+    Union[
+        TextBlock,
+        # ImageBlock,
+        AudioBlock,
+        DocumentBlock,
+        CachePoint,
+        CitableBlock,
+        CitationBlock,
+        ImageBlock,
+        VideoBlock,
+        ToolCallBlock,
+        ToolCallResultBlock,
+    ],
+    Field(discriminator="block_type"),
+]
 
 
 class SessionMessage(Document):
@@ -86,8 +94,11 @@ class SessionMessage(Document):
     user -> AI: 1 session message
     AI -> user: 1 session message
     """
+
     # message_id: auto gen
-    session_id: PydanticObjectId | None # chỉ vào chathistory # r sao ko de chat histỏy la 1 list o day
+    session_id: (
+        PydanticObjectId | None
+    )  # chỉ vào chathistory # r sao ko de chat histỏy la 1 list o day
 
     role: MessageRole = Field(
         ..., description="Message role: Could be USER, SYSTEM, ASSISTANT, ..."
@@ -98,8 +109,4 @@ class SessionMessage(Document):
 
     class Settings:
         name = settings.CHAT_MESSAGE_COLLECTION_NAME
-        indexes = [
-            "role",
-            [("timestamp", -1)],
-            [("last_updated", -1)]
-        ]
+        indexes = ["role", [("timestamp", -1)], [("last_updated", -1)]]

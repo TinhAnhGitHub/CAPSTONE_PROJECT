@@ -26,6 +26,44 @@ export default function Chat() {
 
   const chatMessages = useStoreChat((state) => state.chatMessages);
   const setChatMessages = useStoreChat((state) => state.setChatMessages);
+  //   const [chatMessages, setChatMessages] = useState([{
+  //     role: 'assistant',
+  //     timestamp: Date.now(),
+  //     blocks: [
+  //       {
+  //         block_type: 'text',
+  //         text: 'Hello! How can I assist you today?',
+  //       }
+  //     ],
+  //   },
+  // {
+  //     role: 'user',
+  //     timestamp: Date.now(),
+  //     blocks: [
+  //       {
+  //         block_type: 'text',
+  //         text: 'Hi! I have a question about my order.',
+  //       }
+  //     ],
+  // },
+  // {
+  //   role: 'assistant',
+  //   timestamp: Date.now(),
+  //   blocks: [
+  //     {
+  //       block_type: 'text',
+  //       text: 'Sure! Could you please provide me with your order number so I can look into it for you?',
+  //     },
+  //     {
+  //       block_type: 'image',
+  //       url: ['http://100.120.22.90:5173/images/testImage.png', 'http://100.120.22.90:5173/images/testImage.png'],
+  //     },
+  //     {
+  //       block_type: 'video',
+  //       url: ['http://100.120.22.90:5173/videos/testVideo.mp4'],
+  //     }
+  //   ],
+  // }]);
   const addChatMessage = useStoreChat((state) => state.addChatMessage);
 
   const getSessionId = useStoreChat((state) => state.getSessionId);
@@ -36,7 +74,7 @@ export default function Chat() {
   const userId = user?.id;
 
   const [agentProgess, setAgentProgress] = useState(false);
-  const [thinkingMessage, setThinkingMessage] = useState('CAgent is thinking...');
+  const [thinkingMessage, setThinkingMessage] = useState('');
 
 
   const queryClient = useQueryClient();
@@ -60,6 +98,9 @@ export default function Chat() {
       });
     },
     enabled: !!session_id,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    staleTime: Infinity,
   })
 
   useEffect(() => {
@@ -95,8 +136,30 @@ export default function Chat() {
       setAgentProgress(true);
     }
 
-    const handleMedia = () => {
+    const handleMedia = (media) => {
       // done
+      console.log("media received", media);
+      setAgentProgress(false);
+      const prev = useStoreChat.getState().chatMessages;
+      if (!media || !media.media_type) return;
+
+      let media_type = media.media_type;
+      if (media_type !== 'image' && media_type !== 'video') return;
+
+      let media_url = [];
+      if (media_type === 'image') {
+        media_url = media.results.map((item) => item.image_url);  
+      } else if (media_type === 'video') {
+        media_url = media.results.map((item) => item.caption_url);
+      }
+      const newBlock = parseChunkToBlock(media_type, media_url);
+      if (!newBlock) return;
+      const updated = addBlockToMessages(prev, 'assistant', newBlock);
+      setChatMessages(updated);
+
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
     };
 
     const handleFullResponse = (data) => {
@@ -141,9 +204,9 @@ export default function Chat() {
     const handleKeyDown = (e) => {
       // Don't steal focus if user is already typing in an input/textarea
       const activeEl = document.activeElement;
-      const isTyping = activeEl?.tagName === 'INPUT' || 
-                       activeEl?.tagName === 'TEXTAREA' || 
-                       activeEl?.isContentEditable;
+      const isTyping = activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        activeEl?.isContentEditable;
       if (isTyping) return;
 
       const key = e.key || e.keyCode;

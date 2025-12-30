@@ -14,3 +14,12 @@ body {
         @apply border border-gray-800 rounded-full size-8 flex items-center justify-center text-xl hover:bg-gray-100 cursor-pointer transition select-none;
     }
 }
+
+pre {
+    @apply whitespace-pre-wrap break-words overflow-x-auto max-w-full;
+}
+
+code {
+    word-break: break-word;
+    white-space: pre-wrap;
+}

@@ -63,7 +63,7 @@ export const useGroups = () => {
         queryKey: ['groups'],
         queryFn: async () => {
             const res = await api.get('/api/user/groups');
-            console.log(res.data)
+            // console.log(res.data)
             return res.data.groups
         }
     });

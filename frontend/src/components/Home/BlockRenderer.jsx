@@ -27,7 +27,7 @@ export default function BlockRenderer({ block, role }) {
 
     if (block.block_type === 'image') {
         return (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 py-2">
                 {block.url.map((url, i) => (
                     <ImageViewer key={i} image={{ url: url, title: `Image ${i + 1}` }} />
                 ))}
@@ -37,9 +37,9 @@ export default function BlockRenderer({ block, role }) {
 
     if (block.block_type === 'video') {
         return (
-            <div className="grid grid-cols-3 gap-2">
-                {block.url.map((url, i) => (
-                    <VideoPlayer key={i} video={{ url: url, title: `Video ${i + 1}` }} />
+            <div className="grid grid-cols-3 gap-2 py-2">
+                {block.url.map((link, i) => (
+                    <VideoPlayer key={i} video={{ url: link, title: `Video ${i + 1}` }} />
                 ))}
             </div>
         );

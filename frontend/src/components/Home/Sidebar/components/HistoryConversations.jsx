@@ -12,16 +12,10 @@ import { useCreateNewChat } from '@/api/services/hooks/query';
 import ChatHistory from './ChatHistory';
 
 export default function HistoryConversations() {
-  // const chatHistory = useStoreChat((state) => state.chatHistory);
-  // const setChatHistory = useStoreChat((state) => state.setChatHistory);
-  const [chatHistory, setChatHistory] = useState([{
-    _id: 'testsession1',
-  }, {
-    _id: 'testsession2',
-  }
-  ]);
-  const setSessionId = useStoreChat((state) => state.setSessionId);
+  const chatHistory = useStoreChat((state) => state.chatHistory);
+  const setChatHistory = useStoreChat((state) => state.setChatHistory);
   const session_id = useStoreChat((state) => state.session_id);
+  const setSessionId = useStoreChat((state) => state.setSessionId);
   const user = useStore((state) => state.user);
 
   useQuery(
@@ -52,11 +46,11 @@ export default function HistoryConversations() {
 
   function handleEditChat(chatId, newName) {
     // Update local state optimistically
-    setChatHistory(prev => 
-      prev.map(chat => 
-        chat._id === chatId ? { ...chat, name: newName } : chat
-      )
-    );
+    // setChatHistory(prev => 
+    //   prev.map(chat => 
+    //     chat._id === chatId ? { ...chat, name: newName } : chat
+    //   )
+    // );
     
     // TODO: Call API to persist the change
     // api.patch(`/api/chat/${chatId}`, { name: newName });

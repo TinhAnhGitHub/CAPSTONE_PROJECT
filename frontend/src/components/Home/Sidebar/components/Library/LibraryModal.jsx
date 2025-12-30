@@ -31,7 +31,7 @@ export default function LibraryModal({ isModalOpen, closeModal }) {
 
     useEffect(() => {
         const result = ensureGroupId(groups, group, setCurrentGroup);
-        console.log("Ensure group result:", result);
+        // console.log("Ensure group result:", result);
         if (result.status === "create") {
             createNewGroupMutation.mutate();
         }

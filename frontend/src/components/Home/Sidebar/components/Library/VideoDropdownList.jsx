@@ -14,7 +14,7 @@ export default function VideoDropdownList({ video }) {
     const queryClient = useQueryClient();
     const deleteVideoMutation = useMutation({
         mutationFn: (video) => {
-            console.log("Deleting video:", video);
+            // console.log("Deleting video:", video);
             return api.delete('/api/user/videos/delete', {
                 data: {
                     video_ids: [video._id],

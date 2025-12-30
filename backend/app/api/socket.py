@@ -1,5 +1,8 @@
 from email.mime import image
 import json
+import traceback
+
+from regex import P
 from app.core.dependencies import UserServiceDep
 from beanie import PydanticObjectId
 from fastapi import HTTPException
@@ -18,14 +21,17 @@ sio = socketio.AsyncServer(
 import asyncio
 from app.core.lifespan import app_state
 from app.model.session_message import ImageBlock, SessionMessage, TextBlock, VideoBlock
+
 from llama_index.core.base.llms.types import MessageRole
 import httpx
 
 
 security = HTTPBearer(auto_error=False)
 
+from app.tests.test_data import image_search_result_1
 
 # AGENT SOCKET USES RAW WS
+
 
 @sio.on("stream_chat")
 async def handle_stream_chat(socket_id, data: dict):
@@ -76,22 +82,49 @@ async def handle_stream_chat(socket_id, data: dict):
                 chat_history_dict.append(chat_dict)
 
             ai_url = "ws://100.113.186.28:8050/ws/start_workflow"
+            # payload = {
+            #     "user_id": user_id,
+            #     "video_ids": video_ids,
+            #     "user_demand": message,
+            #     "chat_history": chat_history_dict,
+            # }
             payload = {
-                "user_id": user_id,
-                "video_ids": video_ids,
-                "user_demand": message,
-                "chat_history": chat_history_dict,
+                "session_id": "692bd512086bad3a30946947",
+                "user_id": "agenttest",
+                "video_ids": [
+                    "692ad412086ada3a309334ff",
+                    "692ad412086ada3a30933500",
+                    "692ad412086ada3a30933501",
+                    "692ad412086ada3a30933502",
+                ],
+                "user_demand": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
+                "chat_history": [
+                    {
+                        "role": "user",
+                        "content": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
+                    }
+                ],
             }
 
             # HTTP stream
             async with websockets.connect(ai_url) as ws:
                 await ws.send(json.dumps(payload))
 
+                accum = ""
+                prev_msg_type = ""
+                ai_message_blocks = []
                 async for msg in ws:
                     try:
                         data = json.loads(msg)
                         data = data.get("data", {})
                         msg_type = data.get("event_type", "")
+
+                        # Save accumulated stream when transitioning away from AgentStream
+                        if prev_msg_type == "AgentStream" and msg_type != "AgentStream":
+                            if accum:
+                                ai_message_block = TextBlock(text=accum)
+                                ai_message_blocks.append(ai_message_block)
+                                accum = ""
                         # content = data.get("content", "")
                         # AgentProgressEvent -> ...
                         # agentinput -> bỏ
@@ -108,7 +141,7 @@ async def handle_stream_chat(socket_id, data: dict):
 
                         # final event -> lưu chat_history
 
-                        if (msg_type == "AgentProgressEvent"):
+                        if msg_type == "AgentProgressEvent":
                             # hiện ...
                             await sio.emit(
                                 "running",
@@ -118,56 +151,134 @@ async def handle_stream_chat(socket_id, data: dict):
                                 },
                                 to=socket_id,
                             )
-                        elif (msg_type == "AgentInput"):
+                        elif msg_type == "AgentInput":
                             pass
-                        elif (msg_type == "AgentStream"):
+                        elif msg_type == "AgentStream":
                             thinking_delta = data.get("thinking_delta", None)
                             if thinking_delta:
-                                await sio.emit("thinking", {
-                                    "content": thinking_delta,
-                                    "role" : MessageRole.ASSISTANT.value,
-                                }, to=socket_id)
-                            else: # reponse
+                                await sio.emit(
+                                    "thinking",
+                                    {
+                                        "content": thinking_delta,
+                                        "role": MessageRole.ASSISTANT.value,
+                                    },
+                                    to=socket_id,
+                                )
+                            else:  # reponse
                                 response = data.get("response", "")
                                 response_delta = data.get("delta", "")
-                                await sio.emit("response", {
-                                    "content": response,
-                                    "content_delta": response_delta,
-                                    "role" : MessageRole.ASSISTANT.value,
-                                }, to=socket_id)
-                        elif (msg_type == "AgentOutput"):
-                            agent_reponse = data.get("response", "")
-                            agent_reponse["session_id"] = session_id
-                            ai_message = SessionMessage.model_validate(agent_reponse)
-                            await app_state.chat_service.add_message(session_id, "assistant", ai_message)
-                            await sio.emit("full_response", {
-                                "content": data,
-                            })
-                            await sio.emit(
-                                "test",
-                                {
-                                    "content": agent_reponse,
-                                },
-                            )
-                            # lưu vào db
-                        elif (msg_type == "ToolCall"):
+                                # accumulate the delta
+                                if response_delta:
+                                    accum += response_delta
+                                await sio.emit(
+                                    "response",
+                                    {
+                                        "content": response,
+                                        "content_delta": response_delta,
+                                        "role": MessageRole.ASSISTANT.value,
+                                    },
+                                    to=socket_id,
+                                )
+                        elif msg_type == "ToolCall":
                             pass
-                        elif (msg_type == "ToolCallResult"):
+                        elif msg_type == "ToolCallResult":
                             # show toolicon trước
                             # mốt show list hình ảnh từ s3, video + các timestamp
-                            media = data.get("media", [])
-                            await sio.emit("media", {
-                                "content": media
-                            }, to=socket_id)
-                        elif (msg_type == "FinalEvent"):
-                            pass
+
+                            raw_output = data.get("tool_output", {}).get(
+                                "raw_output", {}
+                            )
+                            if isinstance(raw_output, str):
+                                # skip this turn
+                                continue
+                            summary = raw_output.get("summary", {})
+
+                            media_type = summary.get("result_type", "")
+
+                            s3_base = "s3://"
+                            http_base = "http://100.113.186.28:9000/"
+
+                            def format_tool_result(media):
+                                if media_type == "image_search":
+                                    image_url = [
+                                        item["minio_path"].replace(s3_base, http_base)
+                                        for item in media
+                                    ]
+                                    image_block = ImageBlock(
+                                        url=image_url,
+                                    )
+                                    ai_message_blocks.append(image_block)
+                                    return {
+                                        "media_type": "image",
+                                        "results": [
+                                            {
+                                                **item,
+                                                "image_url": item["minio_path"].replace(
+                                                    s3_base, http_base
+                                                ),
+                                            }
+                                            for item in media
+                                        ],
+                                    }
+                                elif media_type == "segment_caption_search":
+                                    video_url = [
+                                        item["minio_path"].replace(s3_base, http_base)
+                                        for item in media
+                                    ]
+                                    video_block = VideoBlock(url=video_url)
+                                    ai_message_blocks.append(video_block)
+                                    return {
+                                        "media_type": "video",
+                                        "results": [
+                                            {
+                                                **item,
+                                                "caption_url": item[
+                                                    "minio_path"
+                                                ].replace(s3_base, http_base),
+                                            }
+                                            for item in media
+                                        ],
+                                    }
+                                else:
+                                    return {"media_type": "unknown", "results": []}
+
+                            media = summary.get("top_matches", [])
+                            formatted_media = format_tool_result(media)
+                            if formatted_media["media_type"] in [
+                                "image",
+                                "video",
+                            ]:
+                                await sio.emit("media", formatted_media, to=socket_id)
+                        elif msg_type == "AgentOutput":
+                            # save to database
+                            print("🐴🐴🐴🐴🐴🐴")
+                            ai_message = SessionMessage(
+                                session_id=session_id,
+                                role=MessageRole.ASSISTANT,
+                                blocks=ai_message_blocks,
+                            )
+                            print("🥀🥀🥀🥀🥀🥀🥀🥀", ai_message_blocks)
+                            await app_state.chat_service.add_message(
+                                session_id, "assistant", ai_message
+                            )
+                            print("📷📷📷📷📷📷📷📷")
+
+                            # Emit stream_end to notify the client
+                            await sio.emit(
+                                "stream_end",
+                                {"session_id": session_id},
+                                to=socket_id,
+                            )
                         else:
                             pass
 
+                        # Update prev_msg_type at end of loop
+                        prev_msg_type = msg_type
+
                     except Exception as e:
                         print("⚠️ parse error:", e)
+                        traceback.print_exc()  # This will show the exact line number
             # update the db
-            # blocks = parseFullResponseToBlocks(full_response)
 
         except Exception as e:
             await sio.emit(
