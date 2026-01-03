@@ -1,7 +1,5 @@
 from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
-import os
 
 class ImageMilvusConfig(BaseSettings):
     model_config = SettingsConfigDict(

@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.pool import NullPool
 
-from core.config.logging import run_logger
 
 Base = declarative_base()
 
@@ -87,7 +86,6 @@ class ArtifactTracker:
     async def initialize(self) -> None:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        run_logger.info("Artifact tracker initialized")
     
     async def save_artifact(self, metadata: ArtifactMetadata) -> str:
         async with self.get_session() as session:
@@ -110,9 +108,7 @@ class ArtifactTracker:
                     )
                     session.add(lineage)
             
-            await session.commit()
-            run_logger.info(f"Saved artifact {metadata.artifact_id}")
-        
+            await session.commit()        
             return metadata.artifact_id
 
     async def get_artifact(self, artifact_id: str) -> ArtifactMetadata | None:

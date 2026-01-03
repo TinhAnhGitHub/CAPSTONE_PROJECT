@@ -2,7 +2,7 @@ from abc import abstractmethod, ABC
 from pymilvus import AsyncMilvusClient
 from typing import Iterable, TypeVar, Generic
 from pydantic import BaseModel
-
+from loguru import logger
 
 OutputT = TypeVar('OutputT', bound=BaseModel)
 class BaseMilvusClient(ABC, Generic[OutputT]):
@@ -15,8 +15,10 @@ class BaseMilvusClient(ABC, Generic[OutputT]):
         self.client: AsyncMilvusClient | None = None
 
     async def connect(self):
+        logger.info(f"Connection to {self.collection=}")
         self.client = AsyncMilvusClient(uri=self.uri)
         await self.client.load_collection(self.collection)
+        logger.info("Connected")
         return self
 
     async def close(self):

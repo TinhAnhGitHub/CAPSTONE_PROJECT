@@ -1,12 +1,14 @@
 from fastapi import FastAPI
-import asyncio
-import logging
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 from llama_index.llms.google_genai import GoogleGenAI
-from videodeepsearch.tools.type.factory import ToolFactory
-from videodeepsearch.tools.clients import *
+import videodeepsearch.tools.implementation
+from videodeepsearch.agent.definition import *
 
+
+
+from videodeepsearch.tools.clients import *
+from videodeepsearch.agent.context.management import FileSystemContextStore
 from .app_state import Appstate
 from .config.client_config import (
     image_milvus_config,
@@ -21,9 +23,6 @@ from .config.llm_config import (
     llm_configs
 )
 
-from videodeepsearch.agent.workflow import VideoAgentWorkFlow
-from videodeepsearch.agent.orc_service import WorkflowService
-from videodeepsearch.code_env.executor import SandboxCodeExecutor
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,7 +78,7 @@ async def lifespan(app: FastAPI):
         secure=minio_storage_client_config.secure
     )
 
-    
+    print(f"Connecting to the clients")
     await app_state.image_milvus_client.connect()
     await app_state.segment_milvus_client.connect()
     await app_state.external_client.connect()
@@ -87,7 +86,7 @@ async def lifespan(app: FastAPI):
     async with app_state.postgres_client.get_session() as session:
         result = await session.execute(text("SELECT version();"))
         version = result.scalar_one()
-        print(f"🗄️ PostgreSQL connection successful.\n   Version: {version}")
+        print(f"PostgreSQL connection successful.\n   Version: {version}")
 
     # llm init
     for llm_config in llm_configs:
@@ -97,27 +96,12 @@ async def lifespan(app: FastAPI):
             generation_config=llm_config.generation_config
         )
 
-    small_llm = GoogleGenAI(
-        model='gemini-2.5-flash-lite',
+        
+    app_state.context_file_management = FileSystemContextStore(
+        storage_dir='./local'
     )
 
-    app_state.tool_factory = ToolFactory(
-        image_milvus_client=app_state.image_milvus_client,
-        external_client=app_state.external_client,
-        segment_milvus_client=app_state.segment_milvus_client,
-        postgres_client=app_state.postgres_client,
-        minio_client=app_state.minio_client,
-        llm_as_tools=small_llm
-    )
-
-    video_agentic_workflow = VideoAgentWorkFlow(timeout=3600, verbose=True)
-    app.state.workflow_service = WorkflowService(orchestration=video_agentic_workflow)
-
-    global_dependencies = app_state.tool_factory.dependency_map
-    app_state.code_sandbox = SandboxCodeExecutor(
-        shared_bindings=global_dependencies
-    )
-
+    
 
     yield 
 

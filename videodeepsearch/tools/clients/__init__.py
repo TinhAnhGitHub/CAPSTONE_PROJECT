@@ -1,5 +1,5 @@
 from .milvus.client import ImageMilvusClient, SegmentCaptionImageMilvusClient
-from .milvus.schema import ImageMilvusResponse, ImageFilterCondition, SegmentCaptionFilterCondition, SegmentCaptionMilvusResponse
+from .milvus.schema import ImageFilterCondition, SegmentCaptionFilterCondition
 from .external.encode_client import ExternalEncodeClient, ImageEmbeddingClient, ImageEmbeddingRequest, ImageEmbeddingResponse, ImageEmbeddingSettings, TextEmbeddingClient, TextEmbeddingRequest, TextEmbeddingResponse, TextEmbeddingSettings
 from .minio.client import StorageClient
 from .postgre.client import PostgresClient
@@ -11,10 +11,8 @@ __all__ = [
     "SegmentCaptionImageMilvusClient",
 
     # milvus schema
-    "ImageMilvusResponse",
     "ImageFilterCondition",
     "SegmentCaptionFilterCondition",
-    "SegmentCaptionMilvusResponse",
 
     # external encode clients
     "ExternalEncodeClient",

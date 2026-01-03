@@ -3,10 +3,10 @@ from typing import Annotated, Iterable
 import traceback
 import logging
 from llama_index.core.llms import ChatMessage
+from llama_index.core.agent.workflow import AgentOutput
 from typing import Any
+from videodeepsearch.agent.orc_service import ignite_workflow
 
-from videodeepsearch.core.dependencies import get_workflow_service
-from videodeepsearch.agent.orc_service import WorkflowService
 
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,6 @@ def _parse_chat_history(raw_history: list[dict]) -> list[ChatMessage]:
 @router.websocket("/start_workflow")
 async def start_workflow_ws(
     websocket: WebSocket,
-    workflow_service: Annotated[WorkflowService, Depends(get_workflow_service)]
 ):
     """
     WebSocket endpoint for streaming workflow results.
@@ -52,13 +51,15 @@ async def start_workflow_ws(
             list_video_ids = data['video_ids']
             user_demand = data['user_demand']
             chat_history_payload = data['chat_history']
+            session_id = data['session_id']
             chat_history = _parse_chat_history(chat_history_payload)
 
-            async_generator = workflow_service.ignite_workflow(
+            async_generator = ignite_workflow(
                 user_id=user_id,
                 list_video_ids=list_video_ids,
                 user_demand=user_demand,
                 chat_history=chat_history,
+                session_id=session_id
             )
             async for output in async_generator:
                 await websocket.send_json(
@@ -83,7 +84,7 @@ async def start_workflow_ws(
 
     except Exception as e:
         # Log full traceback to server logs for debugging visibility
-        print(f"Output: {output}")
+        print(f"Output: {output}") #type:ignore
         logger.exception("Unhandled error in start_workflow_ws")
         tb = traceback.format_exc()
         

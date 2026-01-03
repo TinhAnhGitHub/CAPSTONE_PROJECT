@@ -4,9 +4,7 @@ from typing import Optional
 
 from llama_index.core.llms import ChatMessage
 from event_handler import EventHandler
-from videodeepsearch.agent.orc_events import (
-    FinalEvent,
-)
+
 class WorkflowClient:
     def __init__(self, websocket_url:str, user_id: str, event_handler: EventHandler):
         self.websocket_url = websocket_url
@@ -20,9 +18,9 @@ class WorkflowClient:
         chat_history: list[ChatMessage],
         session_id: str
     )-> list[ChatMessage]:
-        final_response = None
         
-        new_chat_history = None
+        
+        
         try:
             async with websockets.connect(
                 self.websocket_url
@@ -32,7 +30,7 @@ class WorkflowClient:
                     "video_ids": video_ids,
                     "user_demand": user_demand,
                     "chat_history": [message.model_dump(mode='json') for message in chat_history],
-                    # "session_id": session_id,
+                    "session_id": session_id,
                 }
 
                 await websocket.send(json.dumps(request_payload))
@@ -55,9 +53,16 @@ class WorkflowClient:
 
                         if data.get("type") == "workflow_event":
                             event_data = data.get("data", {})
+                            # print(f"{event_data=}")
+                            # print()
+                            # print()
+                            # print()
                             response = self.event_handler.handle_event(event_data)
-                            if isinstance(response, FinalEvent):
-                                new_chat_history = response.chat_history
+                            
+                            # chat_message = ChatMessage(role='assistant', content=str(response))
+
+
+                            # chat_history.append(chat_message)
                       
                     
                     except websockets.exceptions.ConnectionClosed:
@@ -69,4 +74,4 @@ class WorkflowClient:
             Console().print(f"\n[bold red]✗ WebSocket error:[/bold red] {e}")
             raise
         
-        return new_chat_history #type:ignore
+        return chat_history 
