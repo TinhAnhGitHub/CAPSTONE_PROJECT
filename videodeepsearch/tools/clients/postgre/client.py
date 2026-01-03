@@ -20,10 +20,9 @@ class ArtifactMetadata(BaseModel):
     artifact_type: str = Field(..., description="The type of the artifact, such as 'video', 'json', 'image', or 'caption'. Determines the structure and purpose.")
     user_id: str = Field(..., description="User id associated")
     minio_url: str = Field(..., description="Full S3/Minio URL to the artifact file (e.g., 's3://bucket/path/to/file').")
-    parent_artifact_id: str | None = Field(None, description="The ID of the immediate parent artifact from which this one was derived, enabling lineage tracking.")
     created_at: datetime = Field(default_factory=datetime.now, description="UTC timestamp when the artifact metadata was created/inserted into the database.")
     artifact_metadata: dict = Field(..., description="related metadata")
-
+    lineage_parents: list[str] = Field(default_factory=list)
 
 class ArtifactSchema(Base):
     __tablename__ = "artifacts_application"
@@ -32,10 +31,11 @@ class ArtifactSchema(Base):
     artifact_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     minio_url: Mapped[str] = mapped_column(Text, nullable=False)
     user_id: Mapped[str] = mapped_column(String(128),nullable=False)
-    parent_artifact_id: Mapped[str|None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(), index=True)
     artifact_metadata: Mapped[dict] = mapped_column("metadata", JSON, nullable=True)
     
+
+  
 
 class ArtifactLineageSchema(Base):
     """Track artifact lineage relationships"""
@@ -55,9 +55,7 @@ class ArtifactLineageSchema(Base):
         nullable=False,
         index=True,
     )
-    transformation_type = Column(String(128), nullable=False)
     created_at = Column(DateTime, default=datetime.now)
-    
 
 
 class PostgresClient:
@@ -90,7 +88,6 @@ class PostgresClient:
                 artifact_id=result.artifact_id,
                 artifact_type=result.artifact_type,
                 minio_url=result.minio_url,
-                parent_artifact_id=result.parent_artifact_id or None,
                 created_at=result.created_at,
                 user_id=result.user_id,
                 artifact_metadata=result.artifact_metadata
@@ -130,14 +127,9 @@ class PostgresClient:
                     ArtifactSchema.artifact_id.in_(child_ids)
                 )
                 
-                # if filter_artifact_type:
-                #     artifact_query = artifact_query.where(
-                #         ArtifactSchema.artifact_type.in_(filter_artifact_type)
-                #     )
-
+        
                 artifact_result = await session.execute(artifact_query)
                 artifacts = artifact_result.scalars().all()
-                # print(f"{artifacts=}")
 
                 for a in artifacts:
                     results.append(
@@ -145,10 +137,10 @@ class PostgresClient:
                             artifact_id=a.artifact_id,
                             artifact_type=a.artifact_type,
                             minio_url=a.minio_url,
-                            parent_artifact_id=a.parent_artifact_id,
                             created_at=a.created_at,
                             user_id=a.user_id,
-                            artifact_metadata=a.artifact_metadata
+                            artifact_metadata=a.artifact_metadata,
+                            lineage_parents=[current_id],
                         )
                     )
 

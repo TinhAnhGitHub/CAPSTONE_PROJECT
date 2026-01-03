@@ -1,17 +1,19 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, model_validator
+from pydantic import model_validator
 from google.genai import types
 from typing import Literal
-from videodeepsearch.agent.worker import GREETER_NAME, PLANNER_NAME, ORCHESTRATION_NAME, SUB_WORKER_NAME, FINAL_RESPONSE_AGENT
+from videodeepsearch.agent.definition import GREETER_AGENT, PLANNER_AGENT, ORCHESTRATOR_AGENT, WORKER_AGENT
 
-VALID_MODELS = {'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'}
+VALID_MODELS = {'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview'}
 
 class BaseGeminiLLMConfig(BaseSettings):
     model_config = SettingsConfigDict(
-        case_sensitive=False
+        case_sensitive=False,
+        env_file='/home/tinhanhnguyen/Desktop/HK7/Capstone/CAPSTONE_PROJECT/videodeepsearch/.env',
+        extra='ignore'
     )
 
-    model_name: Literal['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']
+    model_name: Literal['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview']
     temperature: float | None = None
     top_p: float | None = None
     top_k: float | None = None
@@ -61,14 +63,14 @@ class GreetingLLMConfig(BaseGeminiLLMConfig):
         env_prefix="GREETING_LLM_",
         case_sensitive=False
     )
-    agent_name: str = GREETER_NAME
+    agent_name: str = GREETER_AGENT
 
 class PlannerLLMConfig(BaseGeminiLLMConfig):
     model_config = SettingsConfigDict(
         env_prefix="PLANNER_LLM_",
         case_sensitive=False
     )
-    agent_name: str = PLANNER_NAME
+    agent_name: str = PLANNER_AGENT
 
 
 class SubOrchestratorLLMConfig(BaseGeminiLLMConfig):
@@ -76,21 +78,21 @@ class SubOrchestratorLLMConfig(BaseGeminiLLMConfig):
         env_prefix="SUB_ORCHESTRATOR_LLM_",
         case_sensitive=False
     )
-    agent_name: str = ORCHESTRATION_NAME
+    agent_name: str = ORCHESTRATOR_AGENT
 
 class SubWorkerLLMConfig(BaseGeminiLLMConfig):
     model_config = SettingsConfigDict(
         env_prefix="SUB_WORKER_LLM_",
         case_sensitive=False
     )
-    agent_name: str = SUB_WORKER_NAME
+    agent_name: str = WORKER_AGENT
 
 class OutputRespLLM(BaseGeminiLLMConfig):
     model_config = SettingsConfigDict(
         env_prefix="OUTPUT_RESP_",
         case_sensitive=False
     )
-    agent_name: str = FINAL_RESPONSE_AGENT
+    agent_name: str = 'FINAL_RESPONSE_AGENT'
 
 
 greeting_llm_config = GreetingLLMConfig() #type:ignore

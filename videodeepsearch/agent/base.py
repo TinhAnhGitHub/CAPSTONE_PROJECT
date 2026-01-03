@@ -2,7 +2,7 @@
 Containing the template, the configuration, and the agent factory for register and get the agent based on name
 """
 
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, TypeVar
 from functools import wraps
 
 from llama_index.core.llms import LLM
@@ -13,15 +13,15 @@ from pydantic import BaseModel, Field, ConfigDict
 class AgentConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     name: str = Field(..., description="The name of the agent")
-    description: str
+    description: str 
     system_prompt: str
     llm: LLM
     tools: list[BaseTool] | None = None
     state_prompt: str  | None = None
     streaming: bool = True
-    output_cls: Type[BaseModel] | None = None
+    output_cls: type[BaseModel] | None = None
     extra_kwargs: dict[str, Any] ={}
-    type_of_agent: Type[BaseWorkflowAgent] = FunctionAgent
+    type_of_agent: type[BaseWorkflowAgent] = FunctionAgent
 
 
 class AgentFactory:
@@ -40,17 +40,17 @@ class AgentFactory:
             "streaming": config.streaming,
         }
         if config.tools is not None:
-            agent_kwargs['tools'] = config.tools
+            agent_kwargs['tools'] = config.tools #type:ignore
             
         if config.state_prompt is not None:
             agent_kwargs["state_prompt"] = config.state_prompt
         
         if config.output_cls is not None:
-            agent_kwargs["output_cls"] = config.output_cls
+            agent_kwargs["output_cls"] = config.output_cls #type:ignore
         
         agent_kwargs.update(config.extra_kwargs)
 
-        return config.type_of_agent(**agent_kwargs)
+        return config.type_of_agent(**agent_kwargs) #type:ignore
 
 
 class AgentRegistry:
@@ -63,9 +63,6 @@ class AgentRegistry:
         name: str,
         func: Callable[..., AgentConfig]
     ):
-        """
-        Register an agent by name
-        """
         if name in self.name2ag_conf:
             return
         self.name2ag_conf[name] = func
@@ -77,8 +74,6 @@ class AgentRegistry:
     ):
         func = self.name2ag_conf[name]
         agent_config = func(**kwargs)
-
-
         return self.factory.create_agent(config=agent_config)
 
 

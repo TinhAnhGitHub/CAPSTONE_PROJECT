@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from videodeepsearch.core.app_state import Appstate
 from videodeepsearch.agent.base import get_global_agent_registry
-from videodeepsearch.tools.type.registry import tool_registry
+from videodeepsearch.tools.base.registry import tool_registry
 
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -19,17 +19,11 @@ def _safe_bool(value: object) -> bool:
     summary="Inspect registered search tools and their metadata."
 )
 async def check_tools():
-    all_tools = tool_registry.list_all()
-    categories = {
-        category: tool_registry.list_by_category(category)
-        for category in tool_registry.list_all_categories()
-    }
-    tags = tool_registry.list_all_tags()
+    all_tools = tool_registry.list_all_tool_name()
     return {
         "total": len(all_tools),
         "tools": all_tools,
-        "categories": categories,
-        "tags": tags,
+ 
     }
 
 
@@ -53,7 +47,6 @@ async def check_agents():
 async def app_state_status():
     app_state = Appstate()
     return {
-        "tool_factory_ready": _safe_bool(app_state.tool_factory),
         "milvus_image_connected": _safe_bool(app_state.image_milvus_client),
         "milvus_segment_connected": _safe_bool(app_state.segment_milvus_client),
         "postgres_connected": _safe_bool(app_state.postgres_client),

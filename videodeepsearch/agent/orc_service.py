@@ -1,19 +1,26 @@
-from typing import Any, AsyncGenerator, Mapping
-from datetime import datetime
-from llama_index.core.workflow import Context, JsonSerializer
-from llama_index.core.llms import ChatMessage
-from pydantic import BaseModel
-
-from .orc_events import UserInputEvent
-from .workflow import VideoAgentWorkFlow
-
-from videodeepsearch.core.app_state import Appstate
-from videodeepsearch.tools.schema.artifact import ARTIFACT_MODELS 
-from videodeepsearch.agent.state import create_orchestrator_initial_state, ORCHESTRATOR_STATE_KEY
-
 import os
-import socket
-from loguru import logger
+from typing import Any, AsyncGenerator, Mapping
+
+from pydantic import BaseModel
+from llama_index.core.workflow import Context, JsonSerializer
+from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.tools import FunctionTool
+from llama_index.core.agent.workflow import ToolCallResult
+from videodeepsearch.agent.agent_as_tool import (
+    running_orchestrator_agent_as_tools
+)
+from videodeepsearch.agent.base import get_global_agent_registry
+from videodeepsearch.agent.definition import GREETER_AGENT
+from videodeepsearch.core.app_state import get_llm_instance
+from llama_index.core.workflow import Event
+from llama_index.core.agent.workflow import AgentOutput
+
+from videodeepsearch.tools.base.registry import tool_registry, get_registry_tools
+
+class AgentTotalOutput(Event):
+    total_accumulated_events: list[Event]
+
+
 
 DEFAULT_PHOENIX_HTTP_PORT = 6006
 DEFAULT_PHOENIX_GRPC_PORT = 4317
@@ -21,7 +28,7 @@ DEFAULT_PHOENIX_GRPC_PORT = 4317
 
 
 import llama_index.core
-
+os.environ["PHOENIX_PROJECT_NAME"] = "demo_phoenix"
 llama_index.core.set_global_handler("arize_phoenix")
 
 
@@ -52,66 +59,79 @@ def _serialize_event(event: Any):
     return _mark_context(payload)
 
 
-class WorkflowService:
-    def __init__(
-        self,
-        orchestration: VideoAgentWorkFlow
-    ):
-        self.orchestration = orchestration
+
+async def ignite_workflow(
+    user_id: str, 
+    list_video_ids:list[str], 
+    user_demand: str,
+    session_id: str,
+    chat_history: list[ChatMessage] 
+) -> AsyncGenerator[dict[str, Any], None]:
+
+    agent_registry = get_global_agent_registry()
     
-    async def ignite_workflow(
-            self, 
-            user_id: str, 
-            list_video_ids:list[str], 
-            user_demand: str,
-            chat_history: list[ChatMessage] | None = None
 
-        ) -> AsyncGenerator[dict[str, Any], None]:
-        global COUNTER
-        tool_factory = Appstate().tool_factory
+    orchestration_partial_params = {
+        'session_id': session_id,
+        'user_id': user_id,
+        'list_video_id': list_video_ids,
+        'user_original_user_message': user_demand
+    }
+    orchestrator_as_tools = FunctionTool.from_defaults(
+        async_fn=running_orchestrator_agent_as_tools,
+        partial_params=orchestration_partial_params
+    )
 
-        get_all_llamaindex_functools = tool_factory.get_all_tools_functool(
-            user_id=user_id,
-            list_video_id=list_video_ids,
-            agent_bucket=f'agent_test_{datetime.now().strftime("%Y%m%d%H%M%S")}',
-            agent_object_folder='agent_worker_small'
+    greeting_agent = agent_registry.spawn(
+        name=GREETER_AGENT,
+        llm=get_llm_instance(name=GREETER_AGENT),
+        tools=[orchestrator_as_tools]
+    )
+
+    chat_history.append(
+        ChatMessage(
+            role=MessageRole.USER,
+            content=user_demand
         )
-        get_all_code_normal_tools = tool_factory.get_all_tools_normal(
-            user_id=user_id,
-            list_video_id=list_video_ids,
-            agent_bucket=f'agent_test_ith_{datetime.now().strftime("%Y%m%d%H%M%S")}',
-            agent_object_folder='agent_worker_small'
-        )
-        global_dependencies = tool_factory.dependency_map
-        global_dependencies.update(
-            {type_.__name__: type_ for type_ in ARTIFACT_MODELS}
-        )
-        Appstate().code_sandbox._globals.update(get_all_code_normal_tools) # type: ignore[arg-type]
+    )
+
+    ctx = Context(workflow=greeting_agent)
+
+    total_events = []
+    handler = greeting_agent.run(user_msg=user_demand, ctx=ctx, chat_history=chat_history)
+    async for ev in handler.stream_events():
+
+
+       
+
+        if isinstance(ev, ToolCallResult):
+            if ev.tool_kwargs.get('worker_tools'):
+                del ev.tool_kwargs['worker_tools']
+
+            if ev.tool_kwargs.get('orchestration_tools'):
+                del ev.tool_kwargs['orchestration_tools']
+
+            if ev.tool_kwargs.get('greeter_tools'):
+                del ev.tool_kwargs['greeter_tools']
+
+            ev.tool_output.raw_input = {}
+        total_events.append(ev)
+        yield _serialize_event(event=ev) # type: ignore
+
+
+        # if isinstance(ev, AgentOutput):
+        #     total_events_signal = AgentTotalOutput(total_accumulated_events=total_events)
+        #     yield _serialize_event(event=total_events_signal) # type: ignore
+
+    
+    try:
+        _ = await handler
         
-    
-        start_event = UserInputEvent(
-            user_id=user_id,
-            list_video_ids=list_video_ids,
-            chat_history=chat_history or [],
-            user_demand=user_demand,
-            llama_index_func_tools=get_all_llamaindex_functools,
-            normal_func=get_all_code_normal_tools,
-        )
+    except Exception as e:
+        raise e
 
-        ctx = Context(self.orchestration)
-        global_orchestrate_state = create_orchestrator_initial_state()
-        async with ctx.store.edit_state() as state:
-            state[ORCHESTRATOR_STATE_KEY] = global_orchestrate_state
-            
+
     
-        handler = self.orchestration.run(
-            start_event=start_event,
-            ctx=ctx
-        )
-        async for ev in handler.stream_events():
-            yield _serialize_event(ev) # type: ignore
-        try:
-            result = await handler
-        except Exception as e:
-            raise e
-        
+
+    
+    

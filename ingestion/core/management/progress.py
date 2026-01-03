@@ -164,7 +164,7 @@ class HTTPProgressTracker:
 
             run_progress.current_stage = stage
 
-        await self._trigger_http(video_id)
+        # await self._trigger_http(video_id)
         
     async def complete_stage(self, video_id: str, stage: ProcessingStage) -> None:
         with self._lock:

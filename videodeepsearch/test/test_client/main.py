@@ -24,7 +24,7 @@ async def run_interactive_session(test_session_dir: Path, user_id: str, list_vid
     session_dir.mkdir(parents=True, exist_ok=True)
 
     session_manager = SessionManager(session_dir)
-    event_handler = EventHandler(console=console)
+    event_handler = EventHandler()
 
     websocket_url = "ws://localhost:8050/ws/start_workflow"
 
@@ -127,8 +127,8 @@ async def run_interactive_session(test_session_dir: Path, user_id: str, list_vid
 
 if __name__ == "__main__":
     test_session_dir = Path('../local')
-    user_id = 'string123'
-    list_video_ids = ['vid_e71c93a5b2']
+    user_id = 'agenttest'
+    list_video_ids = ['692ad412086ada3a309334ff', '692ad412086ada3a30933500', '692ad412086ada3a30933501', '692ad412086ada3a30933502']
 
     try:
         asyncio.run(run_interactive_session(test_session_dir=test_session_dir, user_id=user_id, list_video_ids=list_video_ids))

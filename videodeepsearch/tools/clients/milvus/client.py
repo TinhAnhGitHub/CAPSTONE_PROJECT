@@ -1,10 +1,11 @@
 from .base import BaseMilvusClient
-from .schema import ImageMilvusResponse, SegmentCaptionMilvusResponse, SegmentCaptionFilterCondition, ImageFilterCondition
+from .schema import  SegmentCaptionFilterCondition, ImageFilterCondition
+from videodeepsearch.tools.base.schema import ImageInterface, SegmentInterface
 from typing import cast
 from pymilvus import AsyncMilvusClient,AnnSearchRequest,WeightedRanker
 from pymilvus import Function, FunctionType
 
-class ImageMilvusClient(BaseMilvusClient[ImageMilvusResponse]):
+class ImageMilvusClient(BaseMilvusClient[ImageInterface]):
     def __init__(
             self, 
             uri:str,
@@ -29,13 +30,13 @@ class ImageMilvusClient(BaseMilvusClient[ImageMilvusResponse]):
         self.sparse_field = sparse_field
 
     @staticmethod
-    def _hit_to_item(hit) -> ImageMilvusResponse:
+    def _hit_to_item(hit) -> ImageInterface:
         fields = hit.fields if hasattr(hit, "fields") else hit.entity["fields"]
         try:
-            return ImageMilvusResponse(
+            return ImageInterface(
                     id=str(fields["id"]),
                     related_video_id=str(fields["related_video_id"]),
-                    image_minio_url=str(fields["image_minio_url"]),
+                    minio_path=str(fields["image_minio_url"]),
                     user_bucket=str(fields["user_bucket"]),
                     timestamp=str(fields['timestamp']),
                     frame_index=int(fields['frame_index']),
@@ -95,7 +96,7 @@ class ImageMilvusClient(BaseMilvusClient[ImageMilvusResponse]):
         requests: list[AnnSearchRequest],
         limit:int,
         weight: list[float]
-    ) -> list[ImageMilvusResponse]:
+    ) -> list[ImageInterface]:
         assert len(requests) == len(weight), "The...."
         client = cast(AsyncMilvusClient, self.client)
 
@@ -108,7 +109,7 @@ class ImageMilvusClient(BaseMilvusClient[ImageMilvusResponse]):
         )
         return self._from_hit_to_response(result)
 
-class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusResponse]):
+class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentInterface]):
     def __init__(
         self,
         uri: str,
@@ -128,10 +129,10 @@ class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusRespo
         self.sparse_field = sparse_field
     
     @staticmethod
-    def _hit_to_item(hit) -> SegmentCaptionMilvusResponse:
+    def _hit_to_item(hit) -> SegmentInterface:
         fields = hit.fields if hasattr(hit, "fields") else hit.entity["fields"]
         try:
-            return SegmentCaptionMilvusResponse(
+            return SegmentInterface(
                 id=str(fields['id']),
                 start_frame=int(fields['start_frame']),
                 end_frame=int(fields['end_frame']),
@@ -139,7 +140,7 @@ class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusRespo
                 end_time=str(fields['end_time']),
                 related_video_id=str(fields['related_video_id']),
                 segment_caption=str(fields['segment_caption']),
-                segment_caption_minio_url=str(fields['segment_caption_minio_url']),
+                minio_path=str(fields['segment_caption_minio_url']),
                 user_bucket=str(fields['user_bucket']),
                 score=float(hit.score)
             )
@@ -179,7 +180,7 @@ class SegmentCaptionImageMilvusClient(BaseMilvusClient[SegmentCaptionMilvusRespo
         requests: list[AnnSearchRequest],
         limit: int,
         weight: list[float]
-    ) -> list[SegmentCaptionMilvusResponse]:
+    ) -> list[SegmentInterface]:
         assert len(requests) == len(weight), (
             "The number of requests and weights must match."
         )
