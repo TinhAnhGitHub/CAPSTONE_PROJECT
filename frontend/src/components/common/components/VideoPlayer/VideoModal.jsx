@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Modal from '@mui/material/Modal';
+import Modal from '@/components/Modal/modal';
 import VideoJS from './VideoJS';
 import React, { useContext } from 'react';
 import { getFps, getImageKey, videoPath } from '@/utils/imagePath';
@@ -10,7 +10,7 @@ import { useStoreImages } from '@/stores/blobs';
 
 export default function VideoModal({ image, open, onClose }) {
     // const { undoRef, redoRef } = useContext(AppContext)
-    
+
     const { updateQuestionField, getCurrentQuestion, currentQuestionId } = useStore();
     const images = getCurrentQuestion().images;
 
@@ -23,7 +23,7 @@ export default function VideoModal({ image, open, onClose }) {
     const frameDuration = 1 / fps;
 
     const keyframe_id = Number(image?.keyframe_id);
-    
+
     const allTimeStamps = images?.map(img => img.video_id == image?.video_id && img.group_id == image?.group_id ? img.keyframe_id : null).filter(Boolean);
     const markers = allTimeStamps?.map((keyframe_id) => ({
         time: keyframe_id * frameDuration,
@@ -124,7 +124,7 @@ export default function VideoModal({ image, open, onClose }) {
 
             setBlob(blobKey, blob);
             // setSortedImages(prev => [...prev, newImage]);
-            updateQuestionField({'images': [...images, newImage]});
+            updateQuestionField({ 'images': [...images, newImage] });
             // undoRef.current.push(images);
             // onClose();
         }, "image/webp", 0.9);
@@ -136,12 +136,6 @@ export default function VideoModal({ image, open, onClose }) {
             if (!playerRef.current) return;
             if (e.key === 'ArrowLeft') stepFrame(-1);
             if (e.key === 'ArrowRight') stepFrame(1);
-            // if (e.code === 'Space') {
-            //     e.preventDefault(); // Prevent page scroll
-            //     if (!playerRef.current) return;
-            //     const player = playerRef.current;
-            //     player.paused() ? player.play() : player.pause();
-            // }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
@@ -149,52 +143,33 @@ export default function VideoModal({ image, open, onClose }) {
     }, [image]);
 
     return (
-        <div>
-            <Modal
-                open={open}
-                onClose={() => { onClose(); setShowFullTimeline(true); }}
-                aria-labelledby="modal-modal-title"
-                aria-describedby="modal-modal-description"
-            >
-                <Box sx={style}>
-                    <VideoJS options={videoJsOptions} onReady={handlePlayerReady} key={showFullTimeline ? 'full' : 'clipped'} />
-                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mb: 2 }}>
-                        <Button variant="outlined"
-                            onMouseDown={() => startHoldStep(-1)}
-                            onMouseUp={stopHoldStep}
-                            onMouseLeave={stopHoldStep}
-                        >
-                            -1 Frame (<kbd>←</kbd>)</Button>
-                        <Button variant="outlined"
-                            onMouseDown={() => startHoldStep(1)}
-                            onMouseUp={stopHoldStep}
-                            onMouseLeave={stopHoldStep}
-                        >
-                            +1 Frame (<kbd>→</kbd>)</Button>
-                        <Button variant="outlined" onClick={() => setShowFullTimeline(!showFullTimeline)}>
-                            {showFullTimeline ? 'Show Clip' : 'Show Full Timeline'}
-                        </Button>
-                        <Button variant="outlined" onClick={cutFrame}>Cut frame</Button>
-                    </Box>
-
-                </Box>
-            </Modal>
-        </div>
+        <Modal
+            isOpen={open}
+            onClose={() => { onClose(); setShowFullTimeline(true); }}
+            title="Video Player"
+            size="xl"
+        >
+            <div className="space-y-4">
+                <VideoJS options={videoJsOptions} onReady={handlePlayerReady} key={showFullTimeline ? 'full' : 'clipped'} />
+                <div className="flex justify-center gap-4">
+                    <Button
+                        variant="outlined"
+                        onMouseDown={() => startHoldStep(-1)}
+                        onMouseUp={stopHoldStep}
+                        onMouseLeave={stopHoldStep}
+                    >
+                        -1 Frame (<kbd>←</kbd>)
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        onMouseDown={() => startHoldStep(1)}
+                        onMouseUp={stopHoldStep}
+                        onMouseLeave={stopHoldStep}
+                    >
+                        +1 Frame (<kbd>→</kbd>)
+                    </Button>
+                </div>
+            </div>
+        </Modal>
     );
 }
-
-
-const style = {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: "75vw",
-    bgcolor: 'background.paper',
-    border: '1px solid #000',
-    borderRadius: 2,
-    boxShadow: 24,
-    p: 4,
-};
-
-

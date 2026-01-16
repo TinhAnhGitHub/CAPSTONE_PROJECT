@@ -9,11 +9,13 @@ import { useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
 import { useForm } from 'react-hook-form';
 import parseChunkToBlock from '@/utils/chat/parseChunkToBlock';
-import addBlockToMessages from '@/utils/chat/addBlockToMessages';
+import addBlocksToMessages, { addBlockToMessages } from '@/utils/chat/addBlockToMessages';
 import BlockRenderer from './BlockRenderer';
 import { useVideos } from '@/api/services/hooks/query';
 import SendButton from './SendButton';
 import AppBar from '../Appbar';
+import Markdown from 'react-markdown';
+import { ChatBubbleOvalLeftEllipsisIcon } from '@heroicons/react/24/solid';
 
 export default function Chat() {
   const {
@@ -112,9 +114,7 @@ export default function Chat() {
     const handleThinking = (msg) => {
       setAgentProgress(false);
       setThinkingMessage(msg.content);
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+      scrollToBottomIfNeeded();
     };
 
 
@@ -128,9 +128,7 @@ export default function Chat() {
       const updated = addBlockToMessages(prev, 'assistant', newBlock);
       setChatMessages(updated);
 
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+      scrollToBottomIfNeeded();
     };
     const handleRunning = () => {
       setAgentProgress(true);
@@ -142,24 +140,17 @@ export default function Chat() {
       setAgentProgress(false);
       const prev = useStoreChat.getState().chatMessages;
       if (!media || !media.media_type) return;
-
-      let media_type = media.media_type;
+      const media_type = media.media_type;
       if (media_type !== 'image' && media_type !== 'video') return;
 
-      let media_url = [];
-      if (media_type === 'image') {
-        media_url = media.results.map((item) => item.image_url);  
-      } else if (media_type === 'video') {
-        media_url = media.results.map((item) => item.caption_url);
-      }
-      const newBlock = parseChunkToBlock(media_type, media_url);
-      if (!newBlock) return;
-      const updated = addBlockToMessages(prev, 'assistant', newBlock);
+      const newBlocks = parseChunkToBlock(media_type, media.results)
+      if (!newBlocks) return;
+
+      // Fix: actually update state with the result
+      const updated = addBlocksToMessages(prev, 'assistant', newBlocks);
       setChatMessages(updated);
 
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+      scrollToBottomIfNeeded();
     };
 
     const handleFullResponse = (data) => {
@@ -198,10 +189,32 @@ export default function Chat() {
 
   const bottomRef = useRef(null);
   const chatRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true); // Track if user is near bottom
+
+  // Helper to check if scrolled near bottom
+  const checkIfNearBottom = () => {
+    const container = chatContainerRef.current;
+    if (!container) return true;
+    const threshold = 100; // pixels from bottom to consider "at bottom"
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+  };
+
+  // Auto-scroll only if user is near bottom
+  const scrollToBottomIfNeeded = (behavior = 'smooth') => {
+    if (isNearBottomRef.current) {
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior });
+      });
+    }
+  };
 
   useEffect(() => {
     // if keyboard a-z or 0-9 is pressed, focus the chat input
     const handleKeyDown = (e) => {
+      // Don't steal focus if modifier keys are pressed (Ctrl+C, Cmd+V, etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
       // Don't steal focus if user is already typing in an input/textarea
       const activeEl = document.activeElement;
       const isTyping = activeEl?.tagName === 'INPUT' ||
@@ -232,28 +245,67 @@ export default function Chat() {
         }
       ],
     });
-    requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    })
+    // Always scroll to bottom when user sends a message
+    isNearBottomRef.current = true;
+    scrollToBottomIfNeeded();
     reset({ prompt: '' });
   };
 
   return (
     <div className='h-screen w-full flex flex-col justify-between'>
       <AppBar />
-      <div className="flex flex-col w-full  h-[90vh] gap-12 px-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto">
+      <div
+        ref={chatContainerRef}
+        onScroll={() => { isNearBottomRef.current = checkIfNearBottom(); }}
+        className="flex flex-col w-full  h-[90vh] gap-12 px-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto"
+      >
         {/*  hiện tại chưa handle block, hard code! */}
         {chatMessages.map((m, i) => (
           <div key={i} className='w-full flex flex-col'>
             {m.blocks.map((block, j) => (
-              <BlockRenderer key={j} block={block} role={m.role} />
+              <BlockRenderer key={`${i}-${j}`} block={block} role={m.role} />
             ))}
           </div>
         ))}
 
+        {/* test video block */}
+        {
+          <BlockRenderer block={{
+            block_type: 'video',
+            url: '/videos/testVideo.mp4',
+            segments: [{ start_frame: 0, end_frame: 150 },
+            { start_frame: 1000, end_frame: 2537 }], // in frames
+            fps: 30,
+          }} role={"assistant"} />
+        }
+        {/* test video block */}
+        {
+          <BlockRenderer block={{
+            block_type: 'text',
+            text: 'This is a test message to demonstrate the text block rendering in the chat interface. It should properly display the text content sent by the assistant role.',
+          }} role={"assistant"} />
+        }
+        {/* test ảnh block */}
+        {
+          <BlockRenderer block={{
+            block_type: 'image',
+            url: ['/images/testImage.png', '/images/testImage.png', '/images/testImage.png'],
+          }} role={"assistant"} />
+        }
+        {
+          <BlockRenderer block={{
+            block_type: 'image',
+            url: ['/images/testImage.png', '/images/testImage.png'],
+          }} role={"assistant"} />
+        }
+
         {thinkingMessage && <div className='flex pt-12 gap-2'>
-          <div>loading icon</div>
-          <div className='animate-pulse text-white flex flex-col '>{thinkingMessage}</div>
+          <div><ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5 text-gray-400" /></div>
+          <div className='animate-pulse text-white flex flex-col '>
+            <Markdown>
+              {thinkingMessage}
+            </Markdown>
+          </div>
         </div>}
         {agentProgess && <div className='animate-pulse text-white flex flex-col pt-12'>...</div>}
         <div ref={bottomRef}></div>

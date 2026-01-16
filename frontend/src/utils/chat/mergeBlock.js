@@ -1,17 +1,15 @@
 export default function mergeBlock(lastBlock, newBlock) {
-    if (!lastBlock || !newBlock) return false;
-    
+    if (!lastBlock || !newBlock) return null;
+
     if (lastBlock.block_type === 'text' && newBlock.block_type === 'text') {
-        lastBlock.text += newBlock.text;
-        return true;
+        // Return a NEW object instead of mutating
+        return { ...lastBlock, text: lastBlock.text + newBlock.text };
     }
     if (lastBlock.block_type === 'image' && newBlock.block_type === 'image') {
-        lastBlock.url = lastBlock.image_urls.concat(newBlock.url);
-        return true;
+        return { ...lastBlock, url: lastBlock.url.concat(newBlock.url) };
     }
     if (lastBlock.block_type === 'video' && newBlock.block_type === 'video') {
-        lastBlock.url = lastBlock.video_urls.concat(newBlock.url);
-        return true;
+        return { ...lastBlock, url: lastBlock.url.concat(newBlock.url) };
     }
-    return false;
+    return null;
 }

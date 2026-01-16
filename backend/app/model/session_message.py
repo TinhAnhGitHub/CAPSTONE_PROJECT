@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
-from typing import Any, Type, TypeVar, Literal, Annotated, Union
+from typing import Any, Optional, Type, TypeVar, Literal, Annotated, Union
 from beanie import Document, PydanticObjectId
 from datetime import datetime
 from abc import abstractmethod, ABC
@@ -35,27 +35,36 @@ class ToolCallBlock(BaseModel):
     tool_call_id: str
 
 
+class VideoSegment(BaseModel):
+    start: float
+    end: float
+    caption: Optional[str] = None
+
+
 class VideoBlock(BaseModel):
     """A representation of video data to directly pass to/from the LLM."""
 
     block_type: Literal["video"] = "video"
-    video: bytes | None = None
-    path: FilePath | None = None
-    url: list[AnyUrl | str] | None = None
+    # video: bytes | None = None
+    # path: FilePath | None = None
+    video_id: str | None = None
+    url: AnyUrl | str | None = None
     video_mimetype: str | None = None
-    detail: str | None = None
+    # detail: str | None = None
     fps: int | None = None
+    segments: list[VideoSegment] | None = None
 
 
 class ImageBlock(BaseModel):
     """A representation of image data to directly pass to/from the LLM."""
 
     block_type: Literal["image"] = "image"
-    image: bytes | None = None
-    path: FilePath | None = None
+    video_id: str | None = None
+    # image: bytes | None = None
+    # path: FilePath | None = None
     url: list[AnyUrl | str] | None = None
-    image_mimetype: str | None = None
-    detail: str | None = None
+    # image_mimetype: str | None = None
+    # detail: str | None = None
 
 
 class ToolCallResultBlock(BaseModel):

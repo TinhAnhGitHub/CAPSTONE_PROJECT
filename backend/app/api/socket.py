@@ -1,3 +1,4 @@
+from collections import defaultdict
 from email.mime import image
 import json
 import traceback
@@ -20,7 +21,13 @@ sio = socketio.AsyncServer(
 
 import asyncio
 from app.core.lifespan import app_state
-from app.model.session_message import ImageBlock, SessionMessage, TextBlock, VideoBlock
+from app.model.session_message import (
+    ImageBlock,
+    SessionMessage,
+    TextBlock,
+    VideoBlock,
+    VideoSegment,
+)
 
 from llama_index.core.base.llms.types import MessageRole
 import httpx
@@ -89,13 +96,14 @@ async def handle_stream_chat(socket_id, data: dict):
             #     "chat_history": chat_history_dict,
             # }
             payload = {
-                "session_id": "692bd512086bad3a30946947",
+                # "session_id": "692bd642086bad3a30946947",
+                "session_id": session_id,
                 "user_id": "agenttest",
                 "video_ids": [
                     "692ad412086ada3a309334ff",
                     "692ad412086ada3a30933500",
                     "692ad412086ada3a30933501",
-                    "692ad412086ada3a30933502",
+                    "692ad412086ada3a30933503",
                 ],
                 "user_demand": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
                 "chat_history": [
@@ -184,13 +192,15 @@ async def handle_stream_chat(socket_id, data: dict):
                         elif msg_type == "ToolCallResult":
                             # show toolicon trước
                             # mốt show list hình ảnh từ s3, video + các timestamp
-
+                            print("😭😭😭😭😭😭😭")
                             raw_output = data.get("tool_output", {}).get(
                                 "raw_output", {}
                             )
+                            print("🐴🐴🐴🐴🐴🐴")
                             if isinstance(raw_output, str):
                                 # skip this turn
                                 continue
+                            print("💜💜💜💜💜💜💜💜")
                             summary = raw_output.get("summary", {})
 
                             media_type = summary.get("result_type", "")
@@ -198,70 +208,104 @@ async def handle_stream_chat(socket_id, data: dict):
                             s3_base = "s3://"
                             http_base = "http://100.113.186.28:9000/"
 
+                            print("🍎🍎🍎🍎🍎🍎🍎")
+
                             def format_tool_result(media):
                                 if media_type == "image_search":
-                                    image_url = [
-                                        item["minio_path"].replace(s3_base, http_base)
-                                        for item in media
-                                    ]
-                                    image_block = ImageBlock(
-                                        url=image_url,
-                                    )
-                                    ai_message_blocks.append(image_block)
+                                    image_groups = defaultdict(list)
+                                    image_results = []
+                                    for item in media:
+                                        image_groups[item["video_id"]].append(item)
+
+                                    for video_id, images in image_groups.items():
+                                        url_list = []
+                                        for item in images:
+                                            url_list.append(
+                                                item["minio_path"].replace(
+                                                    s3_base, http_base
+                                                )
+                                            )
+                                        image_block = ImageBlock(
+                                            video_id=video_id, url=url_list
+                                        )
+                                        ai_message_blocks.append(image_block)
+                                        image_results.append(image_block)
                                     return {
                                         "media_type": "image",
-                                        "results": [
-                                            {
-                                                **item,
-                                                "image_url": item["minio_path"].replace(
-                                                    s3_base, http_base
-                                                ),
-                                            }
-                                            for item in media
-                                        ],
+                                        "results": image_results,
                                     }
                                 elif media_type == "segment_caption_search":
-                                    video_url = [
-                                        item["minio_path"].replace(s3_base, http_base)
-                                        for item in media
-                                    ]
-                                    video_block = VideoBlock(url=video_url)
-                                    ai_message_blocks.append(video_block)
+                                    # video_url = [
+                                    #     item["minio_path"].replace(s3_base, http_base)
+                                    #     for item in media
+                                    # ]
+                                    # hard coded map for testing now
+                                    path = {
+                                        "692ad412086ada3a309334ff": "s3://videotests/K01_V001.mp4",
+                                        "692ad412086ada3a30933500": "s3://videotests/K01_V002.mp4",
+                                        "692ad412086ada3a30933501": "s3://videotests/K01_V003.mp4",
+                                        "692ad412086ada3a30933502": "s3://videotests/K01_V004.mp4",
+                                    }
+                                    # group similar video segments into one block
+                                    video_groups = defaultdict(list)
+                                    video_results = []
+                                    for item in media:
+                                        video_groups[item["video_id"]].append(item)
+
+                                    for video_id, segments in video_groups.items():
+                                        segment_list = []
+                                        for item in segments:
+                                            segment = VideoSegment(
+                                                start=item["frame_range"]["start"],
+                                                end=item["frame_range"]["end"],
+                                                caption=item["caption_preview"],
+                                            )
+                                            segment_list.append(segment)
+                                        video_block = VideoBlock(
+                                            video_id=video_id,
+                                            url=path[video_id].replace(
+                                                s3_base, http_base
+                                            ),
+                                            fps=segments[0].get("fps", 30),
+                                            segments=segment_list,
+                                        )
+                                        ai_message_blocks.append(video_block)
+                                        video_results.append(video_block)
+
                                     return {
                                         "media_type": "video",
-                                        "results": [
-                                            {
-                                                **item,
-                                                "caption_url": item[
-                                                    "minio_path"
-                                                ].replace(s3_base, http_base),
-                                            }
-                                            for item in media
-                                        ],
+                                        "results": video_results,
                                     }
                                 else:
                                     return {"media_type": "unknown", "results": []}
 
                             media = summary.get("top_matches", [])
                             formatted_media = format_tool_result(media)
+                            print("🐍🐍🐍🐍🐍🐍🐍 ")
                             if formatted_media["media_type"] in [
                                 "image",
                                 "video",
                             ]:
-                                await sio.emit("media", formatted_media, to=socket_id)
+                                # Convert Pydantic models to dicts for JSON serialization
+                                emit_data = {
+                                    "media_type": formatted_media["media_type"],
+                                    "results": [
+                                        r.model_dump()
+                                        for r in formatted_media["results"]
+                                    ],
+                                }
+                                await sio.emit("media", emit_data, to=socket_id)
+                            print("🤯🤯🤯🤯🤯🤯   ")
                         elif msg_type == "AgentOutput":
                             # save to database
-                            print("🐴🐴🐴🐴🐴🐴")
                             ai_message = SessionMessage(
                                 session_id=session_id,
                                 role=MessageRole.ASSISTANT,
                                 blocks=ai_message_blocks,
                             )
-                            print("🥀🥀🥀🥀🥀🥀🥀🥀", ai_message_blocks)
                             await app_state.chat_service.add_message(
                                 session_id, "assistant", ai_message
                             )
-                            print("📷📷📷📷📷📷📷📷")
 
                             # Emit stream_end to notify the client
                             await sio.emit(
