@@ -90,7 +90,7 @@ export default memo(function BlockRenderer({ block, role }) {
         // fps: 30,
         return (
             <div className="grid grid-cols-3 gap-2 py-2">
-                <VideoPlayer video={{ url: block.url, title: `Video`, segments: block.segments, fps: block.fps }} />
+                <VideoPlayer video={{ video_id: block.video_id, url: block.url, title: `Video`, segments: block.segments, fps: block.fps }} />
             </div>
         );
     }

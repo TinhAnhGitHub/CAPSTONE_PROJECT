@@ -39,6 +39,10 @@ export const useStore = create(
             removeWorkspaceVideo: (videoId) => set({ workspaceVideos: get().workspaceVideos.filter(v => v.id !== videoId) }),
             addWorkspaceVideo: (video) => set({ workspaceVideos: [...get().workspaceVideos, video] }),
 
+            overrideVideos: [],
+            setOverrideVideos: (videos) => set({ overrideVideos: videos }),
+            clearOverrideVideos: () => set({ overrideVideos: [] }),
+            isOverrideMode: () => get().overrideVideos.length > 0,
 
             currentGroup: null,
             setCurrentGroup: (group) => set({ currentGroup: group }),

@@ -5,8 +5,9 @@ html {
     padding: 0;
     margin: 0;
 }
+
 body {
-    font: 16px/1.4 monospace, monospace;
+    font-family: var(ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
 }
 
 @layer components {

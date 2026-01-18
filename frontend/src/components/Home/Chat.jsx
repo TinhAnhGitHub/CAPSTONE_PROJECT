@@ -16,6 +16,8 @@ import SendButton from './SendButton';
 import AppBar from '../Appbar';
 import Markdown from 'react-markdown';
 import { ChatBubbleOvalLeftEllipsisIcon } from '@heroicons/react/24/solid';
+import Thinking from './Chat/Thinking';
+import Chip from '../common/components/Chip';
 
 export default function Chat() {
   const {
@@ -28,6 +30,9 @@ export default function Chat() {
 
   const chatMessages = useStoreChat((state) => state.chatMessages);
   const setChatMessages = useStoreChat((state) => state.setChatMessages);
+  const isOverrideMode = useStoreChat((state) => state.isOverrideMode);
+  const overrideVideos = useStoreChat((state) => state.overrideVideos);
+  const setOverrideVideos = useStoreChat((state) => state.setOverrideVideos);
   //   const [chatMessages, setChatMessages] = useState([{
   //     role: 'assistant',
   //     timestamp: Date.now(),
@@ -76,7 +81,7 @@ export default function Chat() {
   const userId = user?.id;
 
   const [agentProgess, setAgentProgress] = useState(false);
-  const [thinkingMessage, setThinkingMessage] = useState('');
+  const [thinkingMessage, setThinkingMessage] = useState('Thinking');
 
 
   const queryClient = useQueryClient();
@@ -249,6 +254,12 @@ export default function Chat() {
     isNearBottomRef.current = true;
     scrollToBottomIfNeeded();
     reset({ prompt: '' });
+    // Reset textarea height after clearing content
+    requestAnimationFrame(() => {
+      if (chatRef.current) {
+        chatRef.current.style.height = 'auto';
+      }
+    });
   };
 
   return (
@@ -272,6 +283,7 @@ export default function Chat() {
         {
           <BlockRenderer block={{
             block_type: 'video',
+            video_id: '2421946379',
             url: '/videos/testVideo.mp4',
             segments: [{ start_frame: 0, end_frame: 150 },
             { start_frame: 1000, end_frame: 2537 }], // in frames
@@ -292,53 +304,72 @@ export default function Chat() {
             url: ['/images/testImage.png', '/images/testImage.png', '/images/testImage.png'],
           }} role={"assistant"} />
         }
-        {
-          <BlockRenderer block={{
-            block_type: 'image',
-            url: ['/images/testImage.png', '/images/testImage.png'],
-          }} role={"assistant"} />
-        }
 
-        {thinkingMessage && <div className='flex pt-12 gap-2'>
+
+        {/* {thinkingMessage && <div className='flex pt-12 gap-2'>
           <div><ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5 text-gray-400" /></div>
           <div className='animate-pulse text-white flex flex-col '>
             <Markdown>
               {thinkingMessage}
             </Markdown>
           </div>
-        </div>}
+        </div>} */}
+        <Thinking />
         {agentProgess && <div className='animate-pulse text-white flex flex-col pt-12'>...</div>}
         <div ref={bottomRef}></div>
       </div>
 
       <div className="flex flex-row w-full px-4 py-2 space-x-2 z-10">
-        <Textarea
-          {...register('prompt')}
-          ref={(e) => {
-            register('prompt').ref(e);
-            chatRef.current = e; // preserve manual ref usage
-          }}
-          rows={1}
-          className={clsx(
-            'block w-full rounded-lg border-none bg-white/5 px-3 py-1.5 text-sm/6 text-white',
-            'focus:outline-none resize-none',
-            'whitespace-pre-wrap leading-relaxed',
-            'max-h-[10rem] overflow-y-auto' // ⬅️ cap at ~5 lines + scroll
-          )}
-          onInput={(e) => {
-            e.target.style.height = 'auto'; // reset
-            e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'; // cap to ~10rem (5 lines)
-          }}
-          onKeyDown={(e) => {
-            const value = getValues('prompt')?.trim() || '';
-            if (e.key === 'Enter' && !e.shiftKey && value) {
-              e.preventDefault();
-              handlePrompt();
-              e.target.style.height = 'auto';
-            }
-          }}
-          placeholder="Ask the agent..."
-        />
+        <div className="flex-grow">
+          <div className={clsx(
+            'flex flex-col w-full rounded-lg bg-white/5',
+            'focus-within:ring-2 focus-within:ring-white/20 transition-all'
+          )}>
+            {/* Chips inside the input container */}
+            {isOverrideMode() && overrideVideos.length > 0 && (
+              <div className='flex flex-wrap gap-2 px-3 pt-2'>
+                {overrideVideos.map((video, index) => (
+                  <Chip
+                    key={index}
+                    label={video.title}
+                    size="sm"
+                    onDelete={() => {
+                      setOverrideVideos(overrideVideos.filter((v) => v.video_id !== video.video_id));
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            <Textarea
+              {...register('prompt')}
+              ref={(e) => {
+                register('prompt').ref(e);
+                chatRef.current = e;
+              }}
+              rows={1}
+              className={clsx(
+                'block w-full border-none bg-transparent px-3 py-1.5 text-sm/6 text-white',
+                'focus:outline-none resize-none',
+                'whitespace-pre-wrap leading-relaxed',
+                'max-h-[10rem] overflow-y-auto'
+              )}
+              onInput={(e) => {
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+              }}
+              onKeyDown={(e) => {
+                const value = getValues('prompt')?.trim() || '';
+                if (e.key === 'Enter' && !e.shiftKey && value) {
+                  e.preventDefault();
+                  handlePrompt();
+                  e.target.style.height = 'auto';
+                }
+              }}
+              placeholder="Ask the agent..."
+            />
+          </div>
+        </div>
 
         <SendButton control={control} handlePrompt={handlePrompt} />
       </div>

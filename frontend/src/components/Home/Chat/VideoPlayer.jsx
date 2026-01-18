@@ -1,11 +1,14 @@
 import React, { useState, useRef, useMemo, useCallback } from 'react'
 import Modal from '../../Modal/modal'
 import VideoJS from '../../common/components/VideoPlayer/VideoJS'
+import { useStore } from '@/stores/chat'
 
 export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const playerRef = useRef(null)
 
+  const setOverrideVideos = useStore((state) => state.setOverrideVideos)
+  const overrideVideos = useStore((state) => state.overrideVideos)
   const openVideoModal = () => {
     setIsModalOpen(true)
   }
@@ -116,6 +119,15 @@ export default function VideoPlayer({ video }) {
     })
   }, [markers])
 
+  const addVideoToChatSession = (e) => {
+    e.stopPropagation()
+    // check if video already in overrideVideos
+    if (overrideVideos.find(v => v.video_id === video.video_id)) {
+      return
+    }
+    setOverrideVideos([...overrideVideos, video])    
+  }
+
   return (
     <>
       <div
@@ -131,13 +143,16 @@ export default function VideoPlayer({ video }) {
           />
           <div className="absolute inset-0 flex items-center justify-center bg-black/30">
             <div className="w-12 h-12 rounded-full bg-white/80 flex items-center justify-center">
-              <svg className="w-6 h-6 text-gray-800 ml-1" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-gray-800" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
           </div>
         </div>
-        {video.title && <h2 className="p-2 text-sm text-white">{video.title}</h2>}
+        <div className="flex items-center justify-between ">
+          {video.title && <h2 className="p-2 text-sm text-white">{video.title}</h2>}
+          <div className="p-2 text-sm cursor-pointer" onClick={addVideoToChatSession}>Add</div>
+        </div>
       </div>
 
       <Modal
