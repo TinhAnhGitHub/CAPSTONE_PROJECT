@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo, useCallback } from 'react'
 import Modal from '../../Modal/modal'
 import VideoJS from '../../common/components/VideoPlayer/VideoJS'
 import { useStore } from '@/stores/chat'
+import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
 
 export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -125,7 +126,7 @@ export default function VideoPlayer({ video }) {
     if (overrideVideos.find(v => v.video_id === video.video_id)) {
       return
     }
-    setOverrideVideos([...overrideVideos, video])    
+    setOverrideVideos([...overrideVideos, video])
   }
 
   return (
@@ -149,9 +150,19 @@ export default function VideoPlayer({ video }) {
             </div>
           </div>
         </div>
-        <div className="flex items-center justify-between ">
-          {video.title && <h2 className="p-2 text-sm text-white">{video.title}</h2>}
-          <div className="p-2 text-sm cursor-pointer" onClick={addVideoToChatSession}>Add</div>
+        <div className="flex items-center justify-between p-2">
+          {video.title && <h2 className="text-sm text-text truncate flex-1">{video.title}</h2>}
+          <button
+            onClick={addVideoToChatSession}
+            className="p-1 rounded-full hover:bg-surface-light transition-colors cursor-pointer"
+            title={overrideVideos.find(v => v.video_id === video.video_id) ? "Already added" : "Add to chat"}
+          >
+            {overrideVideos.find(v => v.video_id === video.video_id) ? (
+              <CheckCircleIcon className="w-6 h-6 text-accent" />
+            ) : (
+              <PlusCircleIcon className="w-6 h-6 text-text-muted hover:text-accent transition-colors" />
+            )}
+          </button>
         </div>
       </div>
 
@@ -159,13 +170,9 @@ export default function VideoPlayer({ video }) {
         isOpen={isModalOpen}
         onClose={closeVideoModal}
         title={video.title || "Video Player"}
-        size="xl"
+        size="lg"
       >
-        <div className="h-full flex items-center justify-center">
-          <div className="w-full max-w-5xl">
-            <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
-          </div>
-        </div>
+        <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
       </Modal>
     </>
   )

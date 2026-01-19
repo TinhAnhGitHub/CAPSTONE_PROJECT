@@ -2,7 +2,7 @@ import React, { useState, useMemo, memo } from 'react'
 import Modal from '../../Modal/modal'
 import { Gallery } from '../../common/components/ImagePreview/Gallery'
 
-export default memo(function ImageViewer({ image, images = [], startIndex = 0 }) {
+export default memo(function ImageViewer({ image, images = [], startIndex = 0, className = '' }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const openImageGallery = () => {
@@ -31,10 +31,10 @@ export default memo(function ImageViewer({ image, images = [], startIndex = 0 })
   return (
     <>
       <div
-        className="border border-white/10 rounded-lg overflow-hidden hover:cursor-pointer hover:opacity-80"
+        className="border border-white/10 rounded-lg overflow-hidden hover:cursor-pointer hover:opacity-80 h-full"
         onClick={openImageGallery}
       >
-        <img src={image.url} alt={image.title} />
+        <img src={image.url} alt={image.title} className={className || 'w-full h-auto'} />
       </div>
 
       <Modal

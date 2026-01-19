@@ -54,14 +54,15 @@ export default function Upload() {
                 accept={{ 'video/*': [] }}
                 onDrop={(files) => uploadMutation.mutate(files)}>
                 {({ getRootProps, getInputProps }) => (
-                    <div {...getRootProps()} className="bg-black text-white rounded-md p-2 cursor-pointer">
+                    <div {...getRootProps()} className="bg-accent hover:bg-accent-hover text-white rounded-md p-2 cursor-pointer transition-colors ">
                         <input {...getInputProps()} />
-                        <div className='flex items-center gap-1'>
+                        <div className='flex items-center justify-center gap-1 font-medium'>
                             {
                                 isUploading ?
                                     `Uploading... ${progress}%`
                                     :
-                                    <div><PlusIcon className='h-5 w-5 inline-block' /> Upload Video</div>
+                                    <>
+                                        <PlusIcon className='h-5 w-5' /> Upload Video</>
                             }
                         </div>
                     </div>

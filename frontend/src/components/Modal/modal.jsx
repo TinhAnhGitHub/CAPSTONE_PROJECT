@@ -40,7 +40,7 @@ export default function Modal({
         >
             <DialogPanel
                 className={`
-                    bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 relative
+                    bg-surface rounded-2xl shadow-xl p-6 relative border border-surface-light
                     ${sizeClasses[size] || sizeClasses.lg}
                     ${(size === 'full' || size === 'xl') ? 'flex flex-col' : ''}
                     ${className}
@@ -49,18 +49,20 @@ export default function Modal({
                 {showCloseButton && (
                     <button
                         onClick={onClose}
-                        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-white z-10"
+                        className="absolute top-4 right-4 p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-light transition-colors z-10 cursor-pointer"
                         aria-label="Close modal"
                     >
-                        <XMarkIcon className="size-6" />
+                        <XMarkIcon className="size-5" />
                     </button>
                 )}
-                {title && (
-                    <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white mb-4 pr-8">
+                {title ? (
+                    <DialogTitle className="text-xl font-semibold text-text mb-4 pr-10">
                         {title}
                     </DialogTitle>
+                ) : (
+                    <div className="h-6" /> // Spacer when no title to prevent X clipping
                 )}
-                <div className={(size === 'full' || size === 'xl') ? 'flex-1 min-h-0 overflow-hidden' : ''}>
+                <div className={(size === 'full' || size === 'xl') ? 'flex-1 min-h-0 ' : ''}>
                     {children}
                 </div>
             </DialogPanel>

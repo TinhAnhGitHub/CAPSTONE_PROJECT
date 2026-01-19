@@ -37,7 +37,7 @@ export default function VerticalStepper({ steps }) {
     };
 
     return (
-        <ol className="relative border-l py-2 pr-2 border-zinc-300 dark:border-zinc-700">
+        <ol className="relative border-l py-2 pr-2 border-surface-light border-dashed">
             {steps.map((step, i) => {
                 const isLast = i === steps.length - 1;
                 const isExpanded = isLast || expandedSteps.has(i);
@@ -47,7 +47,7 @@ export default function VerticalStepper({ steps }) {
                     <li key={i} className="ml-6 pb-8 last:pb-0">
                         {/* Dot/Icon */}
                         <span
-                            className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border bg-gray-600 border-gray-600`}
+                            className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border ${isLast ? 'bg-accent border-accent' : 'bg-surface-light border-surface-light'}`}
                         >
                             {isLast ? (
                                 <svg className="h-3 w-3 text-white animate-spin" viewBox="0 0 24 24" fill="none">
@@ -67,10 +67,10 @@ export default function VerticalStepper({ steps }) {
                                 className={`flex items-center gap-1 text-left ${hasDescription && !isLast ? "cursor-pointer" : "cursor-default"}`}
                                 disabled={isLast || !hasDescription}
                             >
-                                <h3 className="text-sm font-medium">{step.title}</h3>
+                                <h3 className="text-sm font-medium text-text">{step.title}</h3>
                                 {hasDescription && !isLast && (
                                     <ChevronDownIcon
-                                        className={`h-4 w-4 text-zinc-500 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                                        className={`h-4 w-4 text-text-muted transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
                                     />
                                 )}
                             </button>
@@ -78,7 +78,7 @@ export default function VerticalStepper({ steps }) {
                                 <div
                                     className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}
                                 >
-                                    <p className="mt-1 text-sm text-zinc-500">
+                                    <p className="mt-1 text-sm text-text-muted">
                                         {step.description}
                                     </p>
                                 </div>

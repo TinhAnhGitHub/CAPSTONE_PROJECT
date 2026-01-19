@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import HistoryConversations from './components/HistoryConversations'
 import VideosInConversation from './components/VideosInConversation/VideosInConversation'
 import UserBar from './components/UserBar'
@@ -7,6 +7,32 @@ import { useStore } from '@/stores/chat'
 export default function Sidebar() {
     const sidebarOpen = useStore((state) => state.sidebarOpen)
     const setSidebarOpen = useStore((state) => state.setSidebarOpen)
+
+    // Track if animation should be enabled (only on user interaction, not resize)
+    const [shouldAnimate, setShouldAnimate] = useState(false)
+    const prevOpenRef = useRef(sidebarOpen)
+
+    useEffect(() => {
+        // Only animate when sidebarOpen changes (user clicked toggle)
+        if (prevOpenRef.current !== sidebarOpen) {
+            setShouldAnimate(true)
+            prevOpenRef.current = sidebarOpen
+        }
+    }, [sidebarOpen])
+
+    // Disable animation on resize
+    useEffect(() => {
+        let resizeTimeout
+        const handleResize = () => {
+            setShouldAnimate(false)
+            clearTimeout(resizeTimeout)
+        }
+        window.addEventListener('resize', handleResize)
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            clearTimeout(resizeTimeout)
+        }
+    }, [])
 
     return (
         <>
@@ -21,9 +47,10 @@ export default function Sidebar() {
             {/* Sidebar */}
             <div
                 className={`
-                    h-screen min-w-[300px] max-w-[300px] bg-black/90 text-gray-400 flex flex-col
+                    h-screen min-w-[300px] max-w-[300px] bg-darker-background text-gray-400 flex flex-col
                     fixed md:relative z-50
-                    transition-transform duration-300 ease-in-out
+                    shadow-[1px_0_0_0_rgba(255,255,255,0.03)]
+                    ${shouldAnimate ? 'transition-transform duration-300 ease-in-out' : ''}
                     ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
                 `}
             >
@@ -44,7 +71,7 @@ export default function Sidebar() {
                 <div className='flex-[10] overflow-y-auto'>
                     <VideosInConversation />
                 </div>
-                <div className='border-t border-gray-800 p-2'>
+                <div className='border-t border-white/10 p-2'>
                     <UserBar />
                 </div>
             </div>

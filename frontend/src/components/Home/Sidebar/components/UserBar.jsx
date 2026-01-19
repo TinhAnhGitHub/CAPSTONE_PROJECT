@@ -22,17 +22,17 @@ export default function UserBar() {
     return (
         <div className='my-auto'>
             {/* user img*/}
-            <div className='flex items-center gap-2'>
-                {user ? <img src={user?.picture} alt={user?.name} className='w-8 h-8 rounded-full' /> :
-                    <div className='w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-white'>
-                        U
+            <div className='flex items-center gap-3'>
+                {user ? <img src={user?.picture} alt={user?.name} className='w-9 h-9 rounded-full' /> :
+                    <div className='w-9 h-9 rounded-full bg-surface-light flex items-center justify-center text-text-muted font-medium'>
+                        G
                     </div>
                 }
-                <div className='flex-1'>
+                <div className='flex-1 text-text'>
                     {user ? user.name : 'Guest'}
                 </div>
-                
-                <button className='bg-gray-800 px-2 py-1 rounded hover:bg-gray-700 cursor-pointer transition'
+
+                <button className='bg-surface-light hover:bg-surface-hover text-text-muted hover:text-text px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer transition-colors'
                     onClick={() => user ? logoutConfirm() : navigate('/login')}
                 >
                     {user ? 'Logout' : 'Login'}

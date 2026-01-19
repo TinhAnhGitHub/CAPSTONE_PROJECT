@@ -17,7 +17,7 @@ import AppBar from '../Appbar';
 import Markdown from 'react-markdown';
 import { ChatBubbleOvalLeftEllipsisIcon } from '@heroicons/react/24/solid';
 import Thinking from './Chat/Thinking';
-import Chip from '../common/components/Chip';
+import { XMarkIcon } from '@heroicons/react/16/solid';
 
 export default function Chat() {
   const {
@@ -263,50 +263,51 @@ export default function Chat() {
   };
 
   return (
-    <div className='h-screen w-full flex flex-col justify-between'>
+    <div className='h-screen w-full flex flex-col justify-between bg-background'>
       <AppBar />
       <div
         ref={chatContainerRef}
         onScroll={() => { isNearBottomRef.current = checkIfNearBottom(); }}
-        className="flex flex-col w-full  h-[90vh] gap-12 px-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto"
+        className="flex flex-col w-full h-[90vh] px-4 md:px-8 lg:px-16 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-scroll scrollbar-gutter-stable"
       >
-        {/*  hiện tại chưa handle block, hard code! */}
-        {chatMessages.map((m, i) => (
-          <div key={i} className='w-full flex flex-col'>
-            {m.blocks.map((block, j) => (
-              <BlockRenderer key={`${i}-${j}`} block={block} role={m.role} />
-            ))}
-          </div>
-        ))}
+        {/* Centered content container with max-width */}
+        <div className="w-full max-w-3xl mx-auto flex flex-col gap-3 py-6">
+          {chatMessages.map((m, i) => (
+            <div key={i} className='w-full flex flex-col'>
+              {m.blocks.map((block, j) => (
+                <BlockRenderer key={`${i}-${j}`} block={block} role={m.role} />
+              ))}
+            </div>
+          ))}
 
-        {/* test video block */}
-        {
-          <BlockRenderer block={{
-            block_type: 'video',
-            video_id: '2421946379',
-            url: '/videos/testVideo.mp4',
-            segments: [{ start_frame: 0, end_frame: 150 },
-            { start_frame: 1000, end_frame: 2537 }], // in frames
-            fps: 30,
-          }} role={"assistant"} />
-        }
-        {/* test video block */}
-        {
-          <BlockRenderer block={{
-            block_type: 'text',
-            text: 'This is a test message to demonstrate the text block rendering in the chat interface. It should properly display the text content sent by the assistant role.',
-          }} role={"assistant"} />
-        }
-        {/* test ảnh block */}
-        {
-          <BlockRenderer block={{
-            block_type: 'image',
-            url: ['/images/testImage.png', '/images/testImage.png', '/images/testImage.png'],
-          }} role={"assistant"} />
-        }
+          {/* test video block */}
+          {
+            <BlockRenderer block={{
+              block_type: 'video',
+              video_id: '2421946379',
+              url: '/videos/testVideo.mp4',
+              segments: [{ start_frame: 0, end_frame: 150 },
+              { start_frame: 1000, end_frame: 2537 }], // in frames
+              fps: 30,
+            }} role={"assistant"} />
+          }
+          {/* test video block */}
+          {
+            <BlockRenderer block={{
+              block_type: 'text',
+              text: 'This is a test message to demonstrate the text block rendering in the chat interface. It should properly display the text content sent by the assistant role.',
+            }} role={"assistant"} />
+          }
+          {/* test ảnh block */}
+          {
+            <BlockRenderer block={{
+              block_type: 'image',
+              url: ['/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png'],
+            }} role={"assistant"} />
+          }
 
 
-        {/* {thinkingMessage && <div className='flex pt-12 gap-2'>
+          {/* {thinkingMessage && <div className='flex pt-12 gap-2'>
           <div><ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5 text-gray-400" /></div>
           <div className='animate-pulse text-white flex flex-col '>
             <Markdown>
@@ -314,64 +315,78 @@ export default function Chat() {
             </Markdown>
           </div>
         </div>} */}
-        <Thinking />
-        {agentProgess && <div className='animate-pulse text-white flex flex-col pt-12'>...</div>}
-        <div ref={bottomRef}></div>
+          <Thinking />
+          {agentProgess && <div className='animate-pulse text-accent flex flex-col pt-12'>...</div>}
+          <div ref={bottomRef}></div>
+        </div>
       </div>
 
-      <div className="flex flex-row w-full px-4 py-2 space-x-2 z-10">
-        <div className="flex-grow">
+      {/* Input area with centered max-width */}
+      <div className="w-full px-4 md:px-8 lg:px-16 py-2 z-10 bg-background">
+        <div className="max-w-3xl mx-auto">
           <div className={clsx(
-            'flex flex-col w-full rounded-lg bg-white/5',
-            'focus-within:ring-2 focus-within:ring-white/20 transition-all'
+            'flex flex-col w-full rounded-xl bg-surface border border-surface-light',
+            'focus-within:ring-2 focus-within:ring-accent/50 focus-within:border-accent transition-all'
           )}>
-            {/* Chips inside the input container */}
+            {/* Video thumbnails inside the input container */}
             {isOverrideMode() && overrideVideos.length > 0 && (
-              <div className='flex flex-wrap gap-2 px-3 pt-2'>
+              <div className='flex flex-wrap gap-2 px-3 pt-3'>
                 {overrideVideos.map((video, index) => (
-                  <Chip
+                  <div
                     key={index}
-                    label={video.title}
-                    size="sm"
-                    onDelete={() => {
-                      setOverrideVideos(overrideVideos.filter((v) => v.video_id !== video.video_id));
-                    }}
-                  />
+                    className='relative group rounded-lg overflow-hidden border border-surface-light hover:border-accent/50 transition-colors'
+                  >
+                    <img
+                      src={video.thumbnail || '/images/testImage.png'}
+                      alt={video.title}
+                      className='w-16 h-10 object-cover'
+                    />
+                    <button
+                      onClick={() => setOverrideVideos(overrideVideos.filter((v) => v.video_id !== video.video_id))}
+                      className='absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-all cursor-pointer'
+                      title='Remove video'
+                    >
+                      <XMarkIcon className='w-3 h-3' />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
 
-            <Textarea
-              {...register('prompt')}
-              ref={(e) => {
-                register('prompt').ref(e);
-                chatRef.current = e;
-              }}
-              rows={1}
-              className={clsx(
-                'block w-full border-none bg-transparent px-3 py-1.5 text-sm/6 text-white',
-                'focus:outline-none resize-none',
-                'whitespace-pre-wrap leading-relaxed',
-                'max-h-[10rem] overflow-y-auto'
-              )}
-              onInput={(e) => {
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
-              }}
-              onKeyDown={(e) => {
-                const value = getValues('prompt')?.trim() || '';
-                if (e.key === 'Enter' && !e.shiftKey && value) {
-                  e.preventDefault();
-                  handlePrompt();
+            <div className="flex  items-end gap-2 px-3 py-2">
+              <Textarea
+                {...register('prompt')}
+                ref={(e) => {
+                  register('prompt').ref(e);
+                  chatRef.current = e;
+                }}
+                rows={1}
+                className={clsx(
+                  'block flex-1 border-none bg-transparent text-sm/6 text-text',
+                  'focus:outline-none resize-none placeholder:text-text-muted',
+                  'whitespace-pre-wrap leading-relaxed',
+                  'max-h-[10rem] overflow-y-auto',
+                  'self-center',
+                  'scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent'
+                )}
+                onInput={(e) => {
                   e.target.style.height = 'auto';
-                }
-              }}
-              placeholder="Ask the agent..."
-            />
+                  e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+                }}
+                onKeyDown={(e) => {
+                  const value = getValues('prompt')?.trim() || '';
+                  if (e.key === 'Enter' && !e.shiftKey && value) {
+                    e.preventDefault();
+                    handlePrompt();
+                    e.target.style.height = 'auto';
+                  }
+                }}
+                placeholder="Ask the agent..."
+              />
+              <SendButton control={control} handlePrompt={handlePrompt} />
+            </div>
           </div>
         </div>
-
-        <SendButton control={control} handlePrompt={handlePrompt} />
       </div>
     </div>
   )

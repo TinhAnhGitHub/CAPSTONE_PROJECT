@@ -24,3 +24,31 @@ code {
     word-break: break-word;
     white-space: pre-wrap;
 }
+
+@theme {
+    /* Dark Theme Palette
+     * #222831 - Background (dark charcoal)
+     * #393E46 - Surface (medium gray)
+     * #00ADB5 - Accent (teal/cyan)
+     * #EEEEEE - Text (light gray)
+     */
+
+    /* Base colors */
+    --color-darker-background: #191919;
+    --color-background: #212121;
+    --color-surface: #303030;
+    --color-accent: #00ADB5;
+    --color-text: #EEEEEE;
+
+    /* Accent variations */
+    --color-accent-hover: #00c9d4;
+    --color-accent-muted: #008b92;
+
+    /* Surface variations */
+    --color-surface-hover: #454b54;
+    --color-surface-light: #4a515c;
+
+    /* Text variations */
+    --color-text-muted: #a0a0a0;
+    --color-text-dim: #6b7280;
+}

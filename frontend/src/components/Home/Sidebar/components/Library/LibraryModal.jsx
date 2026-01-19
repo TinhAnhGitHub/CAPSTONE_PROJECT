@@ -22,7 +22,7 @@ export default function LibraryModal({ isModalOpen, closeModal }) {
     const createNewGroupMutation = useCreateGroup();
 
     useEffect(() => {
-        socket.on('ingestion_status', (data)=> {
+        socket.on('ingestion_status', (data) => {
             // video_id and run_id
             // invalidate videos query to refetch updated status
             queryClient.invalidateQueries(['videos']);
@@ -41,14 +41,13 @@ export default function LibraryModal({ isModalOpen, closeModal }) {
     return (
         <Modal isOpen={isModalOpen} onClose={closeModal} title="Library">
             <div className='flex max-md:flex-col'>
-                <div className='max-md:flex max-md:flex-col md:w-[20%] border-b md:border-r border-gray-200 p-2 overflow-auto'>
-                    <div className='flex max-md:flex-row items-center mb-2'>
-                        <p className='font-semibold'>Groups</p>
-                        <div className='ml-auto'>
+                <div className='max-md:flex max-md:flex-col md:w-[20%]  md:border-r border-surface-light p-2 overflow-auto scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent'>
+                    <div className='flex flex-col max-md:flex-row max-md:items-center items-right mb-2'>
                             <AddGroupButton />
-                        </div>
+                        <div className='border-b border-surface-light my-2 max-md:hidden'></div>
+                        <p className=' text-xs text-text-muted uppercase tracking-wide py-2'>GROUPS</p>
                     </div>
-                    <div className='groups max-md:flex max-md:overflow-x-auto'>
+                    <div className='groups max-md:flex max-md:overflow-x-auto scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent'>
                         {
                             groups.map((group, idx) => (
                                 <Group key={idx} group={group} />
@@ -57,7 +56,7 @@ export default function LibraryModal({ isModalOpen, closeModal }) {
                     </div>
                 </div>
                 <div className="relative w-[80%] h-[70vh] flex flex-col">
-                    <div className="flex-1 overflow-y-auto px-1">
+                    <div className="flex-1 overflow-y-auto px-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
                         <div className="columns-2 md:columns-4 gap-4 p-2">
                             {videos.map((video, idx) => (
                                 <div key={idx} className='break-inside-avoid'><VideoCard video={video} /></div>
@@ -66,7 +65,7 @@ export default function LibraryModal({ isModalOpen, closeModal }) {
                     </div>
 
                     {/* Sticky Upload at bottom */}
-                    <div className="p-2 border-t border-gray-200 dark:border-gray-700">
+                    <div className="ml-2 pr-2 py-2 border-t border-surface-light">
                         <Upload />
                     </div>
                 </div>
