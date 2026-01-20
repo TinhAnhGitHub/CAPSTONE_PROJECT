@@ -13,6 +13,19 @@ import ChatHistory from './ChatHistory';
 
 export default function HistoryConversations() {
   const chatHistory = useStoreChat((state) => state.chatHistory);
+
+  // Mock data for testing - remove or set to [] in production
+  const mockChatHistory = [
+    { _id: '1', session_id: 'sess_1', name: 'How to use React hooks', created_at: new Date() },
+    { _id: '2', session_id: 'sess_2', name: 'Video editing tips', created_at: new Date() },
+    { _id: '3', session_id: 'sess_3', name: 'AI image generation', created_at: new Date() },
+    { _id: '4', session_id: 'sess_4', name: 'Building a REST API', created_at: new Date() },
+    { _id: '5', session_id: 'sess_5', name: 'CSS Grid layout tutorial', created_at: new Date() },
+  ];
+
+  // Use mock if chatHistory is empty
+  const displayHistory = chatHistory.length > 0 ? chatHistory : mockChatHistory;
+
   const setChatHistory = useStoreChat((state) => state.setChatHistory);
   const session_id = useStoreChat((state) => state.session_id);
   const setSessionId = useStoreChat((state) => state.setSessionId);
@@ -81,7 +94,7 @@ export default function HistoryConversations() {
         <p className='text-xs text-text-muted uppercase tracking-wide px-4 py-2'>Your Chats</p>
         <div className='flex flex-col flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto'>
           {
-            chatHistory.map((conv, idx) => (
+            displayHistory.map((conv, idx) => (
               <ChatHistory
                 key={conv._id || idx}
                 conv={conv}

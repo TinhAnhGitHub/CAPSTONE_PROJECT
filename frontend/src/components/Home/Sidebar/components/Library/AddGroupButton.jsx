@@ -13,7 +13,7 @@ export default function AddGroupButton() {
   return (
     <button
       onClick={handleAddGroup}
-      className='flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
+      className='flex items-center gap-2 md:w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
     >
       <PlusIcon className="w-5 h-5" />
       <span>Add Group</span>

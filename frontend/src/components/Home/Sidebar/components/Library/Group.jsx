@@ -13,13 +13,17 @@ export default function Group({ group }) {
   }
 
   return (
-    <div className={clsx('relative p-2 m-1 hover:bg-surface-light rounded-md cursor-pointer text-text transition-colors', {
-      'bg-accent/20 text-accent border border-accent/30': currentGroup === group._id
-    })}
+    <div className={clsx(
+      'relative mx-1 my-0.5 py-2 px-3 rounded-lg cursor-pointer transition-colors',
+      'text-text-muted hover:text-text hover:bg-white/5',
+      currentGroup === group._id && 'bg-white/10 text-text',
+      'group'
+    )}
       onClick={handleSelectGroup}
     >
-      <div className='truncate mr-2'>{group.name}</div>
-      <div className="absolute top-2 right-0 rounded-full p-1 hover:bg-surface-hover cursor-pointer">
+      <div className='text-sm truncate pr-6'>{group.name}</div>
+      {/* Ellipsis: always visible on mobile, hover on desktop */}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 hover:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block">
         <GroupDropdownList group={group} />
       </div>
     </div>

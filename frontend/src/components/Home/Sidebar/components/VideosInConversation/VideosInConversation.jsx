@@ -9,9 +9,31 @@ export default function VideosInConversation() {
   const sessionId = useStore((state) => state.session_id);
   const { data: videos = [] } = useVideos(groupId, sessionId);
   const selectedVideos = videos.filter(video => video.selected);
+
+  // Mock data for testing - remove or set to [] in production
+  const mockVideos = [
+    { _id: '1', name: 'Introduction to AI', thumbnail: '/images/testImage.png', length: '12:34', selected: true },
+    { _id: '2', name: 'React Tutorial Part 1', thumbnail: '/images/testImage.png', length: '8:22', selected: true },
+    { _id: '3', name: 'Building Modern UIs', thumbnail: '/images/testImage.png', length: '15:00', selected: true },
+    { _id: '4', name: 'Video Editing Basics', thumbnail: '/images/testImage.png', length: '20:15', selected: true },
+  ];
+
+  // Use mock if selectedVideos is empty
+  const displayVideos = selectedVideos.length > 0 ? selectedVideos : mockVideos;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const closeModal = () => setIsModalOpen(false);
+  const [focusVideoId, setFocusVideoId] = useState(null);
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setFocusVideoId(null);
+  };
   const openModal = () => setIsModalOpen(true);
+
+  const handleVideoClick = (videoId) => {
+    setFocusVideoId(videoId);
+    setIsModalOpen(true);
+  };
 
   return (
     <div className='relative flex flex-col h-full'>
@@ -29,26 +51,39 @@ export default function VideosInConversation() {
       {/* Active Videos Section */}
       <div className='flex flex-col flex-1 overflow-hidden'>
         <p className='text-xs text-text-muted uppercase tracking-wide px-4 py-2'>
-          Active Videos {selectedVideos.length > 0 && `(${selectedVideos.length})`}
+          Active Videos {displayVideos.length > 0 && `(${displayVideos.length})`}
         </p>
         <div className='columns-2 gap-2 px-2 flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto'>
-          {selectedVideos.length === 0 ? (
+          {displayVideos.length === 0 ? (
             <p className='text-sm text-text-dim col-span-2 text-center py-4'>No videos selected</p>
           ) : (
-            selectedVideos.map((video, idx) => (
-              <div key={idx} className='pb-2 break-inside-avoid'>
-                <img src={video.thumbnail || "/images/testImage.png"} alt="thumbnail" className='w-full h-auto rounded-lg' />
-                <div className='mt-1'>
-                  <h3 className='text-sm font-medium truncate text-text'>{video.name}</h3>
-                  <p className='text-xs text-text-dim'>{video.length || "1:00"}</p>
+            displayVideos.map((video, idx) => (
+              <div
+                key={idx}
+                className='pb-2 break-inside-avoid group cursor-pointer'
+                onClick={() => handleVideoClick(video._id)}
+              >
+                <div className='relative overflow-hidden rounded-lg border border-white/10 group-hover:border-accent/50 transition-colors'>
+                  <img
+                    src={video.thumbnail || "/images/testImage.png"}
+                    alt="thumbnail"
+                    className='w-full aspect-video object-cover'
+                  />
+                  {/* Duration badge */}
+                  <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
+                    {video.length || "1:00"}
+                  </span>
                 </div>
+                <h3 className='mt-1.5 text-sm font-medium truncate text-text-muted group-hover:text-text transition-colors'>
+                  {video.name}
+                </h3>
               </div>
             ))
           )}
         </div>
       </div>
 
-      <LibraryModal isModalOpen={isModalOpen} closeModal={closeModal} />
+      <LibraryModal isModalOpen={isModalOpen} closeModal={closeModal} focusVideoId={focusVideoId} />
     </div>
   )
 }
