@@ -18,6 +18,7 @@ import Markdown from 'react-markdown';
 import { ChatBubbleOvalLeftEllipsisIcon } from '@heroicons/react/24/solid';
 import Thinking from './Chat/Thinking';
 import { XMarkIcon } from '@heroicons/react/16/solid';
+import Tools from './Chat/Tools';
 
 export default function Chat() {
   const {
@@ -80,7 +81,8 @@ export default function Chat() {
 
   const userId = user?.id;
 
-  const [agentProgess, setAgentProgress] = useState(false);
+  // mốt merge vào messgaes luôn
+  const [agentProgress, setAgentProgress] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState('Thinking');
 
 
@@ -184,10 +186,10 @@ export default function Chat() {
 
     return () => {
       socket.off('message_received', handleStatus);
-      socket.off('running', handleRunning);
+      socket.off('running', handleRunning); //tool
       socket.off('thinking', handleThinking);
       socket.off('response', handleResponse);
-      socket.off('media', handleMedia);
+      socket.off('media', handleMedia); 
       socket.off('full_response', handleFullResponse);
     };
   }); // [] <- no deps, always up to date for dev
@@ -315,8 +317,9 @@ export default function Chat() {
             </Markdown>
           </div>
         </div>} */}
+          <Tools />
           <Thinking />
-          {agentProgess && <div className='animate-pulse text-accent flex flex-col pt-12'>...</div>}
+          {agentProgress && <div className='animate-pulse text-accent flex flex-col pt-12'>...</div>}
           <div ref={bottomRef}></div>
         </div>
       </div>
