@@ -190,7 +190,8 @@ class UserService:
 
     async def create_user_group(self, user_id: str, group_name: str = "default"):
         group_id = PydanticObjectId()
-        new_group = Group(id=group_id, user_id=user_id, name=group_name)
+        # new_group = Group(id=group_id, user_id=user_id, name=group_name)
+        new_group = Group(id=group_id, user_id=user_id)
         await new_group.insert()
         return str(group_id)
 
@@ -307,3 +308,11 @@ class UserService:
         await ChatHistory.find_one(ChatHistory.id == PydanticObjectId(session_id)).delete()
 
         return True
+    
+    async def rename_session(self, session_id: str, new_name: str):
+        chat_history = await ChatHistory.find_one(ChatHistory.id == PydanticObjectId(session_id))
+        if chat_history:
+            chat_history.name = new_name
+            await chat_history.save()
+            return True
+        return False

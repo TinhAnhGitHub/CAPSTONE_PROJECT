@@ -1,7 +1,11 @@
 import { useMemo, memo } from "react";
 import { TextBlock, ImageGallery, VideoBlock } from "./Chat/Blocks";
+import Thinking from "./Chat/Thinking";
+import Tools from "./Chat/Tools";
 
 const PREVIEW_COUNT = 6;
+
+// now add thinking block and tools block
 
 export default memo(function BlockRenderer({ block, role }) {
     const imageUrlsKey = block.block_type === 'image' ? JSON.stringify(block.url) : '[]';
@@ -32,6 +36,13 @@ export default memo(function BlockRenderer({ block, role }) {
         return <VideoBlock block={block} />;
     }
 
+    if (block.block_type === 'thinking') {
+        return <Thinking block={block.steps} />;
+    }
+    if (block.block_type === 'tools') {
+        return <Tools block={block.tools} />;
+    }
+
     return null;
 }, (prevProps, nextProps) => {
     if (prevProps.role !== nextProps.role) return false;
@@ -50,6 +61,12 @@ export default memo(function BlockRenderer({ block, role }) {
         return prev.url === next.url &&
             JSON.stringify(prev.segments) === JSON.stringify(next.segments) &&
             prev.fps === next.fps;
+    }
+    if (prev.block_type === 'thinking') {
+        return JSON.stringify(prev.thinking) === JSON.stringify(next.thinking);
+    }
+    if (prev.block_type === 'tools') {
+        return JSON.stringify(prev.tools) === JSON.stringify(next.tools);
     }
     return false;
 });

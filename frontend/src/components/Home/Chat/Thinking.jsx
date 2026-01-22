@@ -2,7 +2,7 @@ import VerticalStepper from '@/components/common/components/VerticalStepper'
 import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/react'
 import { ChevronDownIcon } from '@heroicons/react/20/solid'
 
-export default function Thinking({ thinking = [{
+export default function Thinking({ block = [{
     title: "Drafting the Response",
     description: "I'm now putting together the response, considering all the parameters. I am structuring it to meet the requirements precisely. My focus is on concise and clear communication."
 },
@@ -14,7 +14,7 @@ export default function Thinking({ thinking = [{
     return (
         <div className="w-full px-4">
             <div className="w-full max-w-lg divide-y divide-surface-light rounded-r-xl">
-                <VerticalStepper steps={thinking} />
+                <VerticalStepper steps={block} />
             </div>
         </div>
     )

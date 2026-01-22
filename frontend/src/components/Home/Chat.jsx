@@ -16,9 +16,7 @@ import SendButton from './SendButton';
 import AppBar from '../Appbar';
 import Markdown from 'react-markdown';
 import { ChatBubbleOvalLeftEllipsisIcon } from '@heroicons/react/24/solid';
-import Thinking from './Chat/Thinking';
 import { XMarkIcon } from '@heroicons/react/16/solid';
-import Tools from './Chat/Tools';
 
 export default function Chat() {
   const {
@@ -109,7 +107,7 @@ export default function Chat() {
     enabled: !!session_id,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
-    staleTime: Infinity,
+    // staleTime: Infinity,
   })
 
   useEffect(() => {
@@ -283,7 +281,7 @@ export default function Chat() {
           ))}
 
           {/* test video block */}
-          {
+          {/* {
             <BlockRenderer block={{
               block_type: 'video',
               video_id: '2421946379',
@@ -292,33 +290,51 @@ export default function Chat() {
               { start_frame: 1000, end_frame: 2537 }], // in frames
               fps: 30,
             }} role={"assistant"} />
-          }
+          } */}
           {/* test video block */}
-          {
+          {/* {
             <BlockRenderer block={{
               block_type: 'text',
               text: 'This is a test message to demonstrate the text block rendering in the chat interface. It should properly display the text content sent by the assistant role.',
             }} role={"assistant"} />
-          }
+          } */}
           {/* test ảnh block */}
-          {
+          {/* {
             <BlockRenderer block={{
               block_type: 'image',
               url: ['/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png'],
             }} role={"assistant"} />
-          }
+          } */}
+          {/* test tool */}
+          {/* {
+            <BlockRenderer block={{
+              block_type: 'tools',
+              tools: [{
+                tool_name: "Image Recognition",
+                description: "Calling an image recognition model to analyze the provided image and extract relevant information."
+              },
+              {
+                tool_name: "Voice Recognition",
+                description: "Using speech-to-text to transcribe audio content from the video."
+              },
+              {
+                tool_name: "OCR",
+                description: "Extracting text from images using optical character recognition."
+              },
+              {
+                tool_name: "CLIP Search",
+                description: "Using CLIP model to find relevant video segments based on semantic image-text matching."
+              }]
+            }} role={"assistant"} />
+          } */}
+          {/* test thinking */}
+          {/* {
+            <BlockRenderer block={{
+              block_type: 'thinking',
+              thinking: "The assistant is currently processing the request and generating a response.",
+            }} role={"assistant"} />
+          } */}
 
-
-          {/* {thinkingMessage && <div className='flex pt-12 gap-2'>
-          <div><ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5 text-gray-400" /></div>
-          <div className='animate-pulse text-white flex flex-col '>
-            <Markdown>
-              {thinkingMessage}
-            </Markdown>
-          </div>
-        </div>} */}
-          <Tools />
-          <Thinking />
           {agentProgress && <div className='animate-pulse text-accent flex flex-col pt-12'>...</div>}
           <div ref={bottomRef}></div>
         </div>

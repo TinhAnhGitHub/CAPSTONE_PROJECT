@@ -279,3 +279,18 @@ async def delete_session(
     await user_service.delete_session(session_id)
 
     return {"session_id": session_id}
+
+@router.patch("/session/{session_id}/rename")
+async def rename_session(
+    user_service: UserServiceDep,
+    session_id: str,
+    data: dict,
+    user=Depends(verify_token),
+):
+    new_name = data.get("new_name", "Renamed Session")
+    success = await user_service.rename_session(session_id, new_name)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {"session_id": session_id, "new_name": new_name}

@@ -11,11 +11,18 @@ from datetime import datetime
 from abc import abstractmethod, ABC
 from llama_index.core.base.llms.types import MessageRole
 
+
 from app.core.config import settings
 from beanie import PydanticObjectId
+
+from utils.random_name import random_chat_name
+
+
 # chat session
 class ChatHistory(Document):  
     user_id: PydanticObjectId
+
+    name: str = Field(default_factory=random_chat_name)
 
     created_at: datetime = Field(default_factory=datetime.now)
     last_updated: datetime = Field(default_factory=datetime.now)

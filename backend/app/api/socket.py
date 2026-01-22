@@ -13,6 +13,7 @@ import socketio
 import websockets
 from app.schema.user import ALGORITHM, SECRET_KEY
 from utils.blocks import parseFullResponseToBlocks
+from llama_index.core.agent.workflow import AgentOutput
 
 sio = socketio.AsyncServer(
     async_mode="asgi", cors_allowed_origins="*", logger=True, engineio_logger=True
@@ -25,6 +26,9 @@ from app.model.session_message import (
     ImageBlock,
     SessionMessage,
     TextBlock,
+    ThinkingStep,
+    ToolStep,
+    ToolsBlock,
     VideoBlock,
     VideoSegment,
 )
@@ -120,6 +124,8 @@ async def handle_stream_chat(socket_id, data: dict):
 
                 accum = ""
                 prev_msg_type = ""
+                tools_accum = []
+                thinking_accum = []
                 ai_message_blocks = []
                 async for msg in ws:
                     try:
@@ -133,6 +139,16 @@ async def handle_stream_chat(socket_id, data: dict):
                                 ai_message_block = TextBlock(text=accum)
                                 ai_message_blocks.append(ai_message_block)
                                 accum = ""
+                            elif tools_accum:
+                                ai_message_block = ToolsBlock(tools=tools_accum)
+                                ai_message_blocks.append(ai_message_block)
+                                tools_accum = []
+
+                        if (prev_msg_type == "ToolCallResult" or prev_msg_type == "ToolCall") and (msg_type != "ToolCallResult" and msg_type != "ToolCall"):
+                            if tools_accum:
+                                tool_message_block = ToolsBlock(tools=tools_accum)
+                                ai_message_blocks.append(tool_message_block)
+                                tools_accum = []
                         # content = data.get("content", "")
                         # AgentProgressEvent -> ...
                         # agentinput -> bỏ
@@ -149,7 +165,7 @@ async def handle_stream_chat(socket_id, data: dict):
 
                         # final event -> lưu chat_history
 
-                        if msg_type == "AgentProgressEvent":
+                        if msg_type == "AgentProgressEvent": 
                             # hiện ...
                             await sio.emit(
                                 "running",
@@ -159,11 +175,14 @@ async def handle_stream_chat(socket_id, data: dict):
                                 },
                                 to=socket_id,
                             )
-                        elif msg_type == "AgentInput":
-                            pass
+                        # elif msg_type == "AgentInput":
+                        #     pass
                         elif msg_type == "AgentStream":
                             thinking_delta = data.get("thinking_delta", None)
                             if thinking_delta:
+                                # also save
+                                thinking_step = ThinkingStep(title="Thinking", description=thinking_delta)
+                                thinking_accum.append(thinking_step)
                                 await sio.emit(
                                     "thinking",
                                     {
@@ -188,27 +207,35 @@ async def handle_stream_chat(socket_id, data: dict):
                                     to=socket_id,
                                 )
                         elif msg_type == "ToolCall":
-                            pass
+                            tool_id = data.get("tool_id", "")
+
+                            # ai_message_blocks.append()
+                            await sio.emit(
+                                "tool_call",
+                                {
+                                    "tool_id": tool_id,
+                                    "tool_name": tool_id,
+                                },
+                                to=socket_id,
+                            )
                         elif msg_type == "ToolCallResult":
                             # show toolicon trước
                             # mốt show list hình ảnh từ s3, video + các timestamp
-                            print("😭😭😭😭😭😭😭")
+                            tool_id = data.get("tool_id", "")
+                            description = data.get("description", "")
+                            tool_step = ToolStep(tool_name=tool_id, description=description)
+                            tools_accum.append(tool_step)
+
                             raw_output = data.get("tool_output", {}).get(
                                 "raw_output", {}
                             )
-                            print("🐴🐴🐴🐴🐴🐴")
-                            if isinstance(raw_output, str):
-                                # skip this turn
-                                continue
-                            print("💜💜💜💜💜💜💜💜")
                             summary = raw_output.get("summary", {})
-
-                            media_type = summary.get("result_type", "")
-
+                            # check if object
+                            if isinstance(summary, dict):
+                                media_type = summary.get("result_type", "")
+                            
                             s3_base = "s3://"
                             http_base = "http://100.113.186.28:9000/"
-
-                            print("🍎🍎🍎🍎🍎🍎🍎")
 
                             def format_tool_result(media):
                                 if media_type == "image_search":
@@ -281,7 +308,6 @@ async def handle_stream_chat(socket_id, data: dict):
 
                             media = summary.get("top_matches", [])
                             formatted_media = format_tool_result(media)
-                            print("🐍🐍🐍🐍🐍🐍🐍 ")
                             if formatted_media["media_type"] in [
                                 "image",
                                 "video",
@@ -295,7 +321,10 @@ async def handle_stream_chat(socket_id, data: dict):
                                     ],
                                 }
                                 await sio.emit("media", emit_data, to=socket_id)
-                            print("🤯🤯🤯🤯🤯🤯   ")
+                            else: 
+                                tool_name = data.get("tool_id", "unknown_tool")
+                                description = data.get("description", "")
+                                await sio.emit("tool_result", {"tool_name": tool_name, "description": description}, to=socket_id)
                         elif msg_type == "AgentOutput":
                             # save to database
                             ai_message = SessionMessage(
@@ -322,17 +351,11 @@ async def handle_stream_chat(socket_id, data: dict):
                     except Exception as e:
                         print("⚠️ parse error:", e)
                         traceback.print_exc()  # This will show the exact line number
-            # update the db
 
         except Exception as e:
             await sio.emit(
                 "error", {"message": "agent unreachable: " + str(e)}, to=socket_id
             )
-
-        # notify finish
-        # await sio.emit(
-        #     "stream_end", {"timestamp": ai_message.timestamp.isoformat()}, to=socket_id
-        # )
 
     except Exception as e:
         await sio.emit("error", {"message": str(e)}, to=socket_id)

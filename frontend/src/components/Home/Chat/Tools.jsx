@@ -37,7 +37,7 @@ const getToolIcon = (toolName) => {
     return toolIcons.default;
 };
 
-export default function Tools({ tools = [{
+export default function block({ block = [{
     tool_name: "Image Recognition",
     description: "Calling an image recognition model to analyze the provided image and extract relevant information."
 },
@@ -56,11 +56,11 @@ export default function Tools({ tools = [{
     const [expandedSteps, setExpandedSteps] = useState(new Set());
 
     useEffect(() => {
-        setExpandedSteps(new Set([tools.length - 1]));
-    }, [tools.length]);
+        setExpandedSteps(new Set([block.length - 1]));
+    }, [block.length]);
 
     const toggleStep = (index) => {
-        const isLast = index === tools.length - 1;
+        const isLast = index === block.length - 1;
         if (isLast) return;
 
         setExpandedSteps((prev) => {
@@ -78,8 +78,8 @@ export default function Tools({ tools = [{
         <div className="w-full px-4">
             <div className="w-full max-w-lg divide-y divide-surface-light rounded-r-xl">
                 <ol className="relative border-l py-2 pr-2 border-surface-light border-dashed">
-                    {tools.map((tool, i) => {
-                        const isLast = i === tools.length - 1;
+                    {block.map((tool, i) => {
+                        const isLast = i === block.length - 1;
                         const isExpanded = isLast || expandedSteps.has(i);
                         const hasDescription = !!tool.description;
                         const ToolIcon = getToolIcon(tool.tool_name);
@@ -89,8 +89,8 @@ export default function Tools({ tools = [{
                                 {/* Icon in circle - always shows tool icon, styling indicates status */}
                                 <span
                                     className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border ${isLast
-                                            ? 'bg-accent border-accent'
-                                            : 'bg-surface-light border-surface-light'
+                                        ? 'bg-accent border-accent'
+                                        : 'bg-surface-light border-surface-light'
                                         }`}
                                 >
                                     {isLast ? (

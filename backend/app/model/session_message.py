@@ -41,6 +41,29 @@ class VideoSegment(BaseModel):
     caption: Optional[str] = None
 
 
+class ThinkingStep(BaseModel):
+    title: str
+    description: str | None = None
+
+
+class ThinkingBlock(BaseModel):
+    """A representation of thinking state as a sequence of steps."""
+    block_type: Literal["thinking"] = "thinking"
+    steps: list[ThinkingStep] = []
+
+
+class ToolStep(BaseModel):
+    tool_name: str
+    description: str | None = None
+
+
+class ToolsBlock(BaseModel):
+    """A representation of tools state as a sequence of tool usages."""
+
+    block_type: Literal["tools"] = "tools"
+    tools: list[ToolStep] = []
+
+
 class VideoBlock(BaseModel):
     """A representation of video data to directly pass to/from the LLM."""
 
@@ -92,6 +115,8 @@ ContentBlock = Annotated[
         VideoBlock,
         ToolCallBlock,
         ToolCallResultBlock,
+        ThinkingBlock,
+        ToolsBlock,
     ],
     Field(discriminator="block_type"),
 ]
