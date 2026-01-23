@@ -51,13 +51,12 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
         })
     }, [queryClient])
 
-    useEffect(() => {
-        const result = ensureGroupId(groups, group, setCurrentGroup);
-        // console.log("Ensure group result:", result);
-        if (result.status === "create") {
-            createNewGroupMutation.mutate();
-        }
-    }, [group])
+    // useEffect(() => {
+    //     const result = ensureGroupId(groups, group, setCurrentGroup);
+    //     if (result.status === "create") {
+    //         createNewGroupMutation.mutate();
+    //     }
+    // }, [group])
 
     // Handle focus video - scroll to it and highlight
     useEffect(() => {
@@ -92,13 +91,13 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
     return (
         <Modal isOpen={isModalOpen} onClose={closeModal} title="Library">
             <div className='flex max-md:flex-col'>
-                <div className='max-md:flex max-md:flex-col md:w-[20%]  md:border-r border-surface-light p-2 overflow-auto scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent'>
+                <div className='max-md:flex max-md:flex-col md:w-[20%]  md:border-r border-surface-light p-2  scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent '>
                     <div className='flex flex-col max-md:flex-row-reverse max-md:items-center items-right max-md:justify-between mb-2'>
                         <AddGroupButton />
                         <div className='border-b border-surface-light my-2 max-md:hidden'></div>
                         <p className=' text-xs text-text-muted uppercase tracking-wide px-2'>GROUPS</p>
                     </div>
-                    <div className='groups max-md:flex max-md:overflow-x-auto scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent'>
+                    <div className='groups max-md:flex max-md:overflow-x-auto scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto md:max-h-[55vh]'>
                         {
                             displayGroups.map((group, idx) => (
                                 <Group key={idx} group={group} />
@@ -106,9 +105,9 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
                         }
                     </div>
                 </div>
-                <div className="relative w-[80%] h-[70vh] flex flex-col">
+                <div className="relative md:w-[80%] h-[70vh] flex flex-col">
                     <div className="flex-1 overflow-y-auto px-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
-                        <div className="columns-2 md:columns-4 gap-4 p-2">
+                        <div className=" grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-2">
                             {displayVideos.map((video, idx) => (
                                 <div
                                     key={idx}

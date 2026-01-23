@@ -42,6 +42,8 @@ export const useDeleteSession = () => {
     const queryClient = useQueryClient();
     const session_id = useStore((state) => state.session_id);
     const setSessionId = useStore((state) => state.setSessionId);
+    const chatHistory = useStore((state) => state.chatHistory);
+
     return useMutation({
         mutationFn: (session) => {
             // if current session is being deleted, create new chat after deletion
@@ -49,7 +51,9 @@ export const useDeleteSession = () => {
         },
         onSuccess: (data) => {
             if (session_id === data.data.session_id) {
-                setSessionId(null);
+                const index = chatHistory.findIndex(chat => chat._id === data.data.session_id);
+                const next = chatHistory[index + 1] || chatHistory[index - 1] || null;
+                setSessionId(next ? next._id : null);                  
             }
         },
         onSettled: () => {
@@ -59,12 +63,20 @@ export const useDeleteSession = () => {
 }
 
 export const useGroups = () => {
+    const currentGroup = useStore((state) => state.currentGroup);
+    const setCurrentGroup = useStore((state) => state.setCurrentGroup);
     return useQuery({
         queryKey: ['groups'],
         queryFn: async () => {
             const res = await api.get('/api/user/groups');
-            // console.log(res.data)
             return res.data.groups
+        },
+        onSuccess: (data) => {
+            if (data.length > 0) {
+                if (!currentGroup) {
+                    setCurrentGroup(data[0]._id);
+                }
+            }
         }
     });
 }
@@ -77,7 +89,7 @@ export const useCreateGroup = () => {
             return api.post('/api/user/groups/create', { group_name: groupName })
         },
         onSuccess: (data) => {
-            const new_group_id = data.data.group_id;    
+            const new_group_id = data.data.group_id;
             setCurrentGroup(new_group_id);
         },
         onSettled: () => {
@@ -95,8 +107,11 @@ export const useDeleteGroup = () => {
             return api.delete(`/api/user/groups/${groupId}/delete`)
         },
         onSuccess: (data) => {
+            const groups = queryClient.getQueryData('groups') || [];
             if (currentGroup === data.data.group_id) {
-                setCurrentGroup(null);
+                const index = groups.findIndex(chat => chat._id === data.data.group_id);
+                const next = groups[index + 1] || groups[index - 1] || null;
+                setCurrentGroup(next ? next._id : null);
             }
         },
         onSettled: () => {

@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
 import { useForm } from 'react-hook-form';
 import parseChunkToBlock from '@/utils/chat/parseChunkToBlock';
-import addBlocksToMessages, { addBlockToMessages } from '@/utils/chat/addBlockToMessages';
+import addBlocksToMessages, { addBlockToMessages, updateToolCallBlock } from '@/utils/chat/addBlockToMessages';
 import BlockRenderer from './BlockRenderer';
 import { useVideos } from '@/api/services/hooks/query';
 import SendButton from './SendButton';
@@ -32,44 +32,6 @@ export default function Chat() {
   const isOverrideMode = useStoreChat((state) => state.isOverrideMode);
   const overrideVideos = useStoreChat((state) => state.overrideVideos);
   const setOverrideVideos = useStoreChat((state) => state.setOverrideVideos);
-  //   const [chatMessages, setChatMessages] = useState([{
-  //     role: 'assistant',
-  //     timestamp: Date.now(),
-  //     blocks: [
-  //       {
-  //         block_type: 'text',
-  //         text: 'Hello! How can I assist you today?',
-  //       }
-  //     ],
-  //   },
-  // {
-  //     role: 'user',
-  //     timestamp: Date.now(),
-  //     blocks: [
-  //       {
-  //         block_type: 'text',
-  //         text: 'Hi! I have a question about my order.',
-  //       }
-  //     ],
-  // },
-  // {
-  //   role: 'assistant',
-  //   timestamp: Date.now(),
-  //   blocks: [
-  //     {
-  //       block_type: 'text',
-  //       text: 'Sure! Could you please provide me with your order number so I can look into it for you?',
-  //     },
-  //     {
-  //       block_type: 'image',
-  //       url: ['http://100.120.22.90:5173/images/testImage.png', 'http://100.120.22.90:5173/images/testImage.png'],
-  //     },
-  //     {
-  //       block_type: 'video',
-  //       url: ['http://100.120.22.90:5173/videos/testVideo.mp4'],
-  //     }
-  //   ],
-  // }]);
   const addChatMessage = useStoreChat((state) => state.addChatMessage);
 
   const getSessionId = useStoreChat((state) => state.getSessionId);
@@ -79,16 +41,12 @@ export default function Chat() {
 
   const userId = user?.id;
 
-  // mốt merge vào messgaes luôn
-  const [agentProgress, setAgentProgress] = useState(false);
-  const [thinkingMessage, setThinkingMessage] = useState('Thinking');
-
-
   const queryClient = useQueryClient();
 
   const groupId = useStoreChat((state) => state.currentGroup);
   const { data: videos = [] } = useVideos(groupId, session_id);
   const selectedVideosIds = videos.filter(video => video.selected).map(video => video._id);
+  const [querying, setQuerying] = useState(false);
   useQuery({
     queryKey: ["chatMessages", session_id],
     queryFn: async () => {
@@ -112,19 +70,14 @@ export default function Chat() {
 
   useEffect(() => {
     const handleStatus = (msg) => {
+      setQuerying(true);
       if (!getSessionId()) setSessionId(msg.session_id);
       queryClient.invalidateQueries(['chatHistory']);
     };
 
-    const handleThinking = (msg) => {
-      setAgentProgress(false);
-      setThinkingMessage(msg.content);
-      scrollToBottomIfNeeded();
-    };
 
 
     const handleResponse = (msg) => {
-      setThinkingMessage('');
       const prev = useStoreChat.getState().chatMessages;
 
       const newBlock = parseChunkToBlock("text", msg.content_delta);
@@ -135,14 +88,8 @@ export default function Chat() {
 
       scrollToBottomIfNeeded();
     };
-    const handleRunning = () => {
-      setAgentProgress(true);
-    }
 
     const handleMedia = (media) => {
-      // done
-      console.log("media received", media);
-      setAgentProgress(false);
       const prev = useStoreChat.getState().chatMessages;
       if (!media || !media.media_type) return;
       const media_type = media.media_type;
@@ -151,46 +98,75 @@ export default function Chat() {
       const newBlocks = parseChunkToBlock(media_type, media.results)
       if (!newBlocks) return;
 
-      // Fix: actually update state with the result
       const updated = addBlocksToMessages(prev, 'assistant', newBlocks);
       setChatMessages(updated);
 
       scrollToBottomIfNeeded();
     };
 
-    const handleFullResponse = (data) => {
-      console.log("full_response", data);
-    }
-
     // handle session status
     socket.on('message_received', handleStatus);
 
-    // handle agent progress event
-    socket.on("running", handleRunning);
-
-
     // handle stream thinking
-    socket.on('thinking', handleThinking);
+    const handleThinking = (data) => {
+      console.log("thinking ✅", data);
+      const newBlock = parseChunkToBlock('thinking', data)
+      console.log("newBlock thinking", newBlock);
+      if (!newBlock) return;
 
+      const prev = useStoreChat.getState().chatMessages;
+      // Fix: actually update state with the result
+      const updated = addBlockToMessages(prev, 'assistant', newBlock);
+      setChatMessages(updated);
+
+      scrollToBottomIfNeeded();
+    };
+
+    socket.on('thinking', handleThinking);
+    // handle toolcall
+    const handleToolCall = (data) => {
+      const newBlock = parseChunkToBlock('tool_call', data)
+      if (!newBlock) return;
+
+      const prev = useStoreChat.getState().chatMessages;
+      // Fix: actually update state with the result
+      const updated = addBlockToMessages(prev, 'assistant', newBlock);
+      setChatMessages(updated);
+      scrollToBottomIfNeeded();
+    }
+    socket.on('tool_call', handleToolCall);
+    //handle toolcallresult
+    const handleToolCallResult = (data) => {
+      // find the tool name
+      const prev = useStoreChat.getState().chatMessages;
+      const finished_tool_name = data.tool_name;
+      const updated = updateToolCallBlock(prev, finished_tool_name);
+      setChatMessages(updated);
+      scrollToBottomIfNeeded();
+    }
+    socket.on('tool_result', handleToolCallResult);
     // handle answer
     socket.on('response', handleResponse);
-
-    // check save on database
-    socket.on("full_response", handleFullResponse);
 
     // handle end
     socket.on('media', handleMedia);
 
+    socket.on('stream_end', (msg) => {
+      // console.log("stream end ✅✅✅✅✅✅✅✅✅", msg);
+      setQuerying(false);
+    })
+
 
     return () => {
       socket.off('message_received', handleStatus);
-      socket.off('running', handleRunning); //tool
       socket.off('thinking', handleThinking);
       socket.off('response', handleResponse);
       socket.off('media', handleMedia); 
-      socket.off('full_response', handleFullResponse);
+      socket.off('tool_call', handleToolCall);
+      socket.off('tool_result', handleToolCallResult);
+      socket.off('stream_end');
     };
-  }); // [] <- no deps, always up to date for dev
+  }, []); // 
 
   const bottomRef = useRef(null);
   const chatRef = useRef(null);
@@ -236,9 +212,17 @@ export default function Chat() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const stopStreaming = () => {
+    socket.emit('stop_stream', { sessionId: getSessionId() });
+    setQuerying(false);
+  };
+
+
+
   const handlePrompt = async () => {
     const prompt = getValues('prompt').trim();
     if (!prompt) return;
+
     socket.emit('stream_chat', { userId, sessionId: getSessionId(), text: prompt, videos: selectedVideosIds });
     addChatMessage({
       role: 'user',
@@ -335,7 +319,6 @@ export default function Chat() {
             }} role={"assistant"} />
           } */}
 
-          {agentProgress && <div className='animate-pulse text-accent flex flex-col pt-12'>...</div>}
           <div ref={bottomRef}></div>
         </div>
       </div>
@@ -402,7 +385,7 @@ export default function Chat() {
                 }}
                 placeholder="Ask the agent..."
               />
-              <SendButton control={control} handlePrompt={handlePrompt} />
+              <SendButton control={control} onSend={handlePrompt} querying={querying} onStop={stopStreaming} />
             </div>
           </div>
         </div>

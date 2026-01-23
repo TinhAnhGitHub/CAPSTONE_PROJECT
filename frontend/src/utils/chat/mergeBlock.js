@@ -11,5 +11,17 @@ export default function mergeBlock(lastBlock, newBlock) {
     if (lastBlock.block_type === 'video' && newBlock.block_type === 'video') {
         return { ...lastBlock, url: lastBlock.url.concat(newBlock.url) };
     }
+    if (lastBlock.block_type === 'tool_call' && newBlock.block_type === 'tool_call') {
+        return {
+            ...lastBlock,
+            steps: [...lastBlock.steps, ...newBlock.steps],
+        };
+    }
+    if (lastBlock.block_type === 'thinking' && newBlock.block_type === 'thinking') {
+        return {
+            ...lastBlock,
+            steps: [...lastBlock.steps, ...newBlock.steps],
+        };
+    }
     return null;
 }

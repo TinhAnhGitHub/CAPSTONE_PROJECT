@@ -1,6 +1,7 @@
 import VideoPlayer from "../VideoPlayer";
 
 export default function VideoBlock({ block }) {
+    console.log("😭😭😭😭😭block", block)
     return (
         <div className="grid grid-cols-3 gap-2 py-2 px-4">
             <VideoPlayer

@@ -39,8 +39,8 @@ export default memo(function BlockRenderer({ block, role }) {
     if (block.block_type === 'thinking') {
         return <Thinking block={block.steps} />;
     }
-    if (block.block_type === 'tools') {
-        return <Tools block={block.tools} />;
+    if (block.block_type === 'tool_call') {
+        return <Tools block={block.steps} />;
     }
 
     return null;

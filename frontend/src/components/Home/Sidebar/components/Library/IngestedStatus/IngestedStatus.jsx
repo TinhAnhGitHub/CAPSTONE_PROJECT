@@ -11,7 +11,8 @@ export default function IngestedStatus({ percentage }) {
   return (
     <div className="relative flex items-center justify-center">
       {/* Background overlay */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-lg" style={{ margin: '-100%' }} />
+      {/* fix temporary */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm rounded-lg" style={{ margin: '-300%' }} />
 
       {/* Circular progress */}
       <div className="relative w-14 h-14 flex items-center justify-center">

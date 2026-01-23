@@ -37,9 +37,9 @@ const getToolIcon = (toolName) => {
     return toolIcons.default;
 };
 
-export default function block({ block = [{
+export default function ToolCallsteps({ block = [{
     tool_name: "Image Recognition",
-    description: "Calling an image recognition model to analyze the provided image and extract relevant information."
+    description: "Calling an image recognition model to analyze the provided image and extract relevant information.",
 },
 {
     tool_name: "Voice Recognition",
@@ -60,8 +60,6 @@ export default function block({ block = [{
     }, [block.length]);
 
     const toggleStep = (index) => {
-        const isLast = index === block.length - 1;
-        if (isLast) return;
 
         setExpandedSteps((prev) => {
             const next = new Set(prev);
@@ -79,27 +77,29 @@ export default function block({ block = [{
             <div className="w-full max-w-lg divide-y divide-surface-light rounded-r-xl">
                 <ol className="relative border-l py-2 pr-2 border-surface-light border-dashed">
                     {block.map((tool, i) => {
-                        const isLast = i === block.length - 1;
-                        const isExpanded = isLast || expandedSteps.has(i);
+                        {/* const isLast = i === block.length - 1; */ }
+                        const isExpanded = expandedSteps.has(i);
                         const hasDescription = !!tool.description;
                         const ToolIcon = getToolIcon(tool.tool_name);
-
+                        const status = tool.status == "finished"; // true: done, false: in-progress
                         return (
                             <li key={i} className="ml-6 pb-8 last:pb-0">
                                 {/* Icon in circle - always shows tool icon, styling indicates status */}
                                 <span
-                                    className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border ${isLast
+                                    className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border ${status
                                         ? 'bg-accent border-accent'
                                         : 'bg-surface-light border-surface-light'
                                         }`}
                                 >
-                                    {isLast ? (
+                                        {/* <ToolIcon className="h-3 w-3 text-white" /> */ }
+                                    {status ? 
+                                    (
+                                        <CheckIcon className="h-3 w-3 text-white" />
+                                    ) : (
                                         <svg className="h-3 w-3 text-white animate-spin" viewBox="0 0 24 24" fill="none">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                         </svg>
-                                    ) : (
-                                        <ToolIcon className="h-3 w-3 text-white" />
                                     )}
                                 </span>
 
@@ -108,11 +108,11 @@ export default function block({ block = [{
                                     <button
                                         type="button"
                                         onClick={() => toggleStep(i)}
-                                        className={`flex items-center gap-1 text-left ${hasDescription && !isLast ? "cursor-pointer" : "cursor-default"}`}
-                                        disabled={isLast || !hasDescription}
+                                        className={`flex items-center gap-1 text-left ${hasDescription ? "cursor-pointer" : "cursor-default"}`}
+                                        disabled={!hasDescription}
                                     >
                                         <h3 className="text-sm font-medium text-text">{tool.tool_name}</h3>
-                                        {hasDescription && !isLast && (
+                                        {hasDescription && (
                                             <ChevronDownIcon
                                                 className={`h-4 w-4 text-text-muted transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
                                             />

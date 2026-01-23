@@ -28,16 +28,17 @@ export default function VideoPlayer({ video }) {
       const hue = (i * 137.5) % 360
       const color = `hsl(${hue}, 80%, 55%)`
 
-      if (segment.start_frame !== undefined) {
+      if (segment.start !== undefined) {
         markers.push({
-          time: segment.start_frame * frameDuration,
-          text: `Segment ${i + 1} Start`,
+          time: segment.start * frameDuration,
+          // text: `Segment ${i + 1} Start`,
+          text: segment.caption,
           class: `marker-segment-${i}`,
           color: color,
         })
-        if (segment.end_frame !== undefined) {
+        if (segment.end !== undefined) {
           markers.push({
-            time: segment.end_frame * frameDuration,
+            time: segment.end * frameDuration,
             text: `Segment ${i + 1} End`,
             class: `marker-segment-${i}`,
             color: color,
@@ -112,11 +113,11 @@ export default function VideoPlayer({ video }) {
     }
 
     player.on('waiting', () => {
-      console.log('player is waiting')
+      // console.log('player is waiting')
     })
 
     player.on('dispose', () => {
-      console.log('player will dispose')
+      // console.log('player will dispose')
     })
   }, [markers])
 

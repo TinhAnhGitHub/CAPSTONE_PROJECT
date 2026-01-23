@@ -13,11 +13,6 @@ import ChatHistory from './ChatHistory';
 
 export default function HistoryConversations() {
   const chatHistory = useStoreChat((state) => state.chatHistory);
-  console.log("Chat History:", chatHistory);
-  // Mock data for testing - remove or set to [] in production
-
-  // Use mock if chatHistory is empty
-
   const setChatHistory = useStoreChat((state) => state.setChatHistory);
   const session_id = useStoreChat((state) => state.session_id);
   const setSessionId = useStoreChat((state) => state.setSessionId);
@@ -35,7 +30,7 @@ export default function HistoryConversations() {
         setChatHistory(data);
         if (data.length > 0) {
           if (!session_id) {
-            setSessionId(data[0].session_id);
+            setSessionId(data[0]._id);
           }
         }
       },
@@ -59,12 +54,6 @@ export default function HistoryConversations() {
     api.patch(`/api/user/session/${chatId}/rename`, { new_name: newName });
   }
 
-  const ensureSessionId = useStoreChat((state) => state.ensureSessionId);
-  useEffect(() => {
-    if (!ensureSessionId()) {
-      createNewChat();
-    }
-  }, [session_id]);
 
   return (
     <div className='relative flex flex-col h-full'>

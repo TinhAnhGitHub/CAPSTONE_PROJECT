@@ -144,7 +144,10 @@ async def handle_stream_chat(socket_id, data: dict):
                                 ai_message_blocks.append(ai_message_block)
                                 tools_accum = []
 
-                        if (prev_msg_type == "ToolCallResult" or prev_msg_type == "ToolCall") and (msg_type != "ToolCallResult" and msg_type != "ToolCall"):
+                        if (
+                            prev_msg_type == "ToolCallResult"
+                            or prev_msg_type == "ToolCall"
+                        ) and (msg_type != "ToolCallResult" and msg_type != "ToolCall"):
                             if tools_accum:
                                 tool_message_block = ToolsBlock(tools=tools_accum)
                                 ai_message_blocks.append(tool_message_block)
@@ -165,7 +168,7 @@ async def handle_stream_chat(socket_id, data: dict):
 
                         # final event -> lưu chat_history
 
-                        if msg_type == "AgentProgressEvent": 
+                        if msg_type == "AgentProgressEvent":
                             # hiện ...
                             await sio.emit(
                                 "running",
@@ -179,15 +182,19 @@ async def handle_stream_chat(socket_id, data: dict):
                         #     pass
                         elif msg_type == "AgentStream":
                             thinking_delta = data.get("thinking_delta", None)
+                            print("🚀🚀🚀🚀🚀🚀🚀 Agent stream:", thinking_delta)
                             if thinking_delta:
                                 # also save
-                                thinking_step = ThinkingStep(title="Thinking", description=thinking_delta)
+                                print("✅✅✅✅✅✅✅✅ Thinking delta:", thinking_delta)
+                                thinking_step = ThinkingStep(
+                                    title="Thinking", description=thinking_delta
+                                )
                                 thinking_accum.append(thinking_step)
                                 await sio.emit(
                                     "thinking",
                                     {
-                                        "content": thinking_delta,
-                                        "role": MessageRole.ASSISTANT.value,
+                                        "title": "Thinking",
+                                        "description": thinking_delta,
                                     },
                                     to=socket_id,
                                 )
@@ -208,7 +215,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 )
                         elif msg_type == "ToolCall":
                             tool_id = data.get("tool_id", "")
-
+                            print("🚀 Tool call:", tool_id)
                             # ai_message_blocks.append()
                             await sio.emit(
                                 "tool_call",
@@ -223,17 +230,22 @@ async def handle_stream_chat(socket_id, data: dict):
                             # mốt show list hình ảnh từ s3, video + các timestamp
                             tool_id = data.get("tool_id", "")
                             description = data.get("description", "")
-                            tool_step = ToolStep(tool_name=tool_id, description=description)
+                            tool_step = ToolStep(
+                                tool_name=tool_id, description=description
+                            )
                             tools_accum.append(tool_step)
 
                             raw_output = data.get("tool_output", {}).get(
                                 "raw_output", {}
                             )
-                            summary = raw_output.get("summary", {})
+
+                            if isinstance(raw_output, dict):
+                                summary = raw_output.get("summary", {})
+                            else:
+                                summary = {}
                             # check if object
-                            if isinstance(summary, dict):
-                                media_type = summary.get("result_type", "")
-                            
+                            media_type = summary.get("result_type", "")
+
                             s3_base = "s3://"
                             http_base = "http://100.113.186.28:9000/"
 
@@ -321,10 +333,19 @@ async def handle_stream_chat(socket_id, data: dict):
                                     ],
                                 }
                                 await sio.emit("media", emit_data, to=socket_id)
-                            else: 
+                            else:
+                                tool_id = data.get("tool_id", "unknown_tool")
                                 tool_name = data.get("tool_id", "unknown_tool")
                                 description = data.get("description", "")
-                                await sio.emit("tool_result", {"tool_name": tool_name, "description": description}, to=socket_id)
+                                await sio.emit(
+                                    "tool_result",
+                                    {
+                                        "tool_id": tool_id,
+                                        "tool_name": tool_name,
+                                        "description": description,
+                                    },
+                                    to=socket_id,
+                                )
                         elif msg_type == "AgentOutput":
                             # save to database
                             ai_message = SessionMessage(

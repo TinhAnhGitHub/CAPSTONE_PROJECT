@@ -17,7 +17,7 @@ export default function VideoModal({ image, open, onClose }) {
     const playerRef = React.useRef(null);
     const intervalRef = React.useRef(null);
     const timeoutRef = React.useRef(null);
-    // console.log(image, "sfjikahfuia")
+    
     const videoid = `${image?.group_id}_${image?.video_id}.mp4`;
     const fps = getFps(videoid) || 25;
     const frameDuration = 1 / fps;
