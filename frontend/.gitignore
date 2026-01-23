@@ -29,3 +29,5 @@ node_modules
 public/test
 
 .env
+.env.cloudflare
+.env.prod
