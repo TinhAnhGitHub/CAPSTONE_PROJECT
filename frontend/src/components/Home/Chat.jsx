@@ -4,6 +4,7 @@ import { Textarea } from '@headlessui/react';
 import clsx from 'clsx';
 import { useStore } from '@/stores/user';
 import { useStore as useStoreChat } from "@/stores/chat";
+import { ChevronDownIcon } from '@heroicons/react/24/solid';
 
 import { useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
@@ -43,6 +44,15 @@ export default function Chat() {
 
   const queryClient = useQueryClient();
 
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  const handleScroll = () => {
+    const nearBottom = checkIfNearBottom();
+    isNearBottomRef.current = nearBottom;
+    setShowScrollDown(!nearBottom);
+  };
+
+
   const groupId = useStoreChat((state) => state.currentGroup);
   const { data: videos = [] } = useVideos(groupId, session_id);
   const selectedVideosIds = videos.filter(video => video.selected).map(video => video._id);
@@ -54,6 +64,7 @@ export default function Chat() {
       if (!session_id) return [];
       const response = await api.get(`/api/user/chat-history/${session_id}`);
       const chat = response.data.chat;
+      console.log("Fetched chat history:", chat);
       return chat;
     },
     onSuccess: (data) => {
@@ -125,7 +136,7 @@ export default function Chat() {
     socket.on('thinking', handleThinking);
     // handle toolcall
     const handleToolCall = (data) => {
-      const newBlock = parseChunkToBlock('tool_call', data)
+      const newBlock = parseChunkToBlock('tools', data)
       if (!newBlock) return;
 
       const prev = useStoreChat.getState().chatMessages;
@@ -161,7 +172,7 @@ export default function Chat() {
       socket.off('message_received', handleStatus);
       socket.off('thinking', handleThinking);
       socket.off('response', handleResponse);
-      socket.off('media', handleMedia); 
+      socket.off('media', handleMedia);
       socket.off('tool_call', handleToolCall);
       socket.off('tool_result', handleToolCallResult);
       socket.off('stream_end');
@@ -251,7 +262,8 @@ export default function Chat() {
       <AppBar />
       <div
         ref={chatContainerRef}
-        onScroll={() => { isNearBottomRef.current = checkIfNearBottom(); }}
+        // onScroll={() => { isNearBottomRef.current = checkIfNearBottom(); }}
+        onScroll={handleScroll}
         className="flex flex-col w-full h-[90vh] px-4 md:px-8 lg:px-16 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-scroll scrollbar-gutter-stable"
       >
         {/* Centered content container with max-width */}
@@ -318,6 +330,29 @@ export default function Chat() {
               thinking: "The assistant is currently processing the request and generating a response.",
             }} role={"assistant"} />
           } */}
+          {showScrollDown && (
+            <button
+              onClick={() => {
+                isNearBottomRef.current = true;
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="
+              fixed bottom-24 right-6 md:right-10
+              z-20
+              flex items-center justify-center
+              w-10 h-10
+              rounded-full
+              bg-surface border border-surface-light
+              shadow-lg
+              cursor-pointer
+              hover:bg-surface-light
+              transition-all ease-out
+            "
+              aria-label="Scroll to bottom"
+            >
+              <ChevronDownIcon className="w-5 h-5 text-text" />
+            </button>
+          )}
 
           <div ref={bottomRef}></div>
         </div>

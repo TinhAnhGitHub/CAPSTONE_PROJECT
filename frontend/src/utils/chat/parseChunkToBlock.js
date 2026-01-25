@@ -18,9 +18,9 @@ export default function parseChunkToBlock(msg_type, chunk) {
         }
         return thinking_block;
     }
-    if (msg_type === 'tool_call') {
+    if (msg_type === 'tools') {
         const tool_block = {
-            block_type: 'tool_call',
+            block_type: 'tools',
             steps: [{
                 status: 'pending',
                 ...chunk,

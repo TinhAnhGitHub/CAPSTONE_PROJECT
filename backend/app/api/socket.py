@@ -26,6 +26,7 @@ from app.model.session_message import (
     ImageBlock,
     SessionMessage,
     TextBlock,
+    ThinkingBlock,
     ThinkingStep,
     ToolStep,
     ToolsBlock,
@@ -100,16 +101,15 @@ async def handle_stream_chat(socket_id, data: dict):
             #     "chat_history": chat_history_dict,
             # }
             payload = {
-                # "session_id": "692bd642086bad3a30946947",
                 "session_id": session_id,
-                "user_id": "agenttest",
+                "user_id": user_id,
                 "video_ids": [
                     "692ad412086ada3a309334ff",
                     "692ad412086ada3a30933500",
                     "692ad412086ada3a30933501",
                     "692ad412086ada3a30933503",
                 ],
-                "user_demand": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
+                "user_demand": message,
                 "chat_history": [
                     {
                         "role": "user",
@@ -139,17 +139,17 @@ async def handle_stream_chat(socket_id, data: dict):
                                 ai_message_block = TextBlock(text=accum)
                                 ai_message_blocks.append(ai_message_block)
                                 accum = ""
-                            elif tools_accum:
-                                ai_message_block = ToolsBlock(tools=tools_accum)
-                                ai_message_blocks.append(ai_message_block)
-                                tools_accum = []
+                            elif thinking_accum:
+                                thinking_message_block = ThinkingBlock(steps=thinking_accum)
+                                ai_message_blocks.append(thinking_message_block)
+                                thinking_accum = []
 
                         if (
                             prev_msg_type == "ToolCallResult"
                             or prev_msg_type == "ToolCall"
                         ) and (msg_type != "ToolCallResult" and msg_type != "ToolCall"):
                             if tools_accum:
-                                tool_message_block = ToolsBlock(tools=tools_accum)
+                                tool_message_block = ToolsBlock(steps=tools_accum)
                                 ai_message_blocks.append(tool_message_block)
                                 tools_accum = []
                         # content = data.get("content", "")
@@ -182,10 +182,8 @@ async def handle_stream_chat(socket_id, data: dict):
                         #     pass
                         elif msg_type == "AgentStream":
                             thinking_delta = data.get("thinking_delta", None)
-                            print("🚀🚀🚀🚀🚀🚀🚀 Agent stream:", thinking_delta)
                             if thinking_delta:
                                 # also save
-                                print("✅✅✅✅✅✅✅✅ Thinking delta:", thinking_delta)
                                 thinking_step = ThinkingStep(
                                     title="Thinking", description=thinking_delta
                                 )
@@ -215,8 +213,12 @@ async def handle_stream_chat(socket_id, data: dict):
                                 )
                         elif msg_type == "ToolCall":
                             tool_id = data.get("tool_id", "")
-                            print("🚀 Tool call:", tool_id)
-                            # ai_message_blocks.append()
+                            description = data.get("description", "")
+                            tool_step = ToolStep(
+                                tool_name=tool_id, description=description, status="finished"
+                            )
+                            tools_accum.append(tool_step)
+
                             await sio.emit(
                                 "tool_call",
                                 {
@@ -228,12 +230,6 @@ async def handle_stream_chat(socket_id, data: dict):
                         elif msg_type == "ToolCallResult":
                             # show toolicon trước
                             # mốt show list hình ảnh từ s3, video + các timestamp
-                            tool_id = data.get("tool_id", "")
-                            description = data.get("description", "")
-                            tool_step = ToolStep(
-                                tool_name=tool_id, description=description
-                            )
-                            tools_accum.append(tool_step)
 
                             raw_output = data.get("tool_output", {}).get(
                                 "raw_output", {}
@@ -300,6 +296,8 @@ async def handle_stream_chat(socket_id, data: dict):
                                                 caption=item["caption_preview"],
                                             )
                                             segment_list.append(segment)
+                                        # sort segment_list based on start time
+                                        segment_list.sort(key = lambda x: x.start)
                                         video_block = VideoBlock(
                                             video_id=video_id,
                                             url=path[video_id].replace(
@@ -337,6 +335,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 tool_id = data.get("tool_id", "unknown_tool")
                                 tool_name = data.get("tool_id", "unknown_tool")
                                 description = data.get("description", "")
+                                # also update tool result in ai message blocks
                                 await sio.emit(
                                     "tool_result",
                                     {

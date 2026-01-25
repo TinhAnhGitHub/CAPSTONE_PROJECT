@@ -40,7 +40,7 @@ export function updateToolCallBlock(messages, finished_tool_name) {
         const blocks = message.blocks;
         for (let j = blocks.length - 1; j >= 0; j--) {
             const block = blocks[j];
-            if (block.block_type === 'tool_call') {
+            if (block.block_type === 'tools') {
                 const steps = block.steps;
                 for (let k = steps.length - 1; k >= 0; k--) {
                     const step = steps[k];

@@ -55,13 +55,14 @@ class ThinkingBlock(BaseModel):
 class ToolStep(BaseModel):
     tool_name: str
     description: str | None = None
+    status: Literal["pending", "finished", "failed"] = "pending"
 
 
 class ToolsBlock(BaseModel):
     """A representation of tools state as a sequence of tool usages."""
 
     block_type: Literal["tools"] = "tools"
-    tools: list[ToolStep] = []
+    steps: list[ToolStep] = []
 
 
 class VideoBlock(BaseModel):

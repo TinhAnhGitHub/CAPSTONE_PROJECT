@@ -39,7 +39,7 @@ export default memo(function BlockRenderer({ block, role }) {
     if (block.block_type === 'thinking') {
         return <Thinking block={block.steps} />;
     }
-    if (block.block_type === 'tool_call') {
+    if (block.block_type === 'tools') {
         return <Tools block={block.steps} />;
     }
 
@@ -63,10 +63,10 @@ export default memo(function BlockRenderer({ block, role }) {
             prev.fps === next.fps;
     }
     if (prev.block_type === 'thinking') {
-        return JSON.stringify(prev.thinking) === JSON.stringify(next.thinking);
+        return JSON.stringify(prev.steps) === JSON.stringify(next.steps);
     }
     if (prev.block_type === 'tools') {
-        return JSON.stringify(prev.tools) === JSON.stringify(next.tools);
+        return JSON.stringify(prev.steps) === JSON.stringify(next.steps);
     }
     return false;
 });
