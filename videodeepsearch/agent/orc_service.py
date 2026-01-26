@@ -97,7 +97,10 @@ async def ignite_workflow(
 
     ctx = Context(workflow=greeting_agent)
 
+
     total_events = []
+    agent_output = []
+
     handler = greeting_agent.run(user_msg=user_demand, ctx=ctx, chat_history=chat_history)
     async for ev in handler.stream_events():
 
@@ -116,13 +119,17 @@ async def ignite_workflow(
 
             ev.tool_output.raw_input = {}
         total_events.append(ev)
+        if isinstance(ev, AgentOutput):
+            agent_output.append(ev)
+            continue
+
         yield _serialize_event(event=ev) # type: ignore
 
 
-        # if isinstance(ev, AgentOutput):
-        #     total_events_signal = AgentTotalOutput(total_accumulated_events=total_events)
-        #     yield _serialize_event(event=total_events_signal) # type: ignore
-
+        
+    
+    
+    yield _serialize_event(agent_output[-1]) # type: ignore
     
     try:
         _ = await handler

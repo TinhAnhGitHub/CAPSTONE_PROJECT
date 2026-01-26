@@ -139,7 +139,7 @@ async def create_worker_agent(
     worker_ctx = Context(agent)
     worker_ctx._state_store = ctx.store
     event_handler = EventHandler()
-    handler = agent.run(user_msg=f"Here is the task: {agent_task}", ctx=worker_ctx)
+    handler = agent.run(user_msg=f"Here is the task: {agent_task}", ctx=ctx)
     async for ev in handler.stream_events():
         event_handler.handle_event(ev)
     result = await handler

@@ -102,7 +102,6 @@ async def get_segments(
             segments.sort(key=lambda s: parse_time_safe(s.end_time))
         
         elif forward_or_backward == 'backward':
-            print(f"{type(segment_artifact.end_frame)=}")
             if segment_artifact.end_frame <= pivot_segment_start_frame:
                 segments.append(
                     SegmentInterface.from_artifact(segment_artifact, caption) 

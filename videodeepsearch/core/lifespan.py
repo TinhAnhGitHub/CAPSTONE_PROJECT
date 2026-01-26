@@ -54,6 +54,7 @@ async def lifespan(app: FastAPI):
         txt_client=external_text_embedding_client
     )
 
+    print(image_milvus_config)
     app_state.image_milvus_client = ImageMilvusClient(
         uri=image_milvus_config.uri,
         collection_name=image_milvus_config.collection_name,

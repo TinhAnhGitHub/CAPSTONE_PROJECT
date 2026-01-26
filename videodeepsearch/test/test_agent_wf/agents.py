@@ -59,7 +59,6 @@ async def main():
 
     with open('./context.json', 'w') as f:
         json.dump(context_dict, f, indent=2, ensure_ascii=False)
-    pprint(context_dict)
 
     return result.response.content
 
