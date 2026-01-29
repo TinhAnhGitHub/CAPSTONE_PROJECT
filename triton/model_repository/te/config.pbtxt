@@ -1,0 +1,45 @@
+name: "te"
+backend: "python"
+max_batch_size: 32
+
+
+dynamic_batching {
+  preferred_batch_size: [8, 16]
+  max_queue_delay_microseconds: 50000
+  preserve_ordering: true
+}
+
+parameters: {
+  key: "mmbert_model_name"
+  value: { string_value: "jhu-clsp/mmBERT-base" }
+}
+
+parameters: {
+  key: "mmbert_max_length"
+  value: { string_value: "1024" }
+}
+
+input [
+  {
+    name: "texts"
+    data_type: TYPE_STRING
+    dims: [ 1 ] 
+    reshape: { shape: [] }  
+  }
+]
+
+output [
+  {
+    name: "embeddings"
+    data_type: TYPE_FP32
+    dims: [ 768 ]  
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]

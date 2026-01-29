@@ -1,0 +1,20 @@
+name: "autoshot"
+platform: "onnxruntime_onnx"
+max_batch_size: 0  
+
+input [
+  {
+    name: "input_frames"
+    data_type: TYPE_UINT8
+    dims: [1, 100, 27, 48, 3] 
+  }
+]
+
+output [
+  {
+    name: "shot_boundary_prob"
+    data_type: TYPE_FP32
+    dims: [1, 100, 1]
+  }
+]
+

@@ -1,0 +1,46 @@
+name: "asr"
+backend: "python"
+max_batch_size: 1
+
+input [
+  {
+    name: "video_input"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+output [
+  {
+    name: "transcription"
+    data_type: TYPE_STRING
+    dims: [1]
+  }
+]
+
+parameters: {
+  key: "model_name"
+  value: { string_value: "khanhld/chunkformer-rnnt-large-vie" }
+}
+
+parameters: {
+  key: "chunk_size"
+  value: { string_value: "64" }
+}
+
+parameters: {
+  key: "left_context_size"
+  value: { string_value: "128" }
+}
+
+parameters: {
+  key: "right_context_size"
+  value: { string_value: "128" }
+}
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+  }
+]
