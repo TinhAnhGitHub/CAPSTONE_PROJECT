@@ -11,6 +11,8 @@
 import { useState, useEffect } from "react";
 import { CheckIcon, ChevronDownIcon } from "@heroicons/react/24/solid";
 import { Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react";
+import Markdown from "react-markdown";
+import { ChatBubbleLeftEllipsisIcon } from "@heroicons/react/20/solid";
 
 export default function VerticalStepper({ steps }) {
     // Track which steps are expanded - last one is always expanded
@@ -47,16 +49,20 @@ export default function VerticalStepper({ steps }) {
                     <li key={i} className="ml-6 pb-8 last:pb-0">
                         {/* Dot/Icon */}
                         <span
-                            className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border ${isLast ? 'bg-accent border-accent' : 'bg-surface-light border-surface-light'}`}
+                            className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border 
+                            bg-accent border-accent
+                            `}
                         >
-                            {isLast ? (
+                            {/* {isLast ? (
                                 <svg className="h-3 w-3 text-white animate-spin" viewBox="0 0 24 24" fill="none">
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                 </svg>
-                            ) : (
-                                <CheckIcon className="h-3 w-3 text-white" />
-                            )}
+                            ) : ( */}
+                                {/* <CheckIcon className="h-3 w-3 text-white" /> */}
+                                {/* thinking bubble icon */}
+                                <ChatBubbleLeftEllipsisIcon className="h-3 w-3 text-white"/>
+                            {/* )} */}
                         </span>
 
                         {/* Content */}
@@ -78,9 +84,11 @@ export default function VerticalStepper({ steps }) {
                                 <div
                                     className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}
                                 >
-                                    <p className="mt-1 text-sm text-text-muted">
-                                        {step.description}
-                                    </p>
+                                    <div className="mt-1 text-sm text-text-muted">
+                                        <Markdown>
+                                            {step.description}
+                                        </Markdown>
+                                    </div>
                                 </div>
                             )}
                         </div>

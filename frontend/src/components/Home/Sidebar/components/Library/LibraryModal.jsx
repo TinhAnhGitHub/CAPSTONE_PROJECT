@@ -21,27 +21,28 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
     // get groups
     const { data: groups = [] } = useGroups();
     const queryClient = useQueryClient();
-    const createNewGroupMutation = useCreateGroup();
 
     // Mock data for testing - remove or set to [] in production
+
     const mockGroups = [
-        { _id: 'g1', name: 'Marketing Videos' },
-        { _id: 'g2', name: 'Tutorial Series' },
-        { _id: 'g3', name: 'Product Demos' },
-        { _id: 'g4', name: 'Training Materials' },
-    ];
+        { _id: '65c2f9a4e8b13d7c0a4f92be', name: 'Demo', selected: false },
+    ]
+    const displayGroups = [...groups, ...mockGroups];
+
+    const { data: videos = [] } = useVideos(group, sessionId);
+
+
+        // if choose mockgroup (65c2f9a4e8b13d7c0a4f92be) then show the mock videos
 
     const mockVideos = [
-        { _id: 'v1', name: 'Introduction to AI', thumbnail: '/images/testImage.png', length: '12:34', ingested_status: 100, selected: false },
-        { _id: 'v2', name: 'React Tutorial Part 1', thumbnail: '/images/testImage.png', length: '8:22', ingested_status: 100, selected: true },
-        { _id: 'v3', name: 'Building Modern UIs', thumbnail: '/images/testImage.png', length: '15:00', ingested_status: 75, selected: false },
-        { _id: 'v4', name: 'Video Editing Basics', thumbnail: '/images/testImage.png', length: '20:15', ingested_status: 100, selected: false },
-        { _id: 'v5', name: 'CSS Grid Layout', thumbnail: '/images/testImage.png', length: '10:45', ingested_status: 100, selected: true },
-        { _id: 'v6', name: 'Node.js Crash Course', thumbnail: '/images/testImage.png', length: '25:00', ingested_status: 50, selected: false },
+        { _id: '692ad412086ada3a309334ff', name: 'Introduction to AI', thumbnail: '/images/testImage.png', length: '12:34', ingested_status: 100, selected: true },
+        { _id: '692ad412086ada3a30933500', name: 'React Tutorial Part 1', thumbnail: '/images/testImage.png', length: '8:22', ingested_status: 100, selected: true },
+        { _id: '692ad412086ada3a30933501', name: 'Building Modern UIs', thumbnail: '/images/testImage.png', length: '15:00', ingested_status: 100, selected: true },
+        { _id: '692ad412086ada3a30933503', name: 'Video Editing Basics', thumbnail: '/images/testImage.png', length: '20:15', ingested_status: 100, selected: true },
     ];
+    // Use mock if videos is empty
+    const displayVideos = group === '65c2f9a4e8b13d7c0a4f92be' ? [...mockVideos] : videos;
 
-    // Use mock if data is empty
-    const displayGroups = groups.length > 0 ? groups : mockGroups;
 
     useEffect(() => {
         socket.on('ingestion_status', (data) => {
@@ -83,10 +84,17 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
         }
     }, [focusVideoId, isModalOpen]);
 
-    const { data: videos = [] } = useVideos(group, sessionId);
 
-    // Use mock if videos is empty
-    const displayVideos = videos.length > 0 ? videos : mockVideos;
+    function handleEditGroup(groupId, newName) {
+        // Update local state optimistically
+        const newGroups = displayGroups.map(group =>
+            group._id === groupId ? { ...group, name: newName } : group
+        );
+        setDisplayGroups(newGroups);
+        // TODO: Call API to persist the change
+        api.patch(`/api/user/session/${groupId}/rename`, { new_name: newName });
+    }
+
 
     return (
         <Modal isOpen={isModalOpen} onClose={closeModal} title="Library">
@@ -100,7 +108,7 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
                     <div className='groups max-md:flex max-md:overflow-x-auto scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto md:max-h-[55vh]'>
                         {
                             displayGroups.map((group, idx) => (
-                                <Group key={idx} group={group} />
+                                <Group key={idx} groups={displayGroups} group={group} onEdit={handleEditGroup} />
                             ))
                         }
                     </div>

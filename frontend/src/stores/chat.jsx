@@ -1,3 +1,4 @@
+import socket from "@/api/socket";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -6,7 +7,10 @@ export const useStore = create(
 
         (set, get) => ({
             session_id: null, // new chat
-            setSessionId: (session_id) => set({ session_id }),
+            setSessionId: (session_id) => {
+                socket.emit('join_session', { session_id });
+                set({ session_id })
+            },
             getSessionId: () => get().session_id,
             ensureSessionId: () => {
                 let session_id = get().session_id;

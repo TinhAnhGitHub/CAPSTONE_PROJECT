@@ -167,6 +167,14 @@ export default function Chat() {
       setQuerying(false);
     })
 
+    socket.on('continue_stream', (msg) => {
+      const data = msg.content;
+      const prev = useStoreChat.getState().chatMessages;
+      const newBlocks = data.map((block) => parseChunkToBlock(block.block_type, block));
+      const updated = addBlocksToMessages(prev, 'assistant', newBlocks);
+      setChatMessages(updated);
+      scrollToBottomIfNeeded();
+    })
 
     return () => {
       socket.off('message_received', handleStatus);

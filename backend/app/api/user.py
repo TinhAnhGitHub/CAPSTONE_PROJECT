@@ -294,3 +294,36 @@ async def rename_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     return {"session_id": session_id, "new_name": new_name}
+
+# group name rename
+@router.patch("/group/{group_id}/rename")
+async def rename_group(
+    user_service: UserServiceDep,
+    group_id: str,
+    data: dict,
+    user=Depends(verify_token),
+):
+    new_name = data.get("new_name", "Renamed Group")
+    success = await user_service.rename_group(group_id, new_name)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    return {"group_id": group_id, "new_name": new_name}
+
+# video name rename
+
+@router.patch("/video/{video_id}/rename")
+async def rename_video(
+    user_service: UserServiceDep,
+    video_id: str,
+    data: dict,
+    user=Depends(verify_token),
+):
+    new_name = data.get("new_name", "Renamed Video")
+    success = await user_service.rename_video(video_id, new_name)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    return {"video_id": video_id, "new_name": new_name}

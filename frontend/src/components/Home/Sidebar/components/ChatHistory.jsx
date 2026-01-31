@@ -2,35 +2,19 @@ import React, { useState } from 'react'
 import SessionDropdownList from './SessionDropdownList'
 import clsx from 'clsx'
 import { useStore as useStoreChat } from "@/stores/chat";
-
+import useEdit from '@/api/services/hooks/edit';
 export default function ChatHistory({ conv, session_id, onEdit }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [editValue, setEditValue] = useState(conv._id);
     const setSessionId = useStoreChat((state) => state.setSessionId);
 
+    const { isEditing, editValue, setEditValue, startEditing, saveEdit, cancelEdit } = useEdit({
+        initialValue: conv.name || conv._id,
+        onSave: (newName) => {
+            onEdit?.(conv._id, newName);
+        }
+    });
 
     function onSelect(session_id) {
-        // set session id 
         setSessionId(session_id);
-    }
-
-
-    function saveEdit() {
-        if (editValue.trim()) {
-            // Call parent handler to save the edit
-            onEdit?.(conv._id, editValue.trim());
-        }
-        setIsEditing(false);
-    }
-
-    function cancelEdit() {
-        setEditValue(conv.name || conv._id); // Reset to original
-        setIsEditing(false);
-    }
-
-    function startEditing() {
-        setEditValue(conv.name || conv._id);
-        setIsEditing(true);
     }
 
     return (

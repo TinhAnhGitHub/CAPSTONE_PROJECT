@@ -12,14 +12,14 @@ export default function VideosInConversation() {
 
   // Mock data for testing - remove or set to [] in production
   const mockVideos = [
-    { _id: '1', name: 'Introduction to AI', thumbnail: '/images/testImage.png', length: '12:34', selected: true },
-    { _id: '2', name: 'React Tutorial Part 1', thumbnail: '/images/testImage.png', length: '8:22', selected: true },
-    { _id: '3', name: 'Building Modern UIs', thumbnail: '/images/testImage.png', length: '15:00', selected: true },
-    { _id: '4', name: 'Video Editing Basics', thumbnail: '/images/testImage.png', length: '20:15', selected: true },
+    { _id: '692ad412086ada3a309334ff', name: 'Introduction to AI', thumbnail: '/images/testImage.png', length: '12:34', selected: true },
+    { _id: '692ad412086ada3a30933500', name: 'React Tutorial Part 1', thumbnail: '/images/testImage.png', length: '8:22', selected: true },
+    { _id: '692ad412086ada3a30933501', name: 'Building Modern UIs', thumbnail: '/images/testImage.png', length: '15:00', selected: true },
+    { _id: '692ad412086ada3a30933503', name: 'Video Editing Basics', thumbnail: '/images/testImage.png', length: '20:15', selected: true },
   ];
 
   // Use mock if selectedVideos is empty
-  const displayVideos = selectedVideos.length > 0 ? selectedVideos : mockVideos;
+  const displayVideos = groupId === '65c2f9a4e8b13d7c0a4f92be' ? [...mockVideos] : selectedVideos;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [focusVideoId, setFocusVideoId] = useState(null);

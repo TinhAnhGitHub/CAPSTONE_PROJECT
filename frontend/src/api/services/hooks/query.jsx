@@ -44,23 +44,45 @@ export const useDeleteSession = () => {
     const setSessionId = useStore((state) => state.setSessionId);
     const chatHistory = useStore((state) => state.chatHistory);
 
+    const createNewChat = useCreateNewChat(); // 👈 composed here
+
     return useMutation({
-        mutationFn: (session) => {
-            // if current session is being deleted, create new chat after deletion
-            return api.delete(`/api/user/session/${session._id}/delete`);
-        },
-        onSuccess: (data) => {
-            if (session_id === data.data.session_id) {
-                const index = chatHistory.findIndex(chat => chat._id === data.data.session_id);
-                const next = chatHistory[index + 1] || chatHistory[index - 1] || null;
-                setSessionId(next ? next._id : null);                  
+        mutationFn: (session) =>
+            api.delete(`/api/user/session/${session._id}/delete`),
+
+        onSuccess: async (data) => {
+            const deletedId = data.data.session_id;
+
+            if (session_id === deletedId) {
+                const remaining = chatHistory.filter(
+                    (chat) => chat._id !== deletedId
+                );
+
+                if (remaining.length === 0) {
+                    // ✅ never allow 0 chats
+                    await createNewChat.mutateAsync();
+                    return;
+                }
+
+                const index = chatHistory.findIndex(
+                    (chat) => chat._id === deletedId
+                );
+
+                const next =
+                    chatHistory[index + 1] ||
+                    chatHistory[index - 1] ||
+                    null;
+
+                setSessionId(next?._id ?? null);
             }
         },
+
         onSettled: () => {
-            queryClient.invalidateQueries('chatHistory');
-        }
-    })
-}
+            queryClient.invalidateQueries(['chatHistory']);
+        },
+    });
+};
+
 
 export const useGroups = () => {
     const currentGroup = useStore((state) => state.currentGroup);
@@ -102,12 +124,18 @@ export const useDeleteGroup = () => {
     const queryClient = useQueryClient();
     const setCurrentGroup = useStore((state) => state.setCurrentGroup);
     const currentGroup = useStore((state) => state.currentGroup);
+    const createGroup = useCreateGroup();
     return useMutation({
         mutationFn: (groupId) => {
             return api.delete(`/api/user/groups/${groupId}/delete`)
         },
-        onSuccess: (data) => {
+        onSuccess: async (data) => {
             const groups = queryClient.getQueryData('groups') || [];
+            if (groups.length <= 1) {
+                // create a new group if no groups left
+                await createGroup.mutateAsync();
+                return;
+            }
             if (currentGroup === data.data.group_id) {
                 const index = groups.findIndex(chat => chat._id === data.data.group_id);
                 const next = groups[index + 1] || groups[index - 1] || null;

@@ -3,18 +3,13 @@ from email.mime import image
 import json
 import traceback
 
-from regex import P
 from app.core.dependencies import UserServiceDep
 from beanie import PydanticObjectId
 from fastapi import HTTPException
 from fastapi.security import HTTPBearer
-import jwt
 import socketio
 import websockets
-from app.schema.user import ALGORITHM, SECRET_KEY
-from utils.blocks import parseFullResponseToBlocks
-from llama_index.core.agent.workflow import AgentOutput
-
+import re
 sio = socketio.AsyncServer(
     async_mode="asgi", cors_allowed_origins="*", logger=True, engineio_logger=True
 )
@@ -45,6 +40,18 @@ from app.tests.test_data import image_search_result_1
 # AGENT SOCKET USES RAW WS
 
 
+def session_room(session_id: str):
+    return f"session:{session_id}"
+
+global_session_tasks = {
+    # session_id: {
+    #   "task": asyncio.Task,
+    #   "accum_blocks": list,      # ai_message_blocks
+    #   "status": "streaming" | "done" | "cancelled",
+    # }
+}
+
+# at agentouput, delete session_id task from global_session_tasks
 @sio.on("stream_chat")
 async def handle_stream_chat(socket_id, data: dict):
     try:
@@ -68,6 +75,12 @@ async def handle_stream_chat(socket_id, data: dict):
             session_id, user_id, user_message
         )
 
+        global_session_tasks[session_id] = {
+            "task": asyncio.current_task(),
+            "accum_blocks": [],
+            "status": "streaming",
+        }
+
         # tell client message received
         await sio.emit(
             "message_received",
@@ -76,7 +89,7 @@ async def handle_stream_chat(socket_id, data: dict):
                 "content": message,
                 "session_id": session_id,
             },
-            to=socket_id,
+            to=session_room(session_id),
         )
         # send data to agent, agent stream back
         try:
@@ -103,19 +116,21 @@ async def handle_stream_chat(socket_id, data: dict):
             payload = {
                 "session_id": session_id,
                 "user_id": user_id,
-                "video_ids": [
-                    "692ad412086ada3a309334ff",
-                    "692ad412086ada3a30933500",
-                    "692ad412086ada3a30933501",
-                    "692ad412086ada3a30933503",
-                ],
+                # "video_ids": [
+                #     "692ad412086ada3a309334ff",
+                #     "692ad412086ada3a30933500",
+                #     "692ad412086ada3a30933501",
+                #     "692ad412086ada3a30933503",
+                # ],
+                "video_ids": video_ids,
                 "user_demand": message,
-                "chat_history": [
-                    {
-                        "role": "user",
-                        "content": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
-                    }
-                ],
+                # "chat_history": [
+                #     {
+                #         "role": "user",
+                #         "content": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
+                #     }
+                # ],
+                "chat_history": chat_history_dict,
             }
 
             # HTTP stream
@@ -138,10 +153,12 @@ async def handle_stream_chat(socket_id, data: dict):
                             if accum:
                                 ai_message_block = TextBlock(text=accum)
                                 ai_message_blocks.append(ai_message_block)
+                                global_session_tasks[session_id]["accum_blocks"].append(ai_message_block)
                                 accum = ""
                             elif thinking_accum:
                                 thinking_message_block = ThinkingBlock(steps=thinking_accum)
                                 ai_message_blocks.append(thinking_message_block)
+                                global_session_tasks[session_id]["accum_blocks"].append(thinking_message_block)
                                 thinking_accum = []
 
                         if (
@@ -151,6 +168,7 @@ async def handle_stream_chat(socket_id, data: dict):
                             if tools_accum:
                                 tool_message_block = ToolsBlock(steps=tools_accum)
                                 ai_message_blocks.append(tool_message_block)
+                                global_session_tasks[session_id]["accum_blocks"].append(tool_message_block)
                                 tools_accum = []
                         # content = data.get("content", "")
                         # AgentProgressEvent -> ...
@@ -176,7 +194,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                     "content": data,
                                     "role": MessageRole.ASSISTANT.value,
                                 },
-                                to=socket_id,
+                                to=session_room(session_id),
                             )
                         # elif msg_type == "AgentInput":
                         #     pass
@@ -184,17 +202,18 @@ async def handle_stream_chat(socket_id, data: dict):
                             thinking_delta = data.get("thinking_delta", None)
                             if thinking_delta:
                                 # also save
+                                title, description = parse_thinking(thinking_delta)
                                 thinking_step = ThinkingStep(
-                                    title="Thinking", description=thinking_delta
+                                    title=title, description=description
                                 )
                                 thinking_accum.append(thinking_step)
                                 await sio.emit(
                                     "thinking",
                                     {
-                                        "title": "Thinking",
-                                        "description": thinking_delta,
+                                        "title": title,
+                                        "description": description,
                                     },
-                                    to=socket_id,
+                                    to=session_room(session_id),
                                 )
                             else:  # reponse
                                 response = data.get("response", "")
@@ -209,7 +228,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                         "content_delta": response_delta,
                                         "role": MessageRole.ASSISTANT.value,
                                     },
-                                    to=socket_id,
+                                    to=session_room(session_id),
                                 )
                         elif msg_type == "ToolCall":
                             tool_id = data.get("tool_id", "")
@@ -225,7 +244,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                     "tool_id": tool_id,
                                     "tool_name": tool_id,
                                 },
-                                to=socket_id,
+                                to=session_room(session_id),
                             )
                         elif msg_type == "ToolCallResult":
                             # show toolicon trước
@@ -264,6 +283,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                             video_id=video_id, url=url_list
                                         )
                                         ai_message_blocks.append(image_block)
+                                        global_session_tasks[session_id]["accum_blocks"].append(image_block)
                                         image_results.append(image_block)
                                     return {
                                         "media_type": "image",
@@ -307,6 +327,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                             segments=segment_list,
                                         )
                                         ai_message_blocks.append(video_block)
+                                        global_session_tasks[session_id]["accum_blocks"].append(video_block)
                                         video_results.append(video_block)
 
                                     return {
@@ -330,7 +351,9 @@ async def handle_stream_chat(socket_id, data: dict):
                                         for r in formatted_media["results"]
                                     ],
                                 }
-                                await sio.emit("media", emit_data, to=socket_id)
+                                await sio.emit(
+                                    "media", emit_data, to=session_room(session_id)
+                                )
                             else:
                                 tool_id = data.get("tool_id", "unknown_tool")
                                 tool_name = data.get("tool_id", "unknown_tool")
@@ -343,7 +366,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                         "tool_name": tool_name,
                                         "description": description,
                                     },
-                                    to=socket_id,
+                                    to=session_room(session_id),
                                 )
                         elif msg_type == "AgentOutput":
                             # save to database
@@ -352,16 +375,20 @@ async def handle_stream_chat(socket_id, data: dict):
                                 role=MessageRole.ASSISTANT,
                                 blocks=ai_message_blocks,
                             )
-                            await app_state.chat_service.add_message(
-                                session_id, "assistant", ai_message
-                            )
+                            await app_state.chat_service.add_message(session_id, "assistant", ai_message)
+
+                            global_session_tasks[session_id]["status"] = "done"
 
                             # Emit stream_end to notify the client
                             await sio.emit(
                                 "stream_end",
                                 {"session_id": session_id},
-                                to=socket_id,
+                                to=session_room(session_id),
                             )
+
+                            # clean up global session task
+                            asyncio.create_task(cleanup_session(session_id))
+
                         else:
                             pass
 
@@ -374,8 +401,82 @@ async def handle_stream_chat(socket_id, data: dict):
 
         except Exception as e:
             await sio.emit(
-                "error", {"message": "agent unreachable: " + str(e)}, to=socket_id
+                "error", {"message": "agent unreachable: " + str(e)}, to=session_room(session_id)
             )
 
     except Exception as e:
-        await sio.emit("error", {"message": str(e)}, to=socket_id)
+        await sio.emit("error", {"message": str(e)}, to=session_room(session_id))
+@sio.on("join_session")
+async def join_session(sid, data):
+    session_id = data.get("session_id", None)
+    if session_id:
+        await sio.enter_room(sid, session_room(session_id))
+    # check inside global_session_tasks if there is a running task for this session
+    if session_id in global_session_tasks:
+        status = global_session_tasks[session_id]["status"]
+        if status == "streaming":
+            ai_message = SessionMessage(
+                session_id=session_id,
+                role=MessageRole.ASSISTANT,
+                blocks=global_session_tasks[session_id]["accum_blocks"],
+            )
+
+            await sio.emit(
+                "continue_stream",
+                {
+                    "content": ai_message.model_dump(),
+                },
+                to=sid,
+            )
+        elif status == "done":
+            await sio.emit(
+                "stream_end",
+                {"session_id": session_id},
+                to=sid,
+            )
+
+
+# def serialize_blocks(blocks):
+#     return [block.model_dump() for block in blocks]
+
+
+# placeholder
+@sio.on("cancel_stream")
+async def cancel_stream(sid, data):
+    session_id = data.get("session_id")
+    state = global_session_tasks.get(session_id)
+    if not state:
+        return
+
+    task = state["task"]
+    if task:
+        task.cancel()
+
+    state["status"] = "cancelled"
+
+
+async def cleanup_session(session_id: str, delay: int = 30):
+    await asyncio.sleep(delay)
+    state = global_session_tasks.get(session_id)
+    if not state:
+        return
+
+    # only delete if safe
+    if state["status"] in ("done", "cancelled"):
+        global_session_tasks.pop(session_id, None)
+
+
+def parse_thinking(text: str):
+    """
+    Extract **Title** and the remaining description.
+    """
+    match = re.match(r"\*\*(.*?)\*\*\s*(.*)", text, re.DOTALL)
+
+    if match:
+        title = match.group(1).strip()
+        description = match.group(2).strip()
+    else:
+        title = "Thinking"
+        description = text.strip()
+
+    return title, description
