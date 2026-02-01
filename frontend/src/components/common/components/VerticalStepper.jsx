@@ -41,6 +41,7 @@ export default function VerticalStepper({ steps }) {
     return (
         <ol className="relative border-l py-2 pr-2 border-surface-light border-dashed">
             {steps.map((step, i) => {
+                const isFirst = i === 0;
                 const isLast = i === steps.length - 1;
                 const isExpanded = isLast || expandedSteps.has(i);
                 const hasDescription = !!step.description;
@@ -48,7 +49,7 @@ export default function VerticalStepper({ steps }) {
                 return (
                     <li key={i} className="ml-6 pb-8 last:pb-0">
                         {/* Dot/Icon */}
-                        <span
+                        {isFirst && <span
                             className={`absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full border 
                             bg-accent border-accent
                             `}
@@ -63,7 +64,7 @@ export default function VerticalStepper({ steps }) {
                                 {/* thinking bubble icon */}
                                 <ChatBubbleLeftEllipsisIcon className="h-3 w-3 text-white"/>
                             {/* )} */}
-                        </span>
+                        </span>}
 
                         {/* Content */}
                         <div>
@@ -82,7 +83,7 @@ export default function VerticalStepper({ steps }) {
                             </button>
                             {hasDescription && (
                                 <div
-                                    className={`overflow-hidden transition-all duration-200 ${isExpanded ? "max-h-40 opacity-100" : "max-h-0 opacity-0"}`}
+                                    className={`overflow-hidden transition-all duration-200 ${isExpanded ? " opacity-100" : "max-h-0 opacity-0"}`}
                                 >
                                     <div className="mt-1 text-sm text-text-muted">
                                         <Markdown>

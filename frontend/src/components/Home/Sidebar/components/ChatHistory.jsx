@@ -20,7 +20,7 @@ export default function ChatHistory({ conv, session_id, onEdit }) {
     return (
         isEditing ? (
             <input
-                className="relative mx-2 my-1 py-2 px-3 bg-surface rounded-lg text-sm text-text outline-none focus:ring-2 focus:ring-accent/50"
+                className="relative mx-2 my-1 py-2 px-3 bg-surface rounded-lg text-sm text-text outline-none focus:ring-2 focus:ring-accent/50 "
                 autoFocus
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}

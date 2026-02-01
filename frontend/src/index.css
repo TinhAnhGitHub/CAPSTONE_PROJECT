@@ -10,6 +10,11 @@ body {
     font-family: var(ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
 }
 
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
 @layer components {
     .btn-icon {
         @apply border border-gray-800 rounded-full size-8 flex items-center justify-center text-xl hover:bg-gray-100 cursor-pointer transition select-none;

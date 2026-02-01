@@ -16,6 +16,7 @@ class Video(Document):
     url: str = ""
 
     ingested_status: float = 0 # 0 -100: not ingested, 100: ingested
+    # failed = -1
     @property 
     def ingested(self) -> bool:
         return self.ingested_status >= 100

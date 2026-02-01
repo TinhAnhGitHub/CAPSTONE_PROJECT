@@ -111,7 +111,7 @@ export default function ToolCallsteps({ block = [{
                                         className={`flex items-center gap-1 text-left ${hasDescription ? "cursor-pointer" : "cursor-default"}`}
                                         disabled={!hasDescription}
                                     >
-                                        <h3 className="text-sm font-medium text-text">{tool.tool_name}</h3>
+                                        <h3 className="text-sm font-medium text-text">{formatToolName(tool.tool_name)}</h3>
                                         {hasDescription && (
                                             <ChevronDownIcon
                                                 className={`h-4 w-4 text-text-muted transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
@@ -135,4 +135,12 @@ export default function ToolCallsteps({ block = [{
             </div>
         </div>
     );
+}
+
+const formatToolName = (name) => {
+    // convert from snake_case or kebab-case to Title Case
+    return name
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+
 }

@@ -6,16 +6,15 @@
 // App.jsx
 import Chat from '@/components/Home/Chat';
 import Sidebar from '@/components/Home/Sidebar/Sidebar';
-import { Button } from '@headlessui/react';
 import "./gradient.css"
 export default function Home() {
 
     return (
-        <>
+        <div className="flex ">
             <Sidebar />
             <div className="w-full flex justify-center h-screen backdrop-blur-md gradient-background">
                 <Chat />
             </div>
-        </>
+        </div>
     );
 }

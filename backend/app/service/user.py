@@ -316,3 +316,20 @@ class UserService:
             await chat_history.save()
             return True
         return False
+    
+    async def rename_group(self, group_id: str, new_name: str):
+        group = await Group.find_one(Group.id == PydanticObjectId(group_id))
+        if group:
+            group.name = new_name
+            await group.save()
+            return True
+        return False
+    
+    async def rename_video(self, video_id: str, new_name: str):
+        video = await Video.find_one(Video.id == PydanticObjectId(video_id))
+        if video:
+            video.name = new_name
+            await video.save()
+            return True
+        return False
+    

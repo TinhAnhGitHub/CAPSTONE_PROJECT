@@ -5,7 +5,7 @@ import  { Toaster } from 'react-hot-toast';
 
 export default function App() {
   return (
-    <div className='flex'>
+    <div>
       <Outlet />
       <Toaster reverseOrder={false} />
     </div>

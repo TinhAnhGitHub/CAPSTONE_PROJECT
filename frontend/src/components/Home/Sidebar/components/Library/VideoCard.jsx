@@ -5,10 +5,12 @@ import VideoDropdownList from './VideoDropdownList';
 import SelectedIcon from './SelectedIcon';
 import { useStore } from '@/stores/chat';
 import clsx from 'clsx';
-import { ingested } from '@/utils/library';
+import { ingested, errorIngested } from '@/utils/library';
 import IngestedStatus from './IngestedStatus/IngestedStatus';
+import useEdit from '@/api/services/hooks/edit';
+import { ArrowPathIcon } from '@heroicons/react/20/solid';
 
-export default function VideoCard({ video, isHighlighted = false }) {
+export default function VideoCard({ video, isHighlighted = false, onEdit }) {
     const queryClient = useQueryClient();
     const session_id = useStore((state) => state.session_id);
     const selectMutation = useMutation({
@@ -28,11 +30,25 @@ export default function VideoCard({ video, isHighlighted = false }) {
     const handleFailed = () => {
         // call api to re-ingest
     }
+
+      const {
+        isEditing,
+        editValue,
+        setEditValue,
+        startEditing,
+        saveEdit,
+        cancelEdit,
+      } = useEdit({
+        initialValue: video.name,
+        onSave: (value) => onEdit?.(video._id, value),
+      });
+      const failed = video.ingested_status === -1;
     return (
         <div className={clsx(
             "group relative rounded-xl p-2 cursor-pointer transition-all",
             "hover:bg-white/5",
-            !ingested(video.ingested_status) && "opacity-50 !cursor-not-allowed",
+            (errorIngested(video.ingested_status) || !ingested(video.ingested_status)) && "opacity-50",
+            (!ingested(video.ingested_status) && !errorIngested(video.ingested_status))  && "!cursor-not-allowed",
             isHighlighted && "animate-highlight-pulse ring-2 ring-accent ring-offset-2 ring-offset-background rounded-xl"
         )}>
             {/* Thumbnail */}
@@ -42,9 +58,9 @@ export default function VideoCard({ video, isHighlighted = false }) {
                     alt="thumbnail"
                     className="w-full h-full object-cover"
                 />
-                <div className='absolute inset-0 flex items-center justify-center'>
+                {!failed && <div className='absolute inset-0 flex items-center justify-center'>
                     <IngestedStatus percentage={video.ingested_status} />
-                </div>
+                </div>}
                 {/* Selection indicator */}
                 <div className='absolute top-2 right-2 rounded-md p-1 bg-black/50 backdrop-blur-sm cursor-pointer hover:bg-black/70 transition-colors'
                     onClick={(e) => {
@@ -54,27 +70,58 @@ export default function VideoCard({ video, isHighlighted = false }) {
                     }}>
                     <SelectedIcon selected={video.selected} />
                 </div>
+                {failed && (
+                    <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500/10 backdrop-blur-sm text-white text-xs font-medium px-4 py-2 rounded-lg'
+                        onClick={handleFailed}
+                    >
+                        <ArrowPathIcon className='inline-block size-4' />
+                    </div>
+                )}
             </div>
 
             {/* Info */}
             <div className="relative mt-2">
-                <div className='pr-6'>
-                    <h3 className="text-sm font-medium text-text-muted group-hover:text-text truncate transition-colors">{video.name}</h3>
-                    <p className="text-xs text-text-dim">{video.length || "1:00"}</p>
+                <div className="pr-6">
+                    {isEditing ? (
+                        <input
+                            className="w-full bg-surface rounded-md px-2 py-1 text-sm text-text outline-none focus:ring-2 focus:ring-accent/50"
+                            autoFocus
+                            value={editValue}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={saveEdit}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") saveEdit();
+                                if (e.key === "Escape") cancelEdit();
+                            }}
+                        />
+                    ) : (
+                        <h3
+                            className="text-sm font-medium text-text-muted group-hover:text-text truncate transition-colors"
+                        >
+                            {video.name}
+                        </h3>
+                    )}
+
+                    <p className="text-xs text-text-dim">
+                        {video.length || "1:00"}
+                    </p>
                 </div>
-                {/* 3-dots: always visible on mobile, hover on desktop */}
-                <div className="absolute top-0 right-0 rounded-md p-1 hover:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block">
-                    <VideoDropdownList video={video} />
+
+                {/* 3-dots */}
+                <div
+                    className="absolute top-0 right-0 rounded-md p-1 hover:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <VideoDropdownList
+                        video={video}
+                        onStartEdit={startEditing}
+                    />
                 </div>
             </div>
 
-            {video.failed && (
-                <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-lg'
-                    onClick={handleFailed}
-                >
-                    Retry
-                </div>
-            )}
+
+            
         </div>
     )
 }

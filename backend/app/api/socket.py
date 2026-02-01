@@ -115,22 +115,29 @@ async def handle_stream_chat(socket_id, data: dict):
             # }
             payload = {
                 "session_id": session_id,
+                # "session_id": 692ad412086ada3a309334ff,
                 "user_id": user_id,
+                # "user_id": 692ad412086ada3a309334ff,
+                "video_ids": video_ids,
                 # "video_ids": [
                 #     "692ad412086ada3a309334ff",
                 #     "692ad412086ada3a30933500",
                 #     "692ad412086ada3a30933501",
                 #     "692ad412086ada3a30933503",
                 # ],
-                "video_ids": video_ids,
                 "user_demand": message,
+                # "user_demand": "Can you find me moments about japanese sewer",
+                "chat_history": chat_history_dict,
                 # "chat_history": [
                 #     {
                 #         "role": "user",
                 #         "content": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
-                #     }
+                #     },
+                    # {
+                    #     "role": "assistant",
+                    #     "content": "Sure! I have found a moment in the video that discusses Tokyo's underground drainage system designed to address climate change challenges. Would you like me to provide more details or show you the specific segment?",
+                    # }
                 # ],
-                "chat_history": chat_history_dict,
             }
 
             # HTTP stream

@@ -18,6 +18,20 @@ export function useVideos(groupId, sessionId) {
     });
 }
 
+export function useRenameVideo(){
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ videoId, newName }) =>
+            api.patch(`/api/user/video/${videoId}/rename`, {
+                new_name: newName,
+            }),
+
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['videos'] });
+        },
+    });
+}
+
 export const useCreateNewChat = () => {
     const queryClient = useQueryClient();
     const setSessionId = useStore((state) => state.setSessionId);
@@ -147,3 +161,18 @@ export const useDeleteGroup = () => {
         }
     })
 }
+
+export const useRenameGroup = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ groupId, newName }) =>
+            api.patch(`/api/user/group/${groupId}/rename`, {
+                new_name: newName,
+            }),
+
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['groups'] });
+        },
+    });
+};

@@ -7,42 +7,25 @@ import Group from './Group';
 import { PlusIcon } from '@heroicons/react/16/solid';
 import AddGroupButton from './AddGroupButton';
 import { useStore } from "@/stores/chat";
-import { useCreateGroup, useGroups, useVideos } from '@/api/services/hooks/query';
+import { useCreateGroup, useGroups, useRenameGroup, useRenameVideo, useVideos } from '@/api/services/hooks/query';
 import { useEffect, useRef, useState } from 'react';
 import socket from '@/api/socket';
 import { ensureGroupId } from '@/utils/ensure/ensureGroupId';
 
 export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) {
     const group = useStore((state) => state.currentGroup);
+    const { data: groups = [] } = useGroups();
     const setCurrentGroup = useStore((state) => state.setCurrentGroup);
+    
     const sessionId = useStore((state) => state.session_id);
     const [highlightedVideoId, setHighlightedVideoId] = useState(null);
     const videoRefs = useRef({});
     // get groups
-    const { data: groups = [] } = useGroups();
     const queryClient = useQueryClient();
 
     // Mock data for testing - remove or set to [] in production
 
-    const mockGroups = [
-        { _id: '65c2f9a4e8b13d7c0a4f92be', name: 'Demo', selected: false },
-    ]
-    const displayGroups = [...groups, ...mockGroups];
-
     const { data: videos = [] } = useVideos(group, sessionId);
-
-
-        // if choose mockgroup (65c2f9a4e8b13d7c0a4f92be) then show the mock videos
-
-    const mockVideos = [
-        { _id: '692ad412086ada3a309334ff', name: 'Introduction to AI', thumbnail: '/images/testImage.png', length: '12:34', ingested_status: 100, selected: true },
-        { _id: '692ad412086ada3a30933500', name: 'React Tutorial Part 1', thumbnail: '/images/testImage.png', length: '8:22', ingested_status: 100, selected: true },
-        { _id: '692ad412086ada3a30933501', name: 'Building Modern UIs', thumbnail: '/images/testImage.png', length: '15:00', ingested_status: 100, selected: true },
-        { _id: '692ad412086ada3a30933503', name: 'Video Editing Basics', thumbnail: '/images/testImage.png', length: '20:15', ingested_status: 100, selected: true },
-    ];
-    // Use mock if videos is empty
-    const displayVideos = group === '65c2f9a4e8b13d7c0a4f92be' ? [...mockVideos] : videos;
-
 
     useEffect(() => {
         socket.on('ingestion_status', (data) => {
@@ -50,14 +33,10 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
             // invalidate videos query to refetch updated status
             queryClient.invalidateQueries(['videos']);
         })
+        return () => {
+            socket.off('ingestion_status');
+        }
     }, [queryClient])
-
-    // useEffect(() => {
-    //     const result = ensureGroupId(groups, group, setCurrentGroup);
-    //     if (result.status === "create") {
-    //         createNewGroupMutation.mutate();
-    //     }
-    // }, [group])
 
     // Handle focus video - scroll to it and highlight
     useEffect(() => {
@@ -84,17 +63,16 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
         }
     }, [focusVideoId, isModalOpen]);
 
-
+    const renameGroup = useRenameGroup();
     function handleEditGroup(groupId, newName) {
-        // Update local state optimistically
-        const newGroups = displayGroups.map(group =>
-            group._id === groupId ? { ...group, name: newName } : group
-        );
-        setDisplayGroups(newGroups);
         // TODO: Call API to persist the change
-        api.patch(`/api/user/session/${groupId}/rename`, { new_name: newName });
+        renameGroup.mutate({ groupId, newName });
     }
 
+    const renameVideo = useRenameVideo();
+    function handleEditVideo(videoId, newName) {
+        renameVideo.mutate({ videoId, newName });
+    }
 
     return (
         <Modal isOpen={isModalOpen} onClose={closeModal} title="Library">
@@ -107,8 +85,8 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
                     </div>
                     <div className='groups max-md:flex max-md:overflow-x-auto scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto md:max-h-[55vh]'>
                         {
-                            displayGroups.map((group, idx) => (
-                                <Group key={idx} groups={displayGroups} group={group} onEdit={handleEditGroup} />
+                            groups.map((group, idx) => (
+                                <Group key={idx} groups={groups} group={group} onEdit={handleEditGroup} />
                             ))
                         }
                     </div>
@@ -116,13 +94,13 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
                 <div className="relative md:w-[80%] h-[70vh] flex flex-col">
                     <div className="flex-1 overflow-y-auto px-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
                         <div className=" grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-2">
-                            {displayVideos.map((video, idx) => (
+                            {videos.map((video, idx) => (
                                 <div
                                     key={idx}
                                     className='break-inside-avoid'
                                     ref={el => videoRefs.current[video._id] = el}
                                 >
-                                    <VideoCard video={video} isHighlighted={highlightedVideoId === video._id} />
+                                    <VideoCard video={video} isHighlighted={highlightedVideoId === video._id} onEdit={handleEditVideo} />
                                 </div>
                             ))}
                         </div>

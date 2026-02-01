@@ -241,8 +241,9 @@ export default function Chat() {
   const handlePrompt = async () => {
     const prompt = getValues('prompt').trim();
     if (!prompt) return;
-
-    socket.emit('stream_chat', { userId, sessionId: getSessionId(), text: prompt, videos: selectedVideosIds });
+    const data = { userId, sessionId: getSessionId(), text: prompt, videos: selectedVideosIds }
+    console.log(data);
+    socket.emit('stream_chat', data);
     addChatMessage({
       role: 'user',
       timestamp: Date.now(),
@@ -285,7 +286,7 @@ export default function Chat() {
           ))}
 
           {/* test video block */}
-          {/* {
+          {
             <BlockRenderer block={{
               block_type: 'video',
               video_id: '2421946379',
@@ -294,7 +295,7 @@ export default function Chat() {
               { start_frame: 1000, end_frame: 2537 }], // in frames
               fps: 30,
             }} role={"assistant"} />
-          } */}
+          }
           {/* test video block */}
           {/* {
             <BlockRenderer block={{
