@@ -1,0 +1,69 @@
+services:
+
+  qwen_vl_embedding:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: qwen_vl_embedding
+    ports: 
+      - "${QWEN_VL_EMBEDDING_PORT}:8000"
+    volumes:
+      - "${QWEN_VL_EMBEDDING_MODEL_DIR}:/models:ro"
+    command: >
+      -m /models/Qwen3-VL-Embedding-8B-Q8_0.gguf
+      --embedding
+      --ctx-size 32768
+      --batch-size 512
+      --ubatch-size 128
+      --threads 16
+      --mlock
+      --host 0.0.0.0
+      --port 8000
+    
+    restart: unless-stopped
+
+  ocr_lighton:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: ocr_lighton
+    ports:
+      - "65530:8080"
+    volumes:
+      - ./llamacpp/lighton-ocr/model:/models
+    command: >
+      --model /models/LightOnOCR-1B-1025-Q8_0.gguf
+      --mmproj /models/mmproj-LightOnOCR-1B-1025-Q8_0.gguf
+      --host 0.0.0.0
+      --port 8080
+      --ctx-size 4096
+      --threads 8
+      --batch-size 512
+      --parallel 2
+      --mlock
+      --verbose
+    restart: unless-stopped
+
+  qwen-asr:
+    image: qwenllm/qwen3-asr:latest
+    container_name: qwen3-asr-demo
+
+    gpus: all
+    shm_size: 4gb
+
+    ports:
+      - "8020:8000"
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: 0
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+    command: >
+      qwen-asr-demo
+      --asr-checkpoint Qwen/Qwen3-ASR-0.6B
+      --aligner-checkpoint Qwen/Qwen3-ForcedAligner-0.6B
+      --backend transformers
+      --cuda-visible-devices 0
+      --backend-kwargs '{"device_map":"cuda:0","dtype":"bfloat16","max_inference_batch_size":8,"max_new_tokens":256}'
+      --aligner-kwargs '{"device_map":"cuda:0","dtype":"bfloat16"}'
+      --ip 0.0.0.0
+      --port 8000
+
+
+
