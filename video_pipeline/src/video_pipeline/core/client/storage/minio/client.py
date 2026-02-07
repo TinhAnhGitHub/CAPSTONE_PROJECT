@@ -97,3 +97,15 @@ class MinioStorageClient:
             content_type=content_type,
             metadata={"Content-Type": content_type},
         )
+
+    def object_exists(self, bucket: str, object_name: str) -> bool:
+        self._ensure_bucket(bucket)
+        try:
+            self.client.stat_object(bucket, object_name)
+            return True
+        except S3Error as exc:
+            if exc.code in ("NoSuchKey", "NoSuchObject"):
+                return False
+            raise MinioStorageError(
+                f"Error checking object {bucket}/{object_name}: {exc}"
+            ) from exc
