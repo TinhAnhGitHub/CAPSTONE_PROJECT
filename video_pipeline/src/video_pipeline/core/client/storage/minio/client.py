@@ -109,3 +109,17 @@ class MinioStorageClient:
             raise MinioStorageError(
                 f"Error checking object {bucket}/{object_name}: {exc}"
             ) from exc
+
+    def get_object_bytes(self, bucket: str, object_name: str) -> bytes:
+        try:
+            response = self.client.get_object(bucket, object_name)
+            try:
+                return response.read()
+            finally:
+                response.close()
+                response.release_conn()
+        except S3Error as exc:
+            logger.exception("Failed to fetch %s/%s", bucket, object_name)
+            raise MinioStorageError(
+                f"Failed to fetch object {bucket}/{object_name}: {exc}"
+            ) from exc

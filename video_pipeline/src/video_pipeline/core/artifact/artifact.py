@@ -65,7 +65,6 @@ class AutoshotArtifact(BaseArtifact):
     related_video_minio_url: str
     related_video_extension: str
     related_video_fps: float
-    user_bucket: str
 
     def _build_lineage_parents(self) -> list[str]:
         return [self.related_video_id]

@@ -27,7 +27,7 @@ class ArtifactPersistentVisitor:
             raise e
 
     async def visit_artifact(
-        self, artifact: "BaseArtifact", upload_to_minio: BinaryIO | None
+        self, artifact: "BaseArtifact", upload_to_minio: BinaryIO | None = None
     ):
         metadata = artifact.metadata or {}
         metadata.update(**artifact.model_dump(mode="json"))
