@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { messagesConversations } from '@/mockdata/messages'
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
 import { useStore } from '@/stores/user';

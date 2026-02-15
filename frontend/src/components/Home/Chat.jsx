@@ -15,8 +15,6 @@ import BlockRenderer from './BlockRenderer';
 import { useVideos } from '@/api/services/hooks/query';
 import SendButton from './SendButton';
 import AppBar from '../Appbar';
-import Markdown from 'react-markdown';
-import { ChatBubbleOvalLeftEllipsisIcon } from '@heroicons/react/24/solid';
 import { XMarkIcon } from '@heroicons/react/16/solid';
 
 export default function Chat() {
@@ -57,6 +55,39 @@ export default function Chat() {
   const { data: videos = [] } = useVideos(groupId, session_id);
   const selectedVideosIds = videos.filter(video => video.selected).map(video => video._id);
   const [querying, setQuerying] = useState(false);
+  const isStreamingRef = useRef(false); // Track if we received continue_stream
+
+  // Reset state when session changes
+  useEffect(() => {
+    isStreamingRef.current = false;
+    setQuerying(false); // Reset querying state - will be set to true by continue_stream if needed
+    setChatMessages([]); // Clear messages to prevent accumulation when switching
+    // Scroll to bottom after messages are rendered
+    requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+    });
+  }, [session_id]);
+
+  // Auto-join session on socket connect (handles F5 refresh)
+  useEffect(() => {
+    const handleConnect = () => {
+      const currentSessionId = getSessionId();
+      if (currentSessionId) {
+        socket.emit('join_session', { session_id: currentSessionId });
+      }
+    };
+
+    // Join immediately if already connected
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    socket.on('connect', handleConnect);
+    return () => {
+      socket.off('connect', handleConnect);
+    };
+  }, []);
+
   useQuery({
     queryKey: ["chatMessages", session_id],
     queryFn: async () => {
@@ -68,6 +99,13 @@ export default function Chat() {
       return chat;
     },
     onSuccess: (data) => {
+      if (isStreamingRef.current) {
+        console.log("DATA", data);
+        console.log("CHATMNESSAGES", chatMessages);
+        setChatMessages([...data, ...chatMessages]);
+        console.log("Not overwriting chat messages due to ongoing stream");
+        return;
+      }
       setChatMessages(data);
       requestAnimationFrame(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'auto' });
@@ -86,9 +124,10 @@ export default function Chat() {
       queryClient.invalidateQueries(['chatHistory']);
     };
 
-
-
     const handleResponse = (msg) => {
+      // Ignore messages from other sessions
+      if (msg.session_id && msg.session_id !== getSessionId()) return;
+
       const prev = useStoreChat.getState().chatMessages;
 
       const newBlock = parseChunkToBlock("text", msg.content_delta);
@@ -101,6 +140,9 @@ export default function Chat() {
     };
 
     const handleMedia = (media) => {
+      // Ignore messages from other sessions
+      if (media.session_id && media.session_id !== getSessionId()) return;
+
       const prev = useStoreChat.getState().chatMessages;
       if (!media || !media.media_type) return;
       const media_type = media.media_type;
@@ -120,9 +162,10 @@ export default function Chat() {
 
     // handle stream thinking
     const handleThinking = (data) => {
-      console.log("thinking ✅", data);
+      // Ignore messages from other sessions
+      if (data.session_id && data.session_id !== getSessionId()) return;
+
       const newBlock = parseChunkToBlock('thinking', data)
-      console.log("newBlock thinking", newBlock);
       if (!newBlock) return;
 
       const prev = useStoreChat.getState().chatMessages;
@@ -136,6 +179,9 @@ export default function Chat() {
     socket.on('thinking', handleThinking);
     // handle toolcall
     const handleToolCall = (data) => {
+      // Ignore messages from other sessions
+      if (data.session_id && data.session_id !== getSessionId()) return;
+
       const newBlock = parseChunkToBlock('tools', data)
       if (!newBlock) return;
 
@@ -148,6 +194,9 @@ export default function Chat() {
     socket.on('tool_call', handleToolCall);
     //handle toolcallresult
     const handleToolCallResult = (data) => {
+      // Ignore messages from other sessions
+      if (data.session_id && data.session_id !== getSessionId()) return;
+
       // find the tool name
       const prev = useStoreChat.getState().chatMessages;
       const finished_tool_name = data.tool_name;
@@ -164,16 +213,40 @@ export default function Chat() {
 
     socket.on('stream_end', (msg) => {
       // console.log("stream end ✅✅✅✅✅✅✅✅✅", msg);
+      isStreamingRef.current = false; // Reset streaming flag
       setQuerying(false);
     })
 
     socket.on('continue_stream', (msg) => {
+      // Ignore messages from other sessions
+      if (msg.session_id && msg.session_id !== getSessionId()) return;
       const data = msg.content;
+      console.log("continue_stream data", data);
+      if (!data || !Array.isArray(data) || data.length === 0) return;
+
+      // Mark that we're streaming - prevents query from overwriting
+      isStreamingRef.current = true;
+
       const prev = useStoreChat.getState().chatMessages;
-      const newBlocks = data.map((block) => parseChunkToBlock(block.block_type, block));
-      const updated = addBlocksToMessages(prev, 'assistant', newBlocks);
+
+      // Check if last message is already an assistant streaming message
+      // If so, replace it instead of appending to avoid duplicates
+      let baseMessages = prev;
+      if (prev.length > 0) {
+        const lastMsg = prev[prev.length - 1];
+        // If last message is assistant and has similar block types, it's likely the same streaming message
+        if (lastMsg.role === 'assistant') {
+          // Remove the last assistant message - we'll replace it with fresh data
+          baseMessages = prev.slice(0, -1);
+        }
+      }
+
+      // Add the streaming blocks as a new assistant message
+      const updated = addBlocksToMessages(baseMessages, 'assistant', data);
+      console.log("continue_stream updated", updated);
       setChatMessages(updated);
       scrollToBottomIfNeeded();
+      setQuerying(true);
     })
 
     return () => {
@@ -232,7 +305,7 @@ export default function Chat() {
   }, []);
 
   const stopStreaming = () => {
-    socket.emit('stop_stream', { sessionId: getSessionId() });
+    socket.emit('cancel_stream', { session_id: getSessionId() });
     setQuerying(false);
   };
 
@@ -242,7 +315,6 @@ export default function Chat() {
     const prompt = getValues('prompt').trim();
     if (!prompt) return;
     const data = { userId, sessionId: getSessionId(), text: prompt, videos: selectedVideosIds }
-    console.log(data);
     socket.emit('stream_chat', data);
     addChatMessage({
       role: 'user',
@@ -286,7 +358,7 @@ export default function Chat() {
           ))}
 
           {/* test video block */}
-          {
+          {/* {
             <BlockRenderer block={{
               block_type: 'video',
               video_id: '2421946379',
@@ -295,7 +367,7 @@ export default function Chat() {
               { start_frame: 1000, end_frame: 2537 }], // in frames
               fps: 30,
             }} role={"assistant"} />
-          }
+          } */}
           {/* test video block */}
           {/* {
             <BlockRenderer block={{

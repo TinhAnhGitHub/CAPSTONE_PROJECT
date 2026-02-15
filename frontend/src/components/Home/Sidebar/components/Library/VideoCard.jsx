@@ -27,8 +27,20 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
     const handleToggleSelect = async (video_id, session_id) => {
         selectMutation.mutate({ video_id, session_id });
     }
+    const retryMutation = useMutation({
+        mutationFn: async (video_id) => {
+            return await api.post('/api/user/ingestion/retry', {
+                video_ids: [video_id],
+            })
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries(['videos']);
+        }
+    })
     const handleFailed = () => {
         // call api to re-ingest
+        console.log("Re-ingest video:", video._id);
+        retryMutation.mutate(video._id);
     }
 
       const {

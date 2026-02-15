@@ -14,7 +14,7 @@ from app.service.agent import Agent
 from app.service.chat import ChatService
 from app.model.user import User
 from app.service.user import UserService
-from app.service.minio import Minio as MinioService
+from app.service.minio import MinioService
 from app.model.group import Group
 from app.model.session_video import SessionVideo
 from app.model.video import Video

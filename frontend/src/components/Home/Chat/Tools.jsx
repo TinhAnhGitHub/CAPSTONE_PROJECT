@@ -28,6 +28,7 @@ const toolIcons = {
 };
 
 const getToolIcon = (toolName) => {
+    if (!toolName) return toolIcons.default;
     const normalizedName = toolName.toLowerCase().replace(/\s+/g, '_');
     for (const [key, Icon] of Object.entries(toolIcons)) {
         if (normalizedName.includes(key)) {
@@ -76,7 +77,7 @@ export default function ToolCallsteps({ block = [{
         <div className="w-full px-4">
             <div className="w-full max-w-lg divide-y divide-surface-light rounded-r-xl">
                 <ol className="relative border-l py-2 pr-2 border-surface-light border-dashed">
-                    {block.map((tool, i) => {
+                    {block.filter(tool => tool && tool.tool_name).map((tool, i) => {
                         {/* const isLast = i === block.length - 1; */ }
                         const isExpanded = expandedSteps.has(i);
                         const hasDescription = !!tool.description;
@@ -91,16 +92,16 @@ export default function ToolCallsteps({ block = [{
                                         : 'bg-surface-light border-surface-light'
                                         }`}
                                 >
-                                        {/* <ToolIcon className="h-3 w-3 text-white" /> */ }
-                                    {status ? 
-                                    (
-                                        <CheckIcon className="h-3 w-3 text-white" />
-                                    ) : (
-                                        <svg className="h-3 w-3 text-white animate-spin" viewBox="0 0 24 24" fill="none">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                        </svg>
-                                    )}
+                                    {/* <ToolIcon className="h-3 w-3 text-white" /> */}
+                                    {status ?
+                                        (
+                                            <CheckIcon className="h-3 w-3 text-white" />
+                                        ) : (
+                                            <svg className="h-3 w-3 text-white animate-spin" viewBox="0 0 24 24" fill="none">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                            </svg>
+                                        )}
                                 </span>
 
                                 {/* Content - no duplicate icon */}
@@ -138,9 +139,9 @@ export default function ToolCallsteps({ block = [{
 }
 
 const formatToolName = (name) => {
+    if (!name) return 'Unknown Tool';
     // convert from snake_case or kebab-case to Title Case
     return name
         .replace(/[-_]/g, ' ')
         .replace(/\b\w/g, char => char.toUpperCase());
-
 }

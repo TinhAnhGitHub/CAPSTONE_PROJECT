@@ -183,19 +183,23 @@ async def upload_files(
         {"video_id": str(vid), "video_url": s3_url}
         for vid, video_url, thumb_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj
     ]
-    # bảo ingestion ingest mấy video có id đó
-    try:
-        async with httpx.AsyncClient() as client:
-            answer = await client.post(
-                "http://100.113.186.28:8000/uploads/",
-                json={"videos": video_ids_video_url_obj, "user_id": user_id},
-            )
-            print(f"Ingestion service response: {answer.status_code} - {answer.text}")
-    except Exception as e:
-        logging.error(f"Error notifying ingestion service: {e}")
+
+    await user_service.ingest_videos(user_id, video_ids_video_url_obj)
 
     return {"msg": "File uploaded successfully"}
 
+# for retry ingestion
+@router.post("/ingestion/retry")
+async def retry_ingestion(
+    user_service: UserServiceDep,
+    data: dict,
+    user=Depends(verify_token),
+):
+    user_id = user["user_id"]
+    video_ids = data.get("video_ids", [])
+
+    await user_service.retry_ingestion(user_id, video_ids)
+    return {"msg": "Ingestion retried successfully"}
 
 @router.get("/groups")
 async def get_user_groups(user_service: UserServiceDep, user=Depends(verify_token)):

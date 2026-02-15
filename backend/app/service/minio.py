@@ -5,10 +5,11 @@ from io import BytesIO
 import tempfile
 from moviepy import VideoFileClip
 from PIL import Image
+from minio import Minio
 
 
-class Minio:
-    def __init__(self, minio_client=None):
+class MinioService:
+    def __init__(self, minio_client: Minio = None):
         self.minio_client = minio_client
         self._ensure_buckets()
 

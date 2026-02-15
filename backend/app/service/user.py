@@ -6,6 +6,8 @@ from typing import Annotated, Sequence
 from beanie import PydanticObjectId
 from bson import ObjectId
 from fastapi import Depends, File, HTTPException, status
+
+import logging
 import httpx
 import jwt
 from app.model.user import User
@@ -24,7 +26,7 @@ from app.schema.user import (
     TokenData,
 )
 import requests
-from app.service.minio import Minio as MinioService
+from app.service.minio import MinioService
 from app.model.chat_history import ChatHistory
 from app.model.group import Group
 from app.model.session_video import SessionVideo
@@ -171,7 +173,6 @@ class UserService:
         await new_chat_his.insert()
         return str(session_id)
 
-
     async def get_user_chat_detail(self, session_id: str):
         """get chat detail by session id"""
         chat_messages = (
@@ -229,6 +230,27 @@ class UserService:
                 await video.save()
 
         return video_id_video_url_thumbnail_url_s3_url_obj
+
+    async def ingest_videos(self, user_id: str, video_ids_video_url_obj):
+        # bảo ingestion ingest mấy video có id đó
+        try:
+            async with httpx.AsyncClient() as client:
+                answer = await client.post(
+                    "http://100.113.186.28:8000/uploads/",
+                    json={"videos": video_ids_video_url_obj, "user_id": user_id},
+                )
+        except Exception as e:
+            logging.error(f"Error notifying ingestion service: {e}")
+
+    async def retry_ingestion(self, user_id: str, video_ids: list[str]):
+        # get videos info from db and filter videoid and url only
+        video_objs = []
+        for vid in video_ids:
+            video = await Video.get(PydanticObjectId(vid))
+            if video:
+                video_objs.append({"video_id": vid, "video_url": video.url})
+        print("🔄🔄🔄 Retrying ingestion for videos:", video_objs)
+        await self.ingest_videos(user_id, video_objs)
 
     async def get_user_videos(self, group_id: str, session_id: str):
         # all videos and their selected state
@@ -302,13 +324,13 @@ class UserService:
     async def delete_session(self, session_id: str):
         # xoá chat_messages
         await SessionMessage.find(SessionMessage.session_id == PydanticObjectId(session_id)).delete()
-        # xoá session_videos 
+        # xoá session_videos
         await SessionVideo.find(SessionVideo.session_id == PydanticObjectId(session_id)).delete()
         # xoá session (chat_history)
         await ChatHistory.find_one(ChatHistory.id == PydanticObjectId(session_id)).delete()
 
         return True
-    
+
     async def rename_session(self, session_id: str, new_name: str):
         chat_history = await ChatHistory.find_one(ChatHistory.id == PydanticObjectId(session_id))
         if chat_history:
@@ -316,7 +338,7 @@ class UserService:
             await chat_history.save()
             return True
         return False
-    
+
     async def rename_group(self, group_id: str, new_name: str):
         group = await Group.find_one(Group.id == PydanticObjectId(group_id))
         if group:
@@ -324,7 +346,7 @@ class UserService:
             await group.save()
             return True
         return False
-    
+
     async def rename_video(self, video_id: str, new_name: str):
         video = await Video.find_one(Video.id == PydanticObjectId(video_id))
         if video:
@@ -332,4 +354,3 @@ class UserService:
             await video.save()
             return True
         return False
-    

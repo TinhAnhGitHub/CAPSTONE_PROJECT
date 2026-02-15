@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @plugin 'tailwind-scrollbar';
+@plugin '@tailwindcss/typography';
 
 html {
     padding: 0;

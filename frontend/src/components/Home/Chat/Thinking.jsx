@@ -13,7 +13,7 @@ export default function Thinking({ block = [{
 
     return (
         <div className="w-full px-4">
-            <div className="w-full max-w-lg divide-y divide-surface-light rounded-r-xl">
+            <div className="w-full divide-y divide-surface-light rounded-r-xl">
                 <VerticalStepper steps={block} />
             </div>
         </div>

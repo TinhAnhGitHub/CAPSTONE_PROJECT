@@ -3,6 +3,7 @@ import Modal from '../../Modal/modal'
 import VideoJS from '../../common/components/VideoPlayer/VideoJS'
 import { useStore } from '@/stores/chat'
 import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
+import Markdown from 'react-markdown'
 
 export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -70,6 +71,17 @@ export default function VideoPlayer({ video }) {
     controls: true,
     responsive: true,
     fluid: true,
+    controlBar: {
+      children: [
+        'playToggle',
+        'volumePanel',
+        'currentTimeDisplay',
+        'timeDivider',
+        'durationDisplay',
+        'progressControl',
+        'fullscreenToggle',
+      ],
+    },
     sources: [{
       src: video.url,
       type: 'video/mp4'
@@ -79,6 +91,17 @@ export default function VideoPlayer({ video }) {
   // Memoize the callback to prevent VideoJS from re-initializing
   const handlePlayerReady = useCallback((player) => {
     playerRef.current = player
+
+    // Force show time controls (workaround for responsive hiding)
+    const controlBar = player.controlBar
+    if (controlBar) {
+      const timeControls = player.el().querySelectorAll('.vjs-time-control, .vjs-current-time, .vjs-duration, .vjs-time-divider')
+      timeControls.forEach(el => {
+        el.style.display = 'flex'
+        el.style.paddingLeft = '0.5em'
+        el.style.paddingRight = '0.5em'
+      })
+    }
 
     // Add markers if segments exist
     if (markers.length > 0) {
@@ -173,8 +196,50 @@ export default function VideoPlayer({ video }) {
         title={video.title || "Video Player"}
         size="lg"
       >
-        <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+        <div className='flex flex-col lg:flex-row gap-3'>
+          {/* 3 parts */}
+          <div className='flex-3'>
+            <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+          </div>
+          {/* 1 part */}
+          <div className='flex-1'>
+            <h3 className="text-xl font-medium text-text mb-2">{video.segments.length} Matches</h3>
+            <div className="max-h-96 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
+              {video.segments?.map((segment, i) => {
+                const hue = (i * 137.5) % 360
+                const color = `hsl(${hue}, 80%, 55%)`
+                const startTime = segment.start !== undefined
+                  ? segment.start * frameDuration
+                  : segment.start_time
+
+                return (
+                  <div
+                    key={i}
+                    className="border border-white/10 rounded-lg p-2 my-2 cursor-pointer hover:bg-surface-light transition-colors w-full flex flex-col"
+                    onClick={() => playerRef.current?.currentTime(startTime)}
+                    style={{ borderLeftColor: color, borderLeftWidth: '3px' }}
+                  >
+                    <div className="text-sm font-medium text-text border rounded-md p-1 self-start w-7 h-7 flex items-center justify-center my-1 font-mono">{i + 1}</div>
+                    {segment.caption && <div className="text-text-muted text-sm mb-1"><Markdown>{segment.caption}</Markdown></div>}
+                    <span className="text-text-muted text-xs border rounded-md mt-1 p-1 self-end font-mono">
+                      {(segment.start !== undefined ? frameToTimeStr(segment.start, frameDuration) : segment.start_time !== undefined ? segment.start_time.toFixed(2) + 's' : 'N/A') + " - " +
+                        (segment.end !== undefined ? frameToTimeStr(segment.end, frameDuration) : segment.end_time !== undefined ? segment.end_time.toFixed(2) + 's' : 'N/A')}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
       </Modal>
     </>
   )
+}
+
+function frameToTimeStr(frame, frameDuration) {
+  const totalSeconds = frame * frameDuration
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = (totalSeconds % 60).toFixed(2)
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(5, '0')}`
 }
