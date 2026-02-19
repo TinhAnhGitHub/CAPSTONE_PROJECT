@@ -21,6 +21,5 @@ for index in range(30):
 
     allow = valve.check(delay, limit, item, key=key)
 
-    print(item, allow)
 
     time.sleep(0.23)

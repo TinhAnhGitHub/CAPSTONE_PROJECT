@@ -35,37 +35,43 @@ export default function Modal({
         <Dialog
             open={isOpen}
             transition
-            className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 transition duration-300 ease-out data-closed:opacity-0"
+            className="relative z-50 focus:outline-none"
             onClose={handleClose}
         >
-            <DialogPanel
-                className={`
-                    bg-surface rounded-2xl shadow-xl p-6 relative border border-surface-light
-                    ${sizeClasses[size] || sizeClasses.lg}
-                    ${(size === 'full' || size === 'xl') ? 'flex flex-col' : ''}
-                    ${className}
-                `}
-            >
-                {showCloseButton && (
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-light transition-colors z-10 cursor-pointer"
-                        aria-label="Close modal"
+            <div className="fixed inset-0 z-50 w-screen overflow-y-auto bg-black/50">
+                <div className="flex min-h-full items-center justify-center p-4">
+                    <DialogPanel
+                    transition
+                        className={`
+                            w-full  rounded-xl bg-surface p-6 backdrop-blur-2xl duration-200 ease-out data-closed:transform-[scale(95%)] data-closed:opacity-0
+                            ${sizeClasses[size] || sizeClasses.lg}
+                            ${(size === 'full' || size === 'xl') ? 'flex flex-col' : ''}
+                            ${className}
+                        `}
                     >
-                        <XMarkIcon className="size-5" />
-                    </button>
-                )}
-                {title ? (
-                    <DialogTitle className="text-xl font-semibold text-text mb-4 pr-10">
-                        {title}
-                    </DialogTitle>
-                ) : (
-                    <div className="h-6" /> // Spacer when no title to prevent X clipping
-                )}
-                <div className={(size === 'full' || size === 'xl') ? 'flex-1 min-h-0 ' : ''}>
-                    {children}
+                        {showCloseButton && (
+                            <button
+                                onClick={onClose}
+                                className="absolute top-4 right-4 p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-light transition-colors z-10 cursor-pointer"
+                                aria-label="Close modal"
+                            >
+                                <XMarkIcon className="size-5" />
+                            </button>
+                        )}
+                        {title ? (
+                            // video name here
+                            <DialogTitle className="text-xl font-semibold text-text mb-4 pr-10">
+                                {title}
+                            </DialogTitle>
+                        ) : (
+                            <div className="h-6" /> // Spacer when no title to prevent X clipping
+                        )}
+                        <div className={(size === 'full' || size === 'xl') ? 'flex-1 min-h-0 ' : ''}>
+                            {children}
+                        </div>
+                    </DialogPanel>
                 </div>
-            </DialogPanel>
+            </div>
         </Dialog>
     );
 }

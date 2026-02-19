@@ -4,6 +4,7 @@ import VideoJS from '../../common/components/VideoPlayer/VideoJS'
 import { useStore } from '@/stores/chat'
 import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
 import Markdown from 'react-markdown'
+import SaveKeyframes from './Savekeyframes.jsx'
 
 export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -194,40 +195,60 @@ export default function VideoPlayer({ video }) {
         isOpen={isModalOpen}
         onClose={closeVideoModal}
         title={video.title || "Video Player"}
-        size="lg"
+        size="xl"
       >
-        <div className='flex flex-col lg:flex-row gap-3'>
+        <div className='flex flex-col lg:flex-row h-full lg:items-center gap-3'>
           {/* 3 parts */}
-          <div className='flex-3'>
+          <div className='flex-1 lg:flex-2 max-lg:max-h-[50%] lg:h-full'>
             <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+            {/* settings like, save allkeyframes, save all images from keyframe */}
+            <div className='m-2'>
+              <SaveKeyframes segments={video.segments} />
+            </div>
           </div>
           {/* 1 part */}
-          <div className='flex-1'>
+          <div className='flex flex-col flex-1 max-lg:min-h-[50%] lg:h-full'>
             <h3 className="text-xl font-medium text-text mb-2">{video.segments.length} Matches</h3>
-            <div className="max-h-96 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
-              {video.segments?.map((segment, i) => {
-                const hue = (i * 137.5) % 360
-                const color = `hsl(${hue}, 80%, 55%)`
-                const startTime = segment.start !== undefined
-                  ? segment.start * frameDuration
-                  : segment.start_time
+            <div className="h-[90%] overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
+              {
+                video.segments?.map((segment, i) => {
+                  const hue = (i * 137.5) % 360
+                  const color = `hsl(${hue}, 80%, 55%)`
+                  const startTime = segment.start !== undefined
+                    ? segment.start * frameDuration
+                    : segment.start_time
 
-                return (
-                  <div
-                    key={i}
-                    className="border border-white/10 rounded-lg p-2 my-2 cursor-pointer hover:bg-surface-light transition-colors w-full flex flex-col"
-                    onClick={() => playerRef.current?.currentTime(startTime)}
-                    style={{ borderLeftColor: color, borderLeftWidth: '3px' }}
-                  >
-                    <div className="text-sm font-medium text-text border rounded-md p-1 self-start w-7 h-7 flex items-center justify-center my-1 font-mono">{i + 1}</div>
-                    {segment.caption && <div className="text-text-muted text-sm mb-1"><Markdown>{segment.caption}</Markdown></div>}
-                    <span className="text-text-muted text-xs border rounded-md mt-1 p-1 self-end font-mono">
-                      {(segment.start !== undefined ? frameToTimeStr(segment.start, frameDuration) : segment.start_time !== undefined ? segment.start_time.toFixed(2) + 's' : 'N/A') + " - " +
-                        (segment.end !== undefined ? frameToTimeStr(segment.end, frameDuration) : segment.end_time !== undefined ? segment.end_time.toFixed(2) + 's' : 'N/A')}
-                    </span>
-                  </div>
-                )
-              })}
+                  const images = segment.preview_images.length === 0
+                    ? Array(5).fill('/images/testImage.png')
+                    : segment.preview_images
+
+                  return (
+                    <div
+                      key={i}
+                      className=" flex flex-col gap-2 border border-white/10 rounded-lg p-2 my-2 cursor-pointer hover:bg-black/10 transition-colors w-full"
+                      onClick={() => playerRef.current?.currentTime(startTime)}
+                      style={{ borderLeftColor: color, borderLeftWidth: '3px' }}
+                    >
+                      <div className='flex items-center justify-between'>
+                        <div className="text-sm font-medium text-text-muted border rounded-md p-1 self-start min-w-7 flex items-center justify-center my-1 font-mono">{i + 1}</div>
+                        <span className="text-text-muted text-xs border rounded-md p-1 font-mono">
+                          {(segment.start !== undefined ? frameToTimeStr(segment.start, frameDuration) : segment.start_time !== undefined ? segment.start_time.toFixed(2) + 's' : 'N/A') + " - " +
+                            (segment.end !== undefined ? frameToTimeStr(segment.end, frameDuration) : segment.end_time !== undefined ? segment.end_time.toFixed(2) + 's' : 'N/A')}
+                        </span>
+                      </div>
+                      <div className='w-full justify-between flex gap-1 bg-black/70 rounded-lg '>
+                        {
+                          // test 
+                          images.map((img, idx) => {
+                            // if segment is empty then render 5 placeholder images /test images/
+                            return <img key={idx} src={img} alt={`Segment ${i + 1} preview ${idx + 1}`} className="rounded-md h-12 object-cover  min-w-0" />
+                          })
+                        }
+                      </div>
+                      {segment.caption && <div className="text-text-muted text-sm mb-1"><Markdown>{segment.caption}</Markdown></div>}
+                    </div>
+                  )
+                })}
             </div>
           </div>
         </div>

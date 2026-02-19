@@ -296,7 +296,7 @@ async def handle_stream_chat(socket_id, data: dict):
                             s3_base = "s3://"
                             http_base = "http://100.113.186.28:9000/"
 
-                            def format_tool_result(media):
+                            async def format_tool_result(media):
                                 if media_type == "image_search":
                                     image_groups = defaultdict(list)
                                     image_results = []
@@ -344,10 +344,13 @@ async def handle_stream_chat(socket_id, data: dict):
                                     for video_id, segments in video_groups.items():
                                         segment_list = []
                                         for item in segments:
+                                            preview_images = await app_state.user_service.generate_video_thumbnails(video_id=video_id, frame_index=item["frame_range"]["start"])
+
                                             segment = VideoSegment(
                                                 start=item["frame_range"]["start"],
                                                 end=item["frame_range"]["end"],
                                                 caption=item["caption_preview"],
+                                                preview_images=preview_images
                                             )
                                             segment_list.append(segment)
                                         # sort segment_list based on start time
@@ -374,7 +377,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                     return {"media_type": "unknown", "results": []}
 
                             media = summary.get("top_matches", [])
-                            formatted_media = format_tool_result(media)
+                            formatted_media = await format_tool_result(media)
                             if formatted_media["media_type"] in [
                                 "image",
                                 "video",

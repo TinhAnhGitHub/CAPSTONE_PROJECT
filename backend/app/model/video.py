@@ -11,7 +11,8 @@ class Video(Document):
     run_id: Optional[PydanticObjectId] = None
 
     name: str = ""
-    length: int = 0
+    length: float = 0 # in seconds
+    fps: float = 30.0
     thumbnail: str = ""
     url: str = ""
 

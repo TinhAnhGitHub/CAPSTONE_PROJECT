@@ -218,18 +218,20 @@ class UserService:
         ]
         await SessionVideo.insert_many(new_group_videos)
         # save videos to minio
-        video_id_video_url_thumbnail_url_s3_url_obj = self.minio_service.save_videos(
+        video_id_video_url_thumbnail_url_length_fps_obj = self.minio_service.save_videos(
             video_ids, files
         )
         # update video thumbnail urls
-        for video_id, video_url, thumbnail_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj:
+        for video_id, video_url, thumbnail_url, length, fps in video_id_video_url_thumbnail_url_length_fps_obj:
             video = await Video.get(video_id)
             if video:
                 video.thumbnail = thumbnail_url
                 video.url = video_url
+                video.length = length
+                video.fps = fps
                 await video.save()
 
-        return video_id_video_url_thumbnail_url_s3_url_obj
+        return video_id_video_url_thumbnail_url_length_fps_obj
 
     async def ingest_videos(self, user_id: str, video_ids_video_url_obj):
         # bảo ingestion ingest mấy video có id đó
@@ -354,3 +356,19 @@ class UserService:
             await video.save()
             return True
         return False
+
+    async def generate_video_thumbnails(self, video_id: str, frame_index: int):
+        video = await Video.get(PydanticObjectId(video_id))
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        if self.minio_service is None:
+            # right now for debugging, return empty list
+            return []
+            # raise HTTPException(status_code=500, detail="Minio service not available")
+        
+        thumbnail_urls = await self.minio_service.generate_timeline_thumbnails(
+            video_id, frame_index
+        )
+
+        return thumbnail_urls

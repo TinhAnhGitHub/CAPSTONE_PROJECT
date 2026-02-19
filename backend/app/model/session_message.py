@@ -38,6 +38,7 @@ class ToolCallBlock(BaseModel):
 class VideoSegment(BaseModel):
     start: float
     end: float
+    preview_images: list[AnyUrl | str] = [] # 5 images
     caption: Optional[str] = None
 
 
@@ -75,7 +76,8 @@ class VideoBlock(BaseModel):
     url: AnyUrl | str | None = None
     video_mimetype: str | None = None
     # detail: str | None = None
-    fps: int | None = None
+    fps: float | None = None
+    # length: float | None = None
     segments: list[VideoSegment] | None = None
 
 

@@ -7,6 +7,8 @@ from moviepy import VideoFileClip
 from PIL import Image
 from minio import Minio
 
+from app.model.video import Video
+
 
 class MinioService:
     def __init__(self, minio_client: Minio = None):
@@ -84,22 +86,31 @@ class MinioService:
                 object_name=object_name,
                 expires=timedelta(days=7),
             )
+            # video_url = f"s3://videos/{object_name}"
 
-            thumbnail_url = self.generate_thumbnail(file, video_id)
+            thumbnail_url, length, fps = self.generate_thumbnail(file, video_id)
 
             results.append(
                 (
                     video_id,  # This is already a PydanticObjectId
                     video_url,
                     thumbnail_url,
-                    f"s3://videos/{object_name}",
+                    length,
+                    fps,
                 )
             )
 
         return results
 
-    def generate_thumbnail(self, file, video_id):
+    def get_video(self, video_id):
+        object_name = f"{video_id}.mp4"
+        return self.minio_client.get_object("videos", object_name)        
+
+    def generate_thumbnail(self, file, video_id, time=5, size=(320, 320)):
         tmp_video = None
+        fps = None
+        length = None 
+
         try:
             # Save video
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
@@ -110,12 +121,14 @@ class MinioService:
             # Extract frame at 5 seconds
             with VideoFileClip(tmp_video) as clip:
                 # Get frame at 5 seconds (or middle if shorter)
-                timestamp = min(5, clip.duration / 2)
+                fps = clip.fps
+                length = clip.duration
+                timestamp = min(time, clip.duration / 2)
                 frame = clip.get_frame(timestamp)
 
             # Convert to PIL Image and resize
             image = Image.fromarray(frame)
-            image.thumbnail((320, 320), Image.Resampling.LANCZOS)
+            image.thumbnail(size, Image.Resampling.LANCZOS)
 
             # Save to memory
             thumb_bytes = BytesIO()
@@ -125,16 +138,18 @@ class MinioService:
             # Upload
             thumb_object = f"{video_id}.jpg"
             self.minio_client.put_object(
-                "thumbnails",
-                thumb_object,
-                thumb_bytes,
-                thumb_bytes.getbuffer().nbytes,
+                bucket_name="thumbnails",
+                object_name=thumb_object,
+                data=thumb_bytes,
+                length=thumb_bytes.getbuffer().nbytes,
                 content_type="image/jpeg",
             )
 
             return self.minio_client.presigned_get_object(
-                "thumbnails", thumb_object, expires=timedelta(days=7)
-            )
+                bucket_name="thumbnails",
+                object_name=thumb_object,
+                expires=timedelta(days=7)
+            ), length, fps
 
         finally:
             if tmp_video and os.path.exists(tmp_video):
@@ -147,3 +162,24 @@ class MinioService:
 
             self.minio_client.remove_object("videos", video_object)
             self.minio_client.remove_object("thumbnails", thumb_object)
+
+    async def generate_timeline_thumbnails(self, video_id, frame_index, size=(320, 320)):
+        video_duration = None
+        # get file from minio
+        video_object = f"{video_id}.mp4"
+        file = self.minio_client.get_object("videos", video_object)
+        # get video metadata from mongodb so dont need to read video file to get duration
+        video = await Video.get(video_id)
+        video_duration = video.length
+        video_fps = video.fps
+
+        # generate 5
+        time = frame_index / video_fps
+        timestamp_3 = time
+        timestamp_2 = max(time - 1, 0)
+        timestamp_1 = max(time-2, 0)
+        timestamp_4 = min(time+1, video_duration)
+        timestamp_5 = min(time+2, video_duration)
+        timestamps = [timestamp_1, timestamp_2, timestamp_3, timestamp_4, timestamp_5]
+        thumbnail_urls = [self.generate_thumbnail(file, video_id, t, size)[0] for t in timestamps]
+        return thumbnail_urls
