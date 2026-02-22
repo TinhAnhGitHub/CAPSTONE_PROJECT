@@ -1,69 +1,172 @@
 services:
 
-  qwen_vl_embedding:
+  mmbert:
     image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: te_mmbert
+    ports:
+      - "${MMBERT_PORT}:8000"
+    volumes:
+      - "${MMBERT_MODEL_DIR}:/models:ro"
+    command: >
+      -m /models/${MMBERT_MODEL}
+      --embedding
+      --ctx-size 8192
+      --batch-size 256
+      --threads 8
+      --host 0.0.0.0
+      --port 8000
+      --mlock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks: [shared]
+    
+  qwen_vl_embedding:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: qwen_vl_embedding
-    ports: 
-      - "${QWEN_VL_EMBEDDING_PORT}:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "${QWEN_VL_EMBEDDING_PORT}:8080"
     volumes:
       - "${QWEN_VL_EMBEDDING_MODEL_DIR}:/models:ro"
     command: >
-      -m /models/Qwen3-VL-Embedding-8B-Q8_0.gguf
+      -m /models/${QWEN_VL_EMBEDDING_MODEL}
+      --mmproj /models/${QWEN_VL_EMBEDDING_MODEL_MMPROJ}
       --embedding
-      --ctx-size 32768
-      --batch-size 512
-      --ubatch-size 128
-      --threads 16
-      --mlock
-      --host 0.0.0.0
-      --port 8000
-    
+      --ctx-size 8192
+      --batch-size 4096
+      --ubatch-size 4096
+      --port 8080
+      --pooling none
+      --no-warmup
+      -t 10
+      --threads-batch 10
+      --n-gpu-layers 25
+      -ctk q8_0 
+      -ctv q8_0
     restart: unless-stopped
+    networks: [shared]
+
+  
+
 
   ocr_lighton:
     image: ghcr.io/ggml-org/llama.cpp:server
     container_name: ocr_lighton
     ports:
-      - "65530:8080"
+      - "${OCR_LIGHTON_PORT}:8000"
     volumes:
-      - ./llamacpp/lighton-ocr/model:/models
+      - "${OCR_LIGHTON_MODEL_DIR}:/models"
     command: >
-      --model /models/LightOnOCR-1B-1025-Q8_0.gguf
-      --mmproj /models/mmproj-LightOnOCR-1B-1025-Q8_0.gguf
+      --model /models/${OCR_LIGHTON_MODEL}
+      --mmproj /models/${OCR_LIGHTON_MMPROJ}
       --host 0.0.0.0
-      --port 8080
+      --port 8000
       --ctx-size 4096
       --threads 8
       --batch-size 512
       --parallel 2
       --mlock
       --verbose
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     restart: unless-stopped
+    networks: [shared]
 
-  qwen-asr:
-    image: qwenllm/qwen3-asr:latest
-    container_name: qwen3-asr-demo
-
-    gpus: all
-    shm_size: 4gb
+  triton-server:
+    image: nvcr.io/nvidia/tritonserver:25.11-py3
+    container_name: triton-server
+    shm_size: "8gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
     ports:
-      - "8020:8000"
-
+      - "${TRITON_HTTP_PORT}:8000"
+      - "${TRITON_GRPC_PORT}:8001"
+      - "${TRITON_METRICS_PORT}:8002"
+    volumes:
+      - "${TRITON_MODEL_REPOSITORY}:/opt/tritonserver/model_repository:ro"
     environment:
-      NVIDIA_VISIBLE_DEVICES: 0
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
-
+      PRIVATE_REPO_TOKEN: ${HF_TOKEN}
+      HUGGINGFACE_TOKEN: ${HF_TOKEN}
+      PYTHONUNBUFFERED: "1"
+      OMP_NUM_THREADS: "8"
+      MKL_NUM_THREADS: "8"
+      ONNXRUNTIME_INTRA_OP_NUM_THREADS: "8"
+      ONNXRUNTIME_INTER_OP_NUM_THREADS: "1"
+      VLLM_MM_ENCODER_CACHE_SIZE: "1024"
+      VLLM_MAX_NUM_BATCHED_TOKENS: "4096"
     command: >
-      qwen-asr-demo
-      --asr-checkpoint Qwen/Qwen3-ASR-0.6B
-      --aligner-checkpoint Qwen/Qwen3-ForcedAligner-0.6B
-      --backend transformers
-      --cuda-visible-devices 0
-      --backend-kwargs '{"device_map":"cuda:0","dtype":"bfloat16","max_inference_batch_size":8,"max_new_tokens":256}'
-      --aligner-kwargs '{"device_map":"cuda:0","dtype":"bfloat16"}'
-      --ip 0.0.0.0
-      --port 8000
+      tritonserver
+      --model-repository=/opt/tritonserver/model_repository
+      --strict-model-config=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    networks: [shared]
+  
+  qwen3-asr:
+    image: qwenllm/qwen3-asr:latest
+    container_name: qwen3-asr-06b
+    ipc: host
+    shm_size: "4gb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "${QWEN_ASR_PORT:-8005}:80"
+    volumes:
+      - "${HUGGINGFACE_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface"
+    command: >
+      qwen-asr-serve Qwen/Qwen3-ASR-0.6B 
+      --gpu-memory-utilization 0.25
+      --max-model-len 2048
+      --max-num-seqs 2
+      --enforce-eager
+      --host 0.0.0.0 
+      --port 80
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/v1/models"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks: [shared]
 
 
 
+networks:
+  shared:
+    external: true
+    name: video_shared_net

@@ -2,6 +2,15 @@ name: "autoshot"
 platform: "onnxruntime_onnx"
 max_batch_size: 0  
 
+
+instance_group [
+  {
+    kind: KIND_GPU
+    count: 1
+  }
+]
+
+
 input [
   {
     name: "input_frames"

@@ -1,0 +1,38 @@
+name: "parakeet_asr"
+backend: "python"
+
+max_batch_size: 8
+
+input [
+  {
+    name: "AUDIO"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+output [
+  {
+    name: "OUTPUT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    kind: KIND_CPU
+    count: 1
+  }
+]
+
+dynamic_batching {
+  max_queue_delay_microseconds: 1000
+}
+
+parameters: {
+  key: "EXECUTION_ENV_PATH"
+  value: {
+    string_value: "$$TRITON_MODEL_DIRECTORY/python3.12-parakeet.tar.gz"
+  }
+}
