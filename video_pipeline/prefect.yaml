@@ -1,0 +1,7 @@
+deployments:
+  - name: local-deployment
+    entrypoint: src/video_pipeline/flow/main.py:single_video_processing_flow
+    work_pool:
+      name: local-pool
+    parameters: {}
+    concurrency_limit: null

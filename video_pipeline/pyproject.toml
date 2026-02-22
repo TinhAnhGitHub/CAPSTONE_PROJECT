@@ -1,10 +1,70 @@
 [project]
-name = "video-pipeline"
+name = "video_pipeline"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "aiohttp>=3.13.3",
+    "asyncpg>=0.31.0",
+    "av>=16.1.0",
+    "fastapi>=0.129.0",
+    "ffmpeg-python>=0.2.0",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "minio>=7.2.20",
+    "numpy<2",
+    "openai>=2.21.0",
+    "opencv-python>=4.11.0.86",
+    "pillow>=12.1.1",
+    "prefect[dask]>=3.6.18",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "pyyaml>=6.0.3",
+    "qdrant-client>=1.12.1",
+    "requests>=2.32.5",
+    "sqlalchemy>=2.0.46",
+    "torch>=2.10.0",
+    "tritonclient>=2.65.0",
+    "urllib3>=2.6.3",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",      # correctness
+  "I",               # imports
+  "UP",              # pyupgrade
+  "B",               # bugbear
+  "SIM",             # simplifications
+  "C4",              # comprehensions
+  "ANN",             # type annotations
+]
 
 [dependency-groups]
-dev = ["black>=26.1.0", "pre-commit>=4.5.1", "ruff>=0.15.0"]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+]
+
+
+
