@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING, BinaryIO
 from uuid import uuid4
@@ -9,27 +9,29 @@ if TYPE_CHECKING:
 
 class BaseArtifact(ABC, BaseModel):
     artifact_id: str = Field(default_factory=lambda: str(uuid4()))
-    artifact_type: str = Field(init=False)
-    lineage_parents: list[str] = Field(init=False)
     user_id: str
     metadata: dict[str, Any] | None = Field(default=None)
-
     object_name: str | None = Field(default=None)
 
-    def model_post_init(self, __context: Any) -> None:
-        self.artifact_type = self.__class__.__name__
-        self.lineage_parents = self._build_lineage_parents()
-        self.object_name = self.construct_object_name()
+
+    @computed_field
+    @property
+    def artifact_type(self) -> str:
+        return self.__class__.__name__
+
+    @computed_field
+    @property
+    def lineage_parents(self) -> list[str]:
+        return self._build_lineage_parents()
+    
+   
+
 
     @abstractmethod
     def _build_lineage_parents(self) -> list[str]:
         raise NotImplementedError
 
-    def construct_object_name(self) -> str | None:
-        """
-        Override this method if artifact has a file uploaded to minio
-        """
-        return None
+   
 
     @property
     def minio_url_path(self) -> str:
@@ -56,6 +58,7 @@ class VideoArtifact(BaseArtifact):
     @property
     def minio_url_path(self) -> str:
         return self.video_minio_url
+    
 
 
 class AutoshotArtifact(BaseArtifact):
@@ -78,7 +81,7 @@ class AutoshotArtifact(BaseArtifact):
 
 
 class ASRArtifact(BaseArtifact):
-    related_video_id: str = Field(
+    related_autoshot_artifact_id: str = Field(
         ..., description="Which video id does this autoshot artifact belong to"
     )
     related_video_minio_url: str
@@ -86,10 +89,13 @@ class ASRArtifact(BaseArtifact):
     related_video_fps: float
 
     def _build_lineage_parents(self) -> list[str]:
-        return [self.related_video_id]
+        return [self.related_autoshot_artifact_id]
 
-    def construct_object_name(self) -> str:
-        return f"asr/{self.related_video_id}.json"
+    @property
+    def minio_url_path(self) -> str:
+        """ASR artifact does not store anything in MinIO."""
+        return ""
+
 
 
 class ImageArtifact(BaseArtifact):
@@ -101,18 +107,16 @@ class ImageArtifact(BaseArtifact):
     related_video_fps: float
     timestamp: str
     autoshot_artifact_id: str
-    user_bucket: str
     content_type: str
 
     def _build_lineage_parents(self) -> list[str]:
         return [self.autoshot_artifact_id]
 
-    def construct_object_name(self) -> str:
-        return f"images/{self.related_video_id}/{self.frame_index:08d}_{self.timestamp}{self.extension}"
+    # def construct_object_name(self) -> str:
+    #     return f"images/{self.related_video_id}/{self.frame_index:08d}_{self.timestamp}{self.extension}"
 
 
 class SegmentCaptionArtifact(BaseArtifact):
-    artifact_type: str
     autoshot_artifact_id: str
     asr_artifact_id: str
     related_video_extension: str

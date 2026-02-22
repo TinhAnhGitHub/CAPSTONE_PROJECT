@@ -1,5 +1,10 @@
 from typing import Any, BinaryIO
 import json
+from contextlib import asynccontextmanager
+import tempfile
+import asyncio
+import os
+from urllib.parse import urlparse
 from io import BytesIO
 from minio import Minio
 from minio.error import S3Error
@@ -8,12 +13,10 @@ from urllib3.util import Timeout
 from loguru import logger
 
 from .exception import MinioStorageError
-from .config import MinioConfig
 
 
 class MinioStorageClient:
-    def __init__(self, config: MinioConfig):
-        self.config = config
+    def __init__(self, endpoint: str, access_key: str, secret_key: str, secure: bool):
         timeout = Timeout(connect=5.0, read=20.0)
         self._http_client = urllib3.PoolManager(
             maxsize=200,
@@ -21,10 +24,10 @@ class MinioStorageClient:
             block=False,
         )
         self.client = Minio(
-            endpoint=f"{config.host}:{config.port}",
-            access_key=config.access_key,
-            secret_key=config.secret_key,
-            secure=config.secure,
+            endpoint=endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
             http_client=self._http_client,
         )
 
@@ -123,3 +126,33 @@ class MinioStorageClient:
             raise MinioStorageError(
                 f"Failed to fetch object {bucket}/{object_name}: {exc}"
             ) from exc
+
+
+    @asynccontextmanager
+    async def fetch_object_from_s3(self, s3_url: str, suffix: str):
+        parsed = urlparse(s3_url)
+        bucket = parsed.netloc
+        object_name = parsed.path.lstrip("/")
+
+        loop = asyncio.get_running_loop()
+
+        data = await loop.run_in_executor(
+            None,
+            lambda: self.get_object_bytes(bucket, object_name),
+        )
+
+        if data is None:
+            raise FileNotFoundError(f"Object {s3_url} not found in storage")
+
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+
+        try:
+            tmp.write(data)
+            tmp.flush()
+            tmp.close()  
+            yield tmp.name
+        finally:
+            try:
+                os.remove(tmp.name)
+            except FileNotFoundError:
+                pass

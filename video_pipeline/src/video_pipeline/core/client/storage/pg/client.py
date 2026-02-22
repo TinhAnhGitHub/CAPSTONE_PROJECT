@@ -2,10 +2,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from .config import PgConfig
-from .schema import ArtifactLineageSchema, ArtifactMetadata, ArtifactSchema
+from .schema import ArtifactLineageSchema, ArtifactMetadata, ArtifactSchema, Base
 
 
 class PostgresClient:
+    _initialized = False
+    
     def __init__(self, config: PgConfig):
         self.engine = create_async_engine(
             url=config.database_url,
@@ -24,10 +26,18 @@ class PostgresClient:
             expire_on_commit=False,
         )
 
+    
+    async def initialize(self):
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            
+    
     def get_session(self) -> AsyncSession:
         return self._sessionmaker()
 
     async def save_artifact(self, metadata: ArtifactMetadata) -> str:
+
+
         async with self.get_session() as session:
             artifact = ArtifactSchema(
                 artifact_id=metadata.artifact_id,
@@ -52,6 +62,8 @@ class PostgresClient:
             return metadata.artifact_id
 
     async def get_artifact(self, artifact_id: str) -> ArtifactMetadata | None:
+
+
         async with self.get_session() as session:
             result = await session.get(ArtifactSchema, artifact_id)
             if not result:

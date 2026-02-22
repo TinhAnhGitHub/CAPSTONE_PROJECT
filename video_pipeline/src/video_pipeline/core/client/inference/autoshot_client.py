@@ -10,21 +10,18 @@ import asyncio
 from loguru import logger
 from pydantic import BaseModel
 
-
-class TritonConfig(BaseModel):
+class AutoshotConfig(BaseModel):
     model_name: str
     model_version: str
 
-
 class AutoShotClient:
-    def __init__(self, client_url: str, triton_config: TritonConfig):
-        self.client_url = client_url
-        self.model_name = triton_config.model_name
-        self.model_version = triton_config.model_version
-        self.client = grpcclient.InferenceServerClient(url=client_url)
+    def __init__(self, url: str, config: AutoshotConfig):
+        self.client_url = url
+        self.model_name = config.model_name
+        self.model_version = config.model_version
+        self.client = grpcclient.InferenceServerClient(url=url)
 
     def check_server_health(self) -> bool:
-        """Check if Triton server is alive and model is ready"""
         try:
             if not self.client.is_server_live():
                 logger.error("Triton server is not live")
@@ -86,7 +83,7 @@ class AutoShotClient:
 
         except Exception:
             logger.exception("Async inference failed")
-            return None
+            raise
 
     async def batch_async_infer(self, batch_frames: list) -> list:
         """
@@ -136,3 +133,15 @@ class AutoShotClient:
         except Exception as e:
             logger.error(f"Error getting model metadata: {e}")
             return None
+
+    def __enter__(self) -> "AutoShotClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    async def __aenter__(self) -> "AutoShotClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()

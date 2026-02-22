@@ -3,7 +3,6 @@ from datetime import datetime
 from video_pipeline.core.client.storage.pg import PostgresClient, ArtifactMetadata
 from video_pipeline.core.client.storage.minio import MinioStorageClient
 
-
 if TYPE_CHECKING:
     from video_pipeline.core.artifact import BaseArtifact
 
