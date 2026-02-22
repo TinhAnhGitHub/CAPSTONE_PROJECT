@@ -1,0 +1,73 @@
+tasks:
+  video_registration:
+    name: "Video Registration"
+    description: "Extract and register video metadata including FPS, duration, and format"
+    stage: "Ingestion"
+    tags:
+      - "video"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 120
+    cache_enabled: false
+    create_summary_artifact: true
+    create_progress_artifact: false
+
+  autoshot_detection:
+    name: "Autoshot Segment Detection"
+    description: "Detect scene boundaries (shots) in video using ML model"
+    stage: "Analysis"
+    tags:
+      - "autoshot-task"
+    retries: 3
+    retry_delay_seconds: 10
+    timeout_seconds: 600
+    cache_enabled: true
+    create_summary_artifact: true
+    create_progress_artifact: true
+
+    additional_kwargs:
+      model_name: "autoshot"
+      model_version: "01"
+
+  asr_transcription:
+    name: "ASR Transcription"
+    description: "Transcribe audio to text using automatic speech recognition"
+    stage: "Analysis"
+    tags:
+      - "asr-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: false
+    create_summary_artifact: true
+    create_progress_artifact: true
+
+    additional_kwargs:
+      model_name: "Qwen/Qwen3-ASR-0.6B"
+      client_url: "http://qwen3-asr:80/v1"
+
+  video_preprocess:
+    name: "Video Preprocess"
+    description: "Download video once and extract audio segments and frame indices for downstream tasks"
+    stage: "Analysis"
+    tags:
+      - "preprocess"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 600
+    cache_enabled: false
+    create_summary_artifact: false
+    create_progress_artifact: false
+
+  image_extraction:
+    name: "Image Extraction"
+    description: "Extract representative frames from video segments and persist as ImageArtifacts"
+    stage: "Analysis"
+    tags:
+      - "image-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: false
+    create_summary_artifact: true
+    create_progress_artifact: true
