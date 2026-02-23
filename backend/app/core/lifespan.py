@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from llama_index.core.llms import LLM
 from llama_index.llms.openai import OpenAI
 from llama_index.core.llms import MockLLM
+import socketio
 
 from app.core.config import settings
 from app.model.chat_history import ChatHistory
@@ -28,6 +29,13 @@ class AppState:
         self.agent: Agent = None # type: ignore
         self.chat_service: ChatService = None # type: ignore
         self.user_service: UserService = None # type: ignore
+        self.minio_service: MinioService = None # type: ignore
+        self.sio  = socketio.AsyncServer(
+            async_mode="asgi",
+            cors_allowed_origins="*",
+            logger=True,
+            engineio_logger=True,
+        )
 
 
 app_state = AppState()

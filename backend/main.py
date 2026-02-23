@@ -2,11 +2,6 @@
 import socketio
 
 
-sio = socketio.AsyncServer(
-    async_mode="asgi", cors_allowed_origins="*", logger=True, engineio_logger=True
-)
-
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

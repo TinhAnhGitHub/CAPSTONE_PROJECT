@@ -28,6 +28,7 @@ export default function Modal({
     showCloseButton = true,
     closeOnOutsideClick = true,
     className = '',
+    zIndex = 'z-50',
 }) {
     const handleClose = closeOnOutsideClick ? onClose : () => { };
 
@@ -35,13 +36,13 @@ export default function Modal({
         <Dialog
             open={isOpen}
             transition
-            className="relative z-50 focus:outline-none"
+            className={`relative ${zIndex} focus:outline-none`}
             onClose={handleClose}
         >
-            <div className="fixed inset-0 z-50 w-screen overflow-y-auto bg-black/50">
+            <div className={`fixed inset-0 ${zIndex} w-screen overflow-y-auto bg-black/50`}>
                 <div className="flex min-h-full items-center justify-center p-4">
                     <DialogPanel
-                    transition
+                        transition
                         className={`
                             w-full  rounded-xl bg-surface p-6 backdrop-blur-2xl duration-200 ease-out data-closed:transform-[scale(95%)] data-closed:opacity-0
                             ${sizeClasses[size] || sizeClasses.lg}

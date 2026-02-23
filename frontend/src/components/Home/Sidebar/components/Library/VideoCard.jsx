@@ -9,8 +9,21 @@ import { ingested, errorIngested } from '@/utils/library';
 import IngestedStatus from './IngestedStatus/IngestedStatus';
 import useEdit from '@/api/services/hooks/edit';
 import { ArrowPathIcon } from '@heroicons/react/20/solid';
+import VideoModal from './VideoModal';
 
 export default function VideoCard({ video, isHighlighted = false, onEdit }) {
+    const {
+        isEditing,
+        editValue,
+        setEditValue,
+        startEditing,
+        saveEdit,
+        cancelEdit,
+    } = useEdit({
+        initialValue: video.name,
+        onSave: (value) => onEdit?.(video._id, value),
+    });
+
     const queryClient = useQueryClient();
     const session_id = useStore((state) => state.session_id);
     const selectMutation = useMutation({
@@ -37,32 +50,26 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
             queryClient.invalidateQueries(['videos']);
         }
     })
-    const handleFailed = () => {
+    const handleFailed = (e) => {
         // call api to re-ingest
+        e.stopPropagation();
         console.log("Re-ingest video:", video._id);
         retryMutation.mutate(video._id);
     }
 
-      const {
-        isEditing,
-        editValue,
-        setEditValue,
-        startEditing,
-        saveEdit,
-        cancelEdit,
-      } = useEdit({
-        initialValue: video.name,
-        onSave: (value) => onEdit?.(video._id, value),
-      });
-      const failed = video.ingested_status === -1;
+    const failed = video.ingested_status === -1;
+
+    const [isOpen, setIsOpen] = React.useState(false);
+    const openModal = () => setIsOpen(true);
+    const closeModal = () => setIsOpen(false);
     return (
         <div className={clsx(
             "group relative rounded-xl p-2 cursor-pointer transition-all",
             "hover:bg-white/5",
             (errorIngested(video.ingested_status) || !ingested(video.ingested_status)) && "opacity-50",
-            (!ingested(video.ingested_status) && !errorIngested(video.ingested_status))  && "!cursor-not-allowed",
-            isHighlighted && "animate-highlight-pulse ring-2 ring-accent ring-offset-2 ring-offset-background rounded-xl"
-        )}>
+            (!ingested(video.ingested_status) && !errorIngested(video.ingested_status)) && "!cursor-not-allowed",
+            isHighlighted && "animate-highlight-pulse ring-2 ring-accent ring-offset-2 ring-offset-background rounded-xl")}
+            onClick={openModal}>
             {/* Thumbnail */}
             <div className='relative aspect-video rounded-lg overflow-hidden bg-black'>
                 <img
@@ -74,7 +81,8 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                     <IngestedStatus percentage={video.ingested_status} />
                 </div>}
                 {/* Selection indicator */}
-                <div className='absolute top-2 right-2 rounded-md p-1 bg-black/50 backdrop-blur-sm cursor-pointer hover:bg-black/70 transition-colors'
+                <div className={clsx('absolute top-2 right-2 rounded-md p-1 bg-black/50 backdrop-blur-sm cursor-pointer hover:bg-black/70 transition-colors',
+                    !ingested(video.ingested_status) && "!cursor-not-allowed opacity-50")}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (!ingested(video.ingested_status)) return;
@@ -83,7 +91,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                     <SelectedIcon selected={video.selected} />
                 </div>
                 {failed && (
-                    <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500/10 backdrop-blur-sm text-white text-xs font-medium px-4 py-2 rounded-lg'
+                    <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500/10 backdrop-blur-sm text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-red-500 transition-colors cursor-pointer'
                         onClick={handleFailed}
                     >
                         <ArrowPathIcon className='inline-block size-4' />
@@ -132,8 +140,9 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                 </div>
             </div>
 
+            {/* modal */}
+            <VideoModal isModalOpen={isOpen} closeModal={closeModal} video={video} />
 
-            
         </div>
     )
 }

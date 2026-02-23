@@ -7,14 +7,8 @@ from app.core.dependencies import UserServiceDep
 from beanie import PydanticObjectId
 from fastapi import HTTPException
 from fastapi.security import HTTPBearer
-import socketio
 import websockets
 import re
-
-sio = socketio.AsyncServer(
-    async_mode="asgi", cors_allowed_origins="*", logger=True, engineio_logger=True
-)
-
 
 import asyncio
 from app.core.lifespan import app_state
@@ -31,19 +25,15 @@ from app.model.session_message import (
 )
 
 from llama_index.core.base.llms.types import MessageRole
-import httpx
 
+from app.api.socket_handlers.agent_progress_event import handle_agent_progress_event
+from app.api.socket_handlers.utils.session_room import session_room
+from app.api.socket_handlers.agent_stream import handle_agent_stream
 
 security = HTTPBearer(auto_error=False)
 
-from app.tests.test_data import image_search_result_1
-
 # AGENT SOCKET USES RAW WS
-
-
-def session_room(session_id: str):
-    return f"session:{session_id}"
-
+sio = app_state.sio
 
 global_session_tasks = {
     # session_id: {
@@ -214,52 +204,11 @@ async def handle_stream_chat(socket_id, data: dict):
 
                         if msg_type == "AgentProgressEvent":
                             # hiện ...
-                            await sio.emit(
-                                "running",
-                                {
-                                    "content": data,
-                                    "role": MessageRole.ASSISTANT.value,
-                                },
-                                to=session_room(session_id),
-                            )
+                            await handle_agent_progress_event(session_id, data)
                         # elif msg_type == "AgentInput":
                         #     pass
                         elif msg_type == "AgentStream":
-                            thinking_delta = data.get("thinking_delta", None)
-                            if thinking_delta:
-                                # also save
-                                title, description = parse_thinking(thinking_delta)
-                                thinking_step = ThinkingStep(
-                                    title=title, description=description
-                                )
-                                thinking_accum.append(thinking_step)
-                                global_session_tasks[session_id][
-                                    "thinking_accum"
-                                ] = thinking_accum
-                                await sio.emit(
-                                    "thinking",
-                                    {
-                                        "title": title,
-                                        "description": description,
-                                    },
-                                    to=session_room(session_id),
-                                )
-                            else:  # reponse
-                                response = data.get("response", "")
-                                response_delta = data.get("delta", "")
-                                # accumulate the delta
-                                if response_delta:
-                                    accum += response_delta
-                                    global_session_tasks[session_id]["accum"] = accum
-                                await sio.emit(
-                                    "response",
-                                    {
-                                        "content": response,
-                                        "content_delta": response_delta,
-                                        "role": MessageRole.ASSISTANT.value,
-                                    },
-                                    to=session_room(session_id),
-                                )
+                            await handle_agent_stream(session_id, data, thinking_accum, global_session_tasks)
                         elif msg_type == "ToolCall":
                             tool_id = data.get("tool_id", "")
                             description = data.get("description", "")
@@ -535,17 +484,3 @@ async def cleanup_session(session_id: str, delay: int = 5):
         global_session_tasks.pop(session_id, None)
 
 
-def parse_thinking(text: str):
-    """
-    Extract **Title** and the remaining description.
-    """
-    match = re.match(r"\*\*(.*?)\*\*\s*(.*)", text, re.DOTALL)
-
-    if match:
-        title = match.group(1).strip()
-        description = match.group(2).strip()
-    else:
-        title = "Thinking"
-        description = text.strip()
-
-    return title, description

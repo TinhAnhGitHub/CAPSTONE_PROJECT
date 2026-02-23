@@ -4,26 +4,21 @@ import Modal from '@/components/Modal/modal';
 import { useQuery, useQueryClient } from 'react-query';
 import VideoCard from './VideoCard';
 import Group from './Group';
-import { PlusIcon } from '@heroicons/react/16/solid';
 import AddGroupButton from './AddGroupButton';
 import { useStore } from "@/stores/chat";
-import { useCreateGroup, useGroups, useRenameGroup, useRenameVideo, useVideos } from '@/api/services/hooks/query';
+import { useGroups, useRenameGroup, useRenameVideo, useVideos } from '@/api/services/hooks/query';
 import { useEffect, useRef, useState } from 'react';
 import socket from '@/api/socket';
-import { ensureGroupId } from '@/utils/ensure/ensureGroupId';
 
 export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) {
     const group = useStore((state) => state.currentGroup);
     const { data: groups = [] } = useGroups();
-    const setCurrentGroup = useStore((state) => state.setCurrentGroup);
     
     const sessionId = useStore((state) => state.session_id);
     const [highlightedVideoId, setHighlightedVideoId] = useState(null);
     const videoRefs = useRef({});
     // get groups
     const queryClient = useQueryClient();
-
-    // Mock data for testing - remove or set to [] in production
 
     const { data: videos = [] } = useVideos(group, sessionId);
 
