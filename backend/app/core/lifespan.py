@@ -56,8 +56,8 @@ async def lifespan(app: FastAPI):
             secure=False,
         )
         
-        # minio_service = MinioService(minio_client)
-        minio_service = None  # Placeholder for MinioService initialization
+        minio_service = MinioService(minio_client)
+        # minio_service = None  # Placeholder for MinioService initialization
 
         print("✓ MinIO initialized")
     except Exception as e:

@@ -22,7 +22,7 @@ export default function VideoDropdownList({ video, onStartEdit }) {
             })
         },
         onSettled: () => {
-            queryClient.invalidateQueries('userVideos');
+            queryClient.invalidateQueries('videos');
         }
     })
     function handleDelete(video) {

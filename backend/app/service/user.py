@@ -238,7 +238,7 @@ class UserService:
         try:
             async with httpx.AsyncClient() as client:
                 answer = await client.post(
-                    "http://100.113.186.28:8000/uploads/",
+                    "http://100.113.186.28:8050/uploads/",
                     json={"videos": video_ids_video_url_obj, "user_id": user_id},
                 )
         except Exception as e:

@@ -8,6 +8,7 @@ export default function VideoModal({ isModalOpen, closeModal, title="Video name"
         controls: true,
         responsive: true,
         fluid: true,
+        aspectRatio: '16:9',
         controlBar: {
           children: [
             'playToggle',
@@ -27,7 +28,7 @@ export default function VideoModal({ isModalOpen, closeModal, title="Video name"
     
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal} title={title} zIndex='z-60'>
-      <div>
+      <div className=''>
         <VideoJS options={videoJsOptions} />
       </div>
     </Modal>

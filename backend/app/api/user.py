@@ -180,13 +180,14 @@ async def upload_files(
         user_id, files, group, session_id
     )
     video_ids_video_url_obj = [
-        {"video_id": str(vid), "video_url": s3_url}
-        for vid, video_url, thumb_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj
+        {"video_id": str(vid), "video_url": video_url}
+        for vid, video_url, thumb_url, length, fps in video_id_video_url_thumbnail_url_s3_url_obj
     ]
 
     await user_service.ingest_videos(user_id, video_ids_video_url_obj)
 
     return {"msg": "File uploaded successfully"}
+
 
 # for retry ingestion
 @router.post("/ingestion/retry")
@@ -200,6 +201,7 @@ async def retry_ingestion(
 
     await user_service.retry_ingestion(user_id, video_ids)
     return {"msg": "Ingestion retried successfully"}
+
 
 @router.get("/groups")
 async def get_user_groups(user_service: UserServiceDep, user=Depends(verify_token)):
@@ -284,6 +286,7 @@ async def delete_session(
 
     return {"session_id": session_id}
 
+
 @router.patch("/session/{session_id}/rename")
 async def rename_session(
     user_service: UserServiceDep,
@@ -298,6 +301,7 @@ async def rename_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     return {"session_id": session_id, "new_name": new_name}
+
 
 # group name rename
 @router.patch("/group/{group_id}/rename")
@@ -315,7 +319,9 @@ async def rename_group(
 
     return {"group_id": group_id, "new_name": new_name}
 
+
 # video name rename
+
 
 @router.patch("/video/{video_id}/rename")
 async def rename_video(
