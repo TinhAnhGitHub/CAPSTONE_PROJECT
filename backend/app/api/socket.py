@@ -278,12 +278,12 @@ async def handle_stream_chat(socket_id, data: dict):
                                     #     for item in media
                                     # ]
                                     # hard coded map for testing now
-                                    path = {
-                                        "692ad412086ada3a309334ff": "s3://videotests/K01_V001.mp4",
-                                        "692ad412086ada3a30933500": "s3://videotests/K01_V002.mp4",
-                                        "692ad412086ada3a30933501": "s3://videotests/K01_V003.mp4",
-                                        "692ad412086ada3a30933502": "s3://videotests/K01_V004.mp4",
-                                    }
+                                    # path = {
+                                    #     "692ad412086ada3a309334ff": "s3://videotests/K01_V001.mp4",
+                                    #     "692ad412086ada3a30933500": "s3://videotests/K01_V002.mp4",
+                                    #     "692ad412086ada3a30933501": "s3://videotests/K01_V003.mp4",
+                                    #     "692ad412086ada3a30933502": "s3://videotests/K01_V004.mp4",
+                                    # }
                                     # group similar video segments into one block
                                     video_groups = defaultdict(list)
                                     video_results = []
@@ -306,9 +306,8 @@ async def handle_stream_chat(socket_id, data: dict):
                                         segment_list.sort(key=lambda x: x.start)
                                         video_block = VideoBlock(
                                             video_id=video_id,
-                                            url=path[video_id].replace(
-                                                s3_base, http_base
-                                            ),
+                                            # public url
+                                            url=f"{http_base}videotests/{video_id}.mp4",
                                             fps=segments[0].get("fps", 30),
                                             segments=segment_list,
                                         )

@@ -1,4 +1,5 @@
 import api from '@/api/api';
+import { useStore } from '@/stores/chat';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import {
     ArchiveBoxXMarkIcon,
@@ -12,6 +13,8 @@ import { useMutation, useQueryClient } from 'react-query'
 
 export default function VideoDropdownList({ video, onStartEdit }) {
     const queryClient = useQueryClient();
+    const session_id = useStore((state) => state.session_id);
+    const group = useStore((state) => state.currentGroup);
     const deleteVideoMutation = useMutation({
         mutationFn: (video) => {
             return api.delete('/api/user/videos/delete', {
@@ -21,8 +24,20 @@ export default function VideoDropdownList({ video, onStartEdit }) {
                 }
             })
         },
+        onMutate: async (video) => {
+            const queryKey = ['videos', group, session_id];
+            await queryClient.cancelQueries(queryKey);
+            const previousVideos = queryClient.getQueryData(queryKey);
+            queryClient.setQueryData(queryKey, old => old.filter(v => v._id !== video._id));
+            return { previousVideos };
+        },
+        onError: (err, video, context) => {
+            console.log(err);
+            queryClient.setQueryData(queryKey, context.previousVideos);
+        },
         onSettled: () => {
-            queryClient.invalidateQueries('videos');
+            console.log('invalidating videos');
+            queryClient.invalidateQueries(queryKey);
         }
     })
     function handleDelete(video) {

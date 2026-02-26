@@ -61,7 +61,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
 
     const [isOpen, setIsOpen] = React.useState(false);
     const openModal = () => setIsOpen(true);
-    const closeModal = () => setIsOpen(false);
+    const closeModal = () => {setIsOpen(false); console.log("Close modal")};
     return (
         <div className={clsx(
             "group relative rounded-xl p-2 cursor-pointer transition-all",
