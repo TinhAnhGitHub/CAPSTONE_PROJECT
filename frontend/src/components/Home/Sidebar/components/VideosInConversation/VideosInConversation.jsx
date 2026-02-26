@@ -60,10 +60,10 @@ export default function VideosInConversation() {
             displayVideos.map((video, idx) => (
               <div
                 key={idx}
-                className='pb-2 break-inside-avoid group cursor-pointer'
+                className='pb-2 break-inside-avoid group cursor-pointer hover:bg-text/10 rounded-lg p-1 transition-colors'
                 onClick={() => handleVideoClick(video._id)}
               >
-                <div className='relative overflow-hidden rounded-lg border border-white/10 group-hover:border-accent/50 transition-colors'>
+                <div className='relative overflow-hidden rounded-lg border border-white/10  transition-colors'>
                   <img
                     src={video.thumbnail || "/images/testImage.png"}
                     alt="thumbnail"

@@ -67,7 +67,6 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
             "group relative rounded-xl p-2 cursor-pointer transition-all",
             "hover:bg-white/5",
             (errorIngested(video.ingested_status) || !ingested(video.ingested_status)) && "opacity-50",
-            (!ingested(video.ingested_status) && !errorIngested(video.ingested_status)) && "!cursor-not-allowed",
             isHighlighted && "animate-highlight-pulse ring-2 ring-accent ring-offset-2 ring-offset-background rounded-xl")}
             onClick={openModal}>
             {/* Thumbnail */}
@@ -81,14 +80,19 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                     <IngestedStatus percentage={video.ingested_status} />
                 </div>}
                 {/* Selection indicator */}
-                <div className={clsx('absolute top-2 right-2 rounded-md p-1 bg-black/50 backdrop-blur-sm cursor-pointer hover:bg-black/70 transition-colors',
-                    !ingested(video.ingested_status) && "!cursor-not-allowed opacity-50")}
+                <div className={
+                    clsx('absolute top-1 right-1 rounded-md p-1 bg-black/50 backdrop-blur-sm cursor-pointer hover:bg-black/70  transition-colors',
+                        (!ingested(video.ingested_status) || failed) && "!cursor-not-allowed opacity-50")
+                }
+
                     onClick={(e) => {
                         e.stopPropagation();
                         if (!ingested(video.ingested_status)) return;
                         handleToggleSelect(video._id, session_id)
                     }}>
-                    <SelectedIcon selected={video.selected} />
+                    <div className='rounded-md p-1 hover:bg-white/10 '>
+                        <SelectedIcon selected={video.selected} />
+                    </div>
                 </div>
                 {failed && (
                     <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500/10 backdrop-blur-sm text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-red-500 transition-colors cursor-pointer'

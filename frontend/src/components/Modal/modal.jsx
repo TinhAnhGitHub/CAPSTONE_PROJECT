@@ -1,6 +1,6 @@
 // components/Modal.jsx
 
-import { Dialog, DialogPanel, DialogTitle } from "@headlessui/react";
+import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
 /**
@@ -26,20 +26,21 @@ export default function Modal({
     children,
     size = 'lg',
     showCloseButton = true,
-    closeOnOutsideClick = true,
     className = '',
     zIndex = 'z-50',
 }) {
-    const handleClose = closeOnOutsideClick ? onClose : () => { };
 
     return (
         <Dialog
             open={isOpen}
             transition
             className={`relative ${zIndex} focus:outline-none`}
-            onClose={handleClose}
+            onClose={onClose}
         >
-            <div className={`fixed inset-0 ${zIndex} w-screen overflow-y-auto bg-black/50`}>
+            <DialogBackdrop
+                transition
+                className="fixed inset-0 bg-black/30 " />
+            <div className={`fixed inset-0 ${zIndex} w-screen overflow-y-auto `}>
                 <div className="flex min-h-full items-center justify-center p-4">
                     <DialogPanel
                         transition
