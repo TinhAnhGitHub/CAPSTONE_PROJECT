@@ -6,7 +6,7 @@ export default function AppBar() {
   const toggleSidebar = useStore((state) => state.toggleSidebar)
 
   return (
-    <header className="flex items-center gap-4 px-4 py-2 md:hidden sticky top-0 z-10 bg-background">
+    <header className="flex items-center gap-4 px-4 py-2 md:hidden sticky top-0 z-10 bg-background border-b border-surface-light">
       {/* Hamburger button - only visible on mobile (md and below) */}
       <button
         onClick={toggleSidebar}

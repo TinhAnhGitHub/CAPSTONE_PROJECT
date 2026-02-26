@@ -341,11 +341,13 @@ export default function Chat() {
   return (
     <div className='h-screen w-full flex flex-col justify-between bg-background'>
       <AppBar />
+      <div className='sticky top-0 border-b flex-shrink-0 max-md:hidden border-surface-light h-14'>
+      </div>
       <div
         ref={chatContainerRef}
         // onScroll={() => { isNearBottomRef.current = checkIfNearBottom(); }}
         onScroll={handleScroll}
-        className="flex flex-col w-full h-[90vh] px-4 md:px-8 lg:px-16 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-scroll scrollbar-gutter-stable"
+        className="flex flex-col w-full h-full px-4 md:px-8 lg:px-16 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-scroll scrollbar-gutter-stable"
       >
         {/* Centered content container with max-width */}
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-3 py-6">

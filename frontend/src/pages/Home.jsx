@@ -10,9 +10,9 @@ import "./gradient.css"
 export default function Home() {
 
     return (
-        <div className="flex ">
+        <div className="flex">
             <Sidebar />
-            <div className="w-full flex justify-center h-screen backdrop-blur-md gradient-background">
+            <div className="w-full min-w-0 flex justify-center h-screen backdrop-blur-md gradient-background">
                 <Chat />
             </div>
         </div>

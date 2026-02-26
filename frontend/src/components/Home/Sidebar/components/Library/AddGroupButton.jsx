@@ -1,5 +1,5 @@
 import { useCreateGroup } from '@/api/services/hooks/query';
-import { PlusIcon } from '@heroicons/react/20/solid'
+import { PlusIcon } from '@heroicons/react/16/solid'
 import React from 'react'
 
 export default function AddGroupButton() {

@@ -57,10 +57,10 @@ export default function HistoryConversations() {
   return (
     <div className='relative flex flex-col h-full'>
       {/* New Chat Button */}
-      <div className='sticky top-0 px-2 py-2 border-b border-surface-light'>
+      <div className='sticky flex top-0 px-2 py-2 border-b border-surface-light h-14'>
         <button
           onClick={createNewChat}
-          className='flex itemeaes-center gap-2 w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
+          className='flex items-center gap-2 self-center w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
         >
           <PencilSquareIcon className="w-5 h-5" />
           <span>New Chat</span>

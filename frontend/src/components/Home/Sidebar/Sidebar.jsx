@@ -8,32 +8,6 @@ export default function Sidebar() {
     const sidebarOpen = useStore((state) => state.sidebarOpen)
     const setSidebarOpen = useStore((state) => state.setSidebarOpen)
 
-    // Track if animation should be enabled (only on user interaction, not resize)
-    const [shouldAnimate, setShouldAnimate] = useState(false)
-    const prevOpenRef = useRef(sidebarOpen)
-
-    useEffect(() => {
-        // Only animate when sidebarOpen changes (user clicked toggle)
-        if (prevOpenRef.current !== sidebarOpen) {
-            setShouldAnimate(true)
-            prevOpenRef.current = sidebarOpen
-        }
-    }, [sidebarOpen])
-
-    // Disable animation on resize
-    useEffect(() => {
-        let resizeTimeout
-        const handleResize = () => {
-            setShouldAnimate(false)
-            clearTimeout(resizeTimeout)
-        }
-        window.addEventListener('resize', handleResize)
-        return () => {
-            window.removeEventListener('resize', handleResize)
-            clearTimeout(resizeTimeout)
-        }
-    }, [])
-
     return (
         <>
             {/* Overlay for mobile - closes sidebar when clicking outside */}
@@ -50,7 +24,6 @@ export default function Sidebar() {
                     h-screen min-w-[300px] max-w-[300px] bg-darker-background text-gray-400 flex flex-col
                     fixed md:relative z-50
                     shadow-[1px_0_0_0_rgba(255,255,255,0.03)]
-                    ${shouldAnimate ? 'transition-transform duration-300 ease-in-out' : ''}
                     ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
                 `}
             >
