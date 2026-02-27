@@ -72,12 +72,15 @@ class MinioService:
         for video_id, file in zip(video_ids, files):
             object_name = f"{video_id}.mp4"
 
+            video_bytes = file.file.read()
+            file.file.seek(0)
+
             # --- upload video ---
             self.minio_client.put_object(
                 bucket_name="videos",
                 object_name=object_name,
-                data=file.file,
-                length=file.size,
+                data=BytesIO(video_bytes),
+                length=len(video_bytes),
                 part_size=10 * 1024 * 1024,
                 content_type="video/mp4",
             )
@@ -87,8 +90,7 @@ class MinioService:
                 expires=timedelta(days=7),
             )
             # video_url = f"s3://videos/{object_name}"
-
-            thumbnail_url, length, fps = self.generate_thumbnail(file, video_id)
+            thumbnail_url, length, fps = self.generate_thumbnail(video_bytes, video_id)
 
             results.append(
                 (
@@ -106,7 +108,7 @@ class MinioService:
         object_name = f"{video_id}.mp4"
         return self.minio_client.get_object("videos", object_name)        
 
-    def generate_thumbnail(self, file, video_id, time=5, size=(320, 320)):
+    def generate_thumbnail(self, video_bytes, video_id, time=5, size=(320, 320)):
         tmp_video = None
         fps = None
         length = None 
@@ -115,8 +117,7 @@ class MinioService:
             # Save video
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
                 tmp_video = tmp.name
-                file.file.seek(0)
-                tmp.write(file.file.read())
+                tmp.write(video_bytes)
 
             # Extract frame at 5 seconds
             with VideoFileClip(tmp_video) as clip:
@@ -167,7 +168,8 @@ class MinioService:
         video_duration = None
         # get file from minio
         video_object = f"{video_id}.mp4"
-        file = self.minio_client.get_object("videos", video_object)
+        response = self.minio_client.get_object("videos", video_object)
+        video_bytes = response.read()
         # get video metadata from mongodb so dont need to read video file to get duration
         video = await Video.get(video_id)
         video_duration = video.length
@@ -181,5 +183,5 @@ class MinioService:
         timestamp_4 = min(time+1, video_duration)
         timestamp_5 = min(time+2, video_duration)
         timestamps = [timestamp_1, timestamp_2, timestamp_3, timestamp_4, timestamp_5]
-        thumbnail_urls = [self.generate_thumbnail(file, video_id, t, size)[0] for t in timestamps]
+        thumbnail_urls = [self.generate_thumbnail(video_bytes, video_id, t, size)[0] for t in timestamps]
         return thumbnail_urls

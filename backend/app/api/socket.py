@@ -29,7 +29,9 @@ from llama_index.core.base.llms.types import MessageRole
 from app.api.socket_handlers.agent_progress_event import handle_agent_progress_event
 from app.api.socket_handlers.utils.session_room import session_room
 from app.api.socket_handlers.agent_stream import handle_agent_stream
-
+from app.api.socket_handlers.save_thinking_block import save_thinking_block
+from app.api.socket_handlers.save_text_block import save_text_block
+from app.api.socket_handlers.save_tool_block import save_tool_block
 security = HTTPBearer(auto_error=False)
 
 # AGENT SOCKET USES RAW WS
@@ -136,16 +138,23 @@ async def handle_stream_chat(socket_id, data: dict):
                 # }
                 # ],
             }
-
+            class AccumulatedData:
+                def __init__(self):
+                    self.accum = ""
+                    self.prev_msg_type = ""
+                    self.thinking_accum = []
+                    self.tools_accum = []
+                    self.ai_message_blocks = []
             # HTTP stream
             async with websockets.connect(ai_url) as ws:
                 await ws.send(json.dumps(payload))
 
-                accum = ""
-                prev_msg_type = ""
-                tools_accum = []
-                thinking_accum = []
-                ai_message_blocks = []
+                accum = AccumulatedData()
+                # accum = ""
+                # prev_msg_type = ""
+                # tools_accum = []
+                # thinking_accum = []
+                # ai_message_blocks = []
                 async for msg in ws:
                     try:
                         data = json.loads(msg)
@@ -153,39 +162,20 @@ async def handle_stream_chat(socket_id, data: dict):
                         msg_type = data.get("event_type", "")
 
                         # Save accumulated stream when transitioning away from AgentStream
-                        if prev_msg_type == "AgentStream" and msg_type != "AgentStream":
+                        if accum.prev_msg_type == "AgentStream" and msg_type != "AgentStream":
                             # Save thinking block first (if any)
-                            if thinking_accum:
-                                thinking_message_block = ThinkingBlock(
-                                    steps=thinking_accum
-                                )
-                                ai_message_blocks.append(thinking_message_block)
-                                global_session_tasks[session_id]["accum_blocks"].append(
-                                    thinking_message_block
-                                )
-                                thinking_accum = []
-                                global_session_tasks[session_id]["thinking_accum"] = []
+                            if accum.thinking_accum:
+                                save_thinking_block(session_id, accum, global_session_tasks)
                             # Save text block (if any) - use 'if' not 'elif' to save both
-                            if accum:
-                                ai_message_block = TextBlock(text=accum)
-                                ai_message_blocks.append(ai_message_block)
-                                global_session_tasks[session_id]["accum_blocks"].append(
-                                    ai_message_block
-                                )
-                                accum = ""
-                                global_session_tasks[session_id]["accum"] = ""
-
+                            if accum.accum:
+                                save_text_block(session_id, accum, global_session_tasks)
+                        # save tool block
                         if (
-                            prev_msg_type == "ToolCallResult"
-                            or prev_msg_type == "ToolCall"
+                            accum.prev_msg_type == "ToolCallResult"
+                            or accum.prev_msg_type == "ToolCall"
                         ) and (msg_type != "ToolCallResult" and msg_type != "ToolCall"):
-                            if tools_accum:
-                                tool_message_block = ToolsBlock(steps=tools_accum)
-                                ai_message_blocks.append(tool_message_block)
-                                global_session_tasks[session_id]["accum_blocks"].append(
-                                    tool_message_block
-                                )
-                                tools_accum = []
+                            if accum.tools_accum:
+                                save_tool_block(session_id, accum, global_session_tasks)
                         # content = data.get("content", "")
                         # AgentProgressEvent -> ...
                         # agentinput -> bỏ
@@ -208,7 +198,7 @@ async def handle_stream_chat(socket_id, data: dict):
                         # elif msg_type == "AgentInput":
                         #     pass
                         elif msg_type == "AgentStream":
-                            await handle_agent_stream(session_id, data, thinking_accum, global_session_tasks)
+                            await handle_agent_stream(session_id, data, accum, global_session_tasks)
                         elif msg_type == "ToolCall":
                             tool_id = data.get("tool_id", "")
                             description = data.get("description", "")
@@ -217,7 +207,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 description=description,
                                 status="finished",
                             )
-                            tools_accum.append(tool_step)
+                            accum.tools_accum.append(tool_step)
 
                             await sio.emit(
                                 "tool_call",
@@ -263,7 +253,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                         image_block = ImageBlock(
                                             video_id=video_id, url=url_list
                                         )
-                                        ai_message_blocks.append(image_block)
+                                        accum.ai_message_blocks.append(image_block)
                                         global_session_tasks[session_id][
                                             "accum_blocks"
                                         ].append(image_block)
@@ -307,11 +297,11 @@ async def handle_stream_chat(socket_id, data: dict):
                                         video_block = VideoBlock(
                                             video_id=video_id,
                                             # public url
-                                            url=f"{http_base}videotests/{video_id}.mp4",
+                                            url=f"{http_base}videos/{video_id}.mp4",
                                             fps=segments[0].get("fps", 30),
                                             segments=segment_list,
                                         )
-                                        ai_message_blocks.append(video_block)
+                                        accum.ai_message_blocks.append(video_block)
                                         global_session_tasks[session_id][
                                             "accum_blocks"
                                         ].append(video_block)
@@ -360,7 +350,7 @@ async def handle_stream_chat(socket_id, data: dict):
                             ai_message = SessionMessage(
                                 session_id=session_id,
                                 role=MessageRole.ASSISTANT,
-                                blocks=ai_message_blocks,
+                                blocks=accum.ai_message_blocks,
                             )
                             await app_state.chat_service.add_message(
                                 session_id, "assistant", ai_message
@@ -382,7 +372,7 @@ async def handle_stream_chat(socket_id, data: dict):
                             pass
 
                         # Update prev_msg_type at end of loop
-                        prev_msg_type = msg_type
+                        accum.prev_msg_type = msg_type
 
                     except Exception as e:
                         print("⚠️ parse error:", e)
@@ -481,5 +471,3 @@ async def cleanup_session(session_id: str, delay: int = 5):
     # only delete if safe
     if state["status"] in ("done", "cancelled"):
         global_session_tasks.pop(session_id, None)
-
-

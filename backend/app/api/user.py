@@ -337,3 +337,21 @@ async def rename_video(
         raise HTTPException(status_code=404, detail="Video not found")
 
     return {"video_id": video_id, "new_name": new_name}
+
+
+@router.get("/thumbnails")
+async def get_segment_thumbnails(
+    user_service: UserServiceDep,
+    video_id: str = Query(..., description="Video ID"),
+    frame_index: int = Query(
+        ..., description="Frame index to generate thumbnails around"
+    ),
+):
+    """
+    On-demand thumbnail generation for video segments.
+    Returns 5 thumbnails around the specified frame (-2s, -1s, center, +1s, +2s).
+    """
+    thumbnail_urls = await user_service.generate_video_thumbnails(
+        video_id=video_id, frame_index=frame_index
+    )
+    return {"thumbnails": thumbnail_urls}

@@ -8,7 +8,7 @@ import re
 
 sio = app_state.sio
 
-async def handle_agent_stream(session_id, data, thinking_accum, global_session_tasks):
+async def handle_agent_stream(session_id, data, accum, global_session_tasks):
     thinking_delta = data.get("thinking_delta", None)
     if thinking_delta:
         # also save
@@ -16,10 +16,10 @@ async def handle_agent_stream(session_id, data, thinking_accum, global_session_t
         thinking_step = ThinkingStep(
             title=title, description=description
         )
-        thinking_accum.append(thinking_step)
+        accum.thinking_accum.append(thinking_step)
         global_session_tasks[session_id][
             "thinking_accum"
-        ] = thinking_accum
+        ] = accum.thinking_accum
         await sio.emit(
             "thinking",
             {
@@ -33,8 +33,8 @@ async def handle_agent_stream(session_id, data, thinking_accum, global_session_t
         response_delta = data.get("delta", "")
         # accumulate the delta
         if response_delta:
-            accum += response_delta
-            global_session_tasks[session_id]["accum"] = accum
+            accum.accum += response_delta
+            global_session_tasks[session_id]["accum"] = accum.accum
         await sio.emit(
             "response",
             {
