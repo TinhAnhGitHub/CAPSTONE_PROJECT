@@ -9,7 +9,8 @@ import { ingested, errorIngested } from '@/utils/library';
 import IngestedStatus from './IngestedStatus/IngestedStatus';
 import useEdit from '@/api/services/hooks/edit';
 import { ArrowPathIcon } from '@heroicons/react/20/solid';
-import VideoModal from './VideoModal';
+import { formatVideoLength } from '@/utils/format';
+import { useVideoModalStore } from '@/stores/videoModal';
 
 export default function VideoCard({ video, isHighlighted = false, onEdit }) {
     const {
@@ -59,9 +60,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
 
     const failed = video.ingested_status === -1;
 
-    const [isOpen, setIsOpen] = React.useState(false);
-    const openModal = () => setIsOpen(true);
-    const closeModal = () => {setIsOpen(false); console.log("Close modal")};
+    const openModal = useVideoModalStore((s) => s.open);
     return (
         <div className={clsx(
             "group relative rounded-xl p-2 cursor-pointer transition-all",
@@ -144,21 +143,8 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                 </div>
             </div>
 
-            {/* modal */}
-            <VideoModal isModalOpen={isOpen} closeModal={closeModal} video={video} />
 
         </div>
     )
 }
 
-const formatVideoLength = (lengthInSeconds) => {
-    const hours = Math.floor(lengthInSeconds / 3600);
-    const minutes = Math.floor((lengthInSeconds % 3600) / 60);
-    const seconds = Math.floor(lengthInSeconds % 60);
-    // show like youtube, if hours > 0, show hh:mm:ss, else show mm:ss, round seconds
-    if (hours > 0) {    
-        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    } else {
-        return `${minutes}:${String(seconds).padStart(2, '0')}`;
-    }
-}

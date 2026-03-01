@@ -3,6 +3,7 @@ import { useVideos } from '@/api/services/hooks/query';
 import { useStore } from '@/stores/chat';
 import LibraryModal from '../Library/LibraryModal';
 import { FilmIcon } from '@heroicons/react/24/outline';
+import { formatVideoLength } from '@/utils/format';
 
 export default function VideosInConversation() {
   const groupId = useStore((state) => state.currentGroup);
@@ -71,7 +72,7 @@ export default function VideosInConversation() {
                   />
                   {/* Duration badge */}
                   <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
-                    {video.length || "1:00"}
+                    {formatVideoLength(video.length)}
                   </span>
                 </div>
                 <h3 className='mt-1.5 text-sm font-medium truncate text-text-muted group-hover:text-text transition-colors'>

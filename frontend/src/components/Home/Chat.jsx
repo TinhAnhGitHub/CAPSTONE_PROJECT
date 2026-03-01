@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import socket from '@/api/socket';
 import { Textarea } from '@headlessui/react';
 import clsx from 'clsx';
 import { useStore } from '@/stores/user';
 import { useStore as useStoreChat } from "@/stores/chat";
 import { ChevronDownIcon } from '@heroicons/react/24/solid';
-
 import { useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
 import { useForm } from 'react-hook-form';
@@ -35,9 +34,7 @@ export default function Chat() {
 
   const getSessionId = useStoreChat((state) => state.getSessionId);
   const session_id = useStoreChat((state) => state.session_id);
-  const setSessionId = useStoreChat((state) => state.setSessionId);
   const user = useStore((state) => state.user);
-
   const userId = user?.id;
 
   const queryClient = useQueryClient();
@@ -57,7 +54,7 @@ export default function Chat() {
   const [querying, setQuerying] = useState(false);
   const isStreamingRef = useRef(false); // Track if we received continue_stream
 
-  // Reset state when session changes
+  // chạy khi chuyển session
   useEffect(() => {
     isStreamingRef.current = false;
     setQuerying(false); // Reset querying state - will be set to true by continue_stream if needed
@@ -68,7 +65,7 @@ export default function Chat() {
     });
   }, [session_id]);
 
-  // Auto-join session on socket connect (handles F5 refresh)
+  // báo join session, mà hình như api bên be có tự động check on session hay sao
   useEffect(() => {
     const handleConnect = () => {
       const currentSessionId = getSessionId();
@@ -100,30 +97,20 @@ export default function Chat() {
     },
     onSuccess: (data) => {
       if (isStreamingRef.current) {
-        console.log("DATA", data);
-        console.log("CHATMNESSAGES", chatMessages);
         setChatMessages([...data, ...chatMessages]);
-        console.log("Not overwriting chat messages due to ongoing stream");
-        return;
-      }
-      setChatMessages(data);
+      } else setChatMessages(data);
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+        bottomRef.current?.scrollIntoView({ behavior: 'instant' });
       });
     },
     enabled: !!session_id,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
-    // staleTime: Infinity,
   })
 
+  // handle socket
   useEffect(() => {
-    const handleStatus = (msg) => {
-      setQuerying(true);
-      if (!getSessionId()) setSessionId(msg.session_id);
-      queryClient.invalidateQueries(['chatHistory']);
-    };
-
+      // response stream bằng text
     const handleResponse = (msg) => {
       // Ignore messages from other sessions
       if (msg.session_id && msg.session_id !== getSessionId()) return;
@@ -138,6 +125,7 @@ export default function Chat() {
 
       scrollToBottomIfNeeded();
     };
+    // response stream bằng hình/video
 
     const handleMedia = (media) => {
       // Ignore messages from other sessions
@@ -157,8 +145,6 @@ export default function Chat() {
       scrollToBottomIfNeeded();
     };
 
-    // handle session status
-    socket.on('message_received', handleStatus);
 
     // handle stream thinking
     const handleThinking = (data) => {
@@ -176,7 +162,6 @@ export default function Chat() {
       scrollToBottomIfNeeded();
     };
 
-    socket.on('thinking', handleThinking);
     // handle toolcall
     const handleToolCall = (data) => {
       // Ignore messages from other sessions
@@ -191,7 +176,6 @@ export default function Chat() {
       setChatMessages(updated);
       scrollToBottomIfNeeded();
     }
-    socket.on('tool_call', handleToolCall);
     //handle toolcallresult
     const handleToolCallResult = (data) => {
       // Ignore messages from other sessions
@@ -204,20 +188,12 @@ export default function Chat() {
       setChatMessages(updated);
       scrollToBottomIfNeeded();
     }
-    socket.on('tool_result', handleToolCallResult);
-    // handle answer
-    socket.on('response', handleResponse);
 
-    // handle end
-    socket.on('media', handleMedia);
-
-    socket.on('stream_end', (msg) => {
-      // console.log("stream end ✅✅✅✅✅✅✅✅✅", msg);
-      isStreamingRef.current = false; // Reset streaming flag
-      setQuerying(false);
-    })
-
-    socket.on('continue_stream', (msg) => {
+    const handleMessageReceived = (msg) => {
+      // maybe set a flag to set the send button to cancel button
+      setQuerying(true);
+    }
+    const handleContinueStream = (msg) => {
       // Ignore messages from other sessions
       if (msg.session_id && msg.session_id !== getSessionId()) return;
       const data = msg.content;
@@ -247,16 +223,33 @@ export default function Chat() {
       setChatMessages(updated);
       scrollToBottomIfNeeded();
       setQuerying(true);
-    })
+    }
+    const handleStreamEnd = (msg) => {
+      isStreamingRef.current = false; // Reset streaming flag
+      setQuerying(false);
+    }
+
+    socket.on('message_received', handleMessageReceived);
+    // handle answer
+    socket.on('response', handleResponse);
+    socket.on('thinking', handleThinking);
+    socket.on('media', handleMedia);
+    socket.on('tool_call', handleToolCall);
+    socket.on('tool_result', handleToolCallResult);
+    socket.on('stream_end', handleStreamEnd);
+
+    socket.on('continue_stream', handleContinueStream);
 
     return () => {
-      socket.off('message_received', handleStatus);
-      socket.off('thinking', handleThinking);
+      socket.off('message_received', handleMessageReceived);
+      // socket.off('message_received', handleStatus);
       socket.off('response', handleResponse);
       socket.off('media', handleMedia);
+      socket.off('thinking', handleThinking);
       socket.off('tool_call', handleToolCall);
       socket.off('tool_result', handleToolCallResult);
-      socket.off('stream_end');
+      socket.off('stream_end', handleStreamEnd);
+      socket.off('continue_stream', handleContinueStream);
     };
   }, []); // 
 
@@ -274,7 +267,7 @@ export default function Chat() {
   };
 
   // Auto-scroll only if user is near bottom
-  const scrollToBottomIfNeeded = (behavior = 'smooth') => {
+  const scrollToBottomIfNeeded = (behavior = 'instant') => {
     if (isNearBottomRef.current) {
       requestAnimationFrame(() => {
         bottomRef.current?.scrollIntoView({ behavior });
@@ -308,8 +301,6 @@ export default function Chat() {
     socket.emit('cancel_stream', { session_id: getSessionId() });
     setQuerying(false);
   };
-
-
 
   const handlePrompt = async () => {
     const prompt = getValues('prompt').trim();
@@ -359,60 +350,6 @@ export default function Chat() {
             </div>
           ))}
 
-          {/* test video block */}
-          {/* {
-            <BlockRenderer block={{
-              block_type: 'video',
-              video_id: '2421946379',
-              url: '/videos/testVideo.mp4',
-              segments: [{ start_frame: 0, end_frame: 150 },
-              { start_frame: 1000, end_frame: 2537 }], // in frames
-              fps: 30,
-            }} role={"assistant"} />
-          } */}
-          {/* test video block */}
-          {/* {
-            <BlockRenderer block={{
-              block_type: 'text',
-              text: 'This is a test message to demonstrate the text block rendering in the chat interface. It should properly display the text content sent by the assistant role.',
-            }} role={"assistant"} />
-          } */}
-          {/* test ảnh block */}
-          {/* {
-            <BlockRenderer block={{
-              block_type: 'image',
-              url: ['/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png', '/images/testImage.png'],
-            }} role={"assistant"} />
-          } */}
-          {/* test tool */}
-          {/* {
-            <BlockRenderer block={{
-              block_type: 'tools',
-              tools: [{
-                tool_name: "Image Recognition",
-                description: "Calling an image recognition model to analyze the provided image and extract relevant information."
-              },
-              {
-                tool_name: "Voice Recognition",
-                description: "Using speech-to-text to transcribe audio content from the video."
-              },
-              {
-                tool_name: "OCR",
-                description: "Extracting text from images using optical character recognition."
-              },
-              {
-                tool_name: "CLIP Search",
-                description: "Using CLIP model to find relevant video segments based on semantic image-text matching."
-              }]
-            }} role={"assistant"} />
-          } */}
-          {/* test thinking */}
-          {/* {
-            <BlockRenderer block={{
-              block_type: 'thinking',
-              thinking: "The assistant is currently processing the request and generating a response.",
-            }} role={"assistant"} />
-          } */}
           {showScrollDown && (
             <button
               onClick={() => {

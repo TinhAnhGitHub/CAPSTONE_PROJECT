@@ -3,6 +3,7 @@ import Modal from '@/components/Modal/modal'
 import React from 'react'
 
 export default function VideoModal({ isModalOpen, closeModal, title="Video name", video }) {
+  if (!video) return null;
       const videoJsOptions = {
         autoplay: false,
         controls: true,
