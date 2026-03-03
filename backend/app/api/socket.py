@@ -32,6 +32,7 @@ from app.api.socket_handlers.agent_stream import handle_agent_stream
 from app.api.socket_handlers.save_thinking_block import save_thinking_block
 from app.api.socket_handlers.save_text_block import save_text_block
 from app.api.socket_handlers.save_tool_block import save_tool_block
+
 security = HTTPBearer(auto_error=False)
 
 # AGENT SOCKET USES RAW WS
@@ -40,7 +41,7 @@ sio = app_state.sio
 global_session_tasks = {
     # session_id: {
     #   "task": asyncio.Task,
-    #   "accum_blocks": list,      # ai_message_blocks
+    #   "accum": list,      # ai_message_blocks
     #   "status": "streaming" | "done" | "cancelled",
     # }
 }
@@ -72,10 +73,7 @@ async def handle_stream_chat(socket_id, data: dict):
 
         global_session_tasks[session_id] = {
             "task": asyncio.current_task(),
-            "accum_blocks": [],
-            "accum": "",  # Current text being streamed
-            "thinking_accum": [],  # Current thinking steps being streamed
-            "tools_accum": [],  # Current tools being streamed
+            "accum": None,
             "status": "streaming",
         }
 
@@ -138,19 +136,22 @@ async def handle_stream_chat(socket_id, data: dict):
                 # }
                 # ],
             }
+
             class AccumulatedData:
                 def __init__(self):
-                    self.accum = ""
-                    self.prev_msg_type = ""
+                    self.text_accum = ""
                     self.thinking_accum = []
                     self.tools_accum = []
                     self.ai_message_blocks = []
+                    self.prev_msg_type = ""
+
             # HTTP stream
             async with websockets.connect(ai_url) as ws:
                 await ws.send(json.dumps(payload))
 
                 accum = AccumulatedData()
-                # accum = ""
+                global_session_tasks[session_id]["accum"] = accum
+                # text_accum = ""
                 # prev_msg_type = ""
                 # tools_accum = []
                 # thinking_accum = []
@@ -162,20 +163,23 @@ async def handle_stream_chat(socket_id, data: dict):
                         msg_type = data.get("event_type", "")
 
                         # Save accumulated stream when transitioning away from AgentStream
-                        if accum.prev_msg_type == "AgentStream" and msg_type != "AgentStream":
+                        if (
+                            accum.prev_msg_type == "AgentStream"
+                            and msg_type != "AgentStream"
+                        ):
                             # Save thinking block first (if any)
                             if accum.thinking_accum:
-                                save_thinking_block(session_id, accum, global_session_tasks)
+                                save_thinking_block(accum)
                             # Save text block (if any) - use 'if' not 'elif' to save both
-                            if accum.accum:
-                                save_text_block(session_id, accum, global_session_tasks)
+                            if accum.text_accum:
+                                save_text_block(accum)
                         # save tool block
                         if (
                             accum.prev_msg_type == "ToolCallResult"
                             or accum.prev_msg_type == "ToolCall"
                         ) and (msg_type != "ToolCallResult" and msg_type != "ToolCall"):
                             if accum.tools_accum:
-                                save_tool_block(session_id, accum, global_session_tasks)
+                                save_tool_block(accum)
                         # content = data.get("content", "")
                         # AgentProgressEvent -> ...
                         # agentinput -> bỏ
@@ -198,7 +202,7 @@ async def handle_stream_chat(socket_id, data: dict):
                         # elif msg_type == "AgentInput":
                         #     pass
                         elif msg_type == "AgentStream":
-                            await handle_agent_stream(session_id, data, accum, global_session_tasks)
+                            await handle_agent_stream(session_id, data, accum)
                         elif msg_type == "ToolCall":
                             tool_id = data.get("tool_id", "")
                             description = data.get("description", "")
@@ -276,13 +280,24 @@ async def handle_stream_chat(socket_id, data: dict):
                                     for video_id, segments in video_groups.items():
                                         segment_list = []
                                         for item in segments:
-                                            preview_images = await app_state.user_service.generate_video_thumbnails(video_id=video_id, frame_index=item["frame_range"]["start"])
+                                            app_state.user_service.generate_video_thumbnails(
+                                                video_id=video_id,
+                                                frame_index=item["frame_range"][
+                                                    "start"
+                                                ],
+                                            )
+                                            thumbnail_urls = app_state.minio_service.generate_thumbnail_links(
+                                                video_id=video_id,
+                                                frame_index=item["frame_range"][
+                                                    "start"
+                                                ],
+                                            )
 
                                             segment = VideoSegment(
                                                 start=item["frame_range"]["start"],
                                                 end=item["frame_range"]["end"],
                                                 caption=item["caption_preview"],
-                                                preview_images=preview_images
+                                                preview_images=thumbnail_urls,
                                             )
                                             segment_list.append(segment)
                                         # sort segment_list based on start time
@@ -340,15 +355,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 )
                         elif msg_type == "AgentOutput":
                             # save to database
-                            ai_message = SessionMessage(
-                                session_id=session_id,
-                                role=MessageRole.ASSISTANT,
-                                blocks=accum.ai_message_blocks,
-                            )
-                            await app_state.chat_service.add_message(
-                                session_id, "assistant", ai_message
-                            )
-
+                            await save_message(session_id, accum)
                             global_session_tasks[session_id]["status"] = "done"
 
                             # Emit stream_end to notify the client
@@ -382,6 +389,16 @@ async def handle_stream_chat(socket_id, data: dict):
         await sio.emit("error", {"message": str(e)}, to=session_room(session_id))
 
 
+async def save_message(session_id, accum):
+    ai_message = SessionMessage(
+        session_id=session_id,
+        role=MessageRole.ASSISTANT,
+        blocks=accum.ai_message_blocks,
+    )
+
+    await app_state.chat_service.add_message(session_id, "assistant", ai_message)
+
+
 @sio.on("join_session")
 async def join_session(sid, data):
     session_id = data.get("session_id", None)
@@ -399,17 +416,19 @@ async def join_session(sid, data):
         status = global_session_tasks[session_id]["status"]
         if status == "streaming":
             # Send just the blocks array, not the whole SessionMessage
-            blocks = global_session_tasks[session_id]["accum_blocks"].copy()
+            # blocks = global_session_tasks[session_id]["accum_blocks"].copy()
+            blocks = global_session_tasks[session_id]["accum"].ai_message_blocks.copy()
 
             # Include in-progress thinking block if any
-            thinking_accum = global_session_tasks[session_id].get("thinking_accum", [])
+            # thinking_accum = global_session_tasks[session_id].get("thinking_accum", [])
+            thinking_accum = global_session_tasks[session_id]["accum"].thinking_accum
             if thinking_accum:
                 blocks.append(ThinkingBlock(steps=thinking_accum))
 
             # Include in-progress text block if any
-            accum = global_session_tasks[session_id].get("accum", "")
-            if accum:
-                blocks.append(TextBlock(text=accum))
+            text_accum = global_session_tasks[session_id]["accum"].text_accum
+            if text_accum:
+                blocks.append(TextBlock(text=text_accum))
 
             blocks_data = [block.model_dump() for block in blocks]
 
@@ -423,10 +442,6 @@ async def join_session(sid, data):
             )
         # Don't emit anything for "done" status - data is already in DB
         # and will be fetched by the frontend query
-
-
-# def serialize_blocks(blocks):
-#     return [block.model_dump() for block in blocks]
 
 
 @sio.on("cancel_stream")
@@ -449,6 +464,9 @@ async def cancel_stream(sid, data):
         {"session_id": session_id, "cancelled": True},
         to=session_room(session_id),
     )
+
+    #  save the accumulated thinking block and text block to Chat document in mongodb
+    await save_message(session_id, state["accum"])
 
     # Clean up immediately since user cancelled
     asyncio.create_task(cleanup_session(session_id, delay=1))

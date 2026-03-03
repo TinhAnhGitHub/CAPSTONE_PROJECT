@@ -302,6 +302,7 @@ export default function Chat() {
     setQuerying(false);
   };
 
+  // handle optimistic UI update when send prompt
   const handlePrompt = async () => {
     const prompt = getValues('prompt').trim();
     if (!prompt) return;

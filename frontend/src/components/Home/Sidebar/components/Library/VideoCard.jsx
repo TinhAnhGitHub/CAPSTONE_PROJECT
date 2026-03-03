@@ -61,13 +61,17 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
     const failed = video.ingested_status === -1;
 
     const openModal = useVideoModalStore((s) => s.open);
+    const handleOpenModal = () => {
+        openModal(video);
+    }
+
     return (
         <div className={clsx(
             "group relative rounded-xl p-2 cursor-pointer transition-all",
             "hover:bg-white/5",
             (errorIngested(video.ingested_status) || !ingested(video.ingested_status)) && "opacity-50",
             isHighlighted && "animate-highlight-pulse ring-2 ring-accent ring-offset-2 ring-offset-background rounded-xl")}
-            onClick={openModal}>
+            onClick={handleOpenModal}>
             {/* Thumbnail */}
             <div className='relative aspect-video rounded-lg overflow-hidden bg-black'>
                 <img

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import timedelta
 import io
 import os
@@ -108,10 +109,18 @@ class MinioService:
         object_name = f"{video_id}.mp4"
         return self.minio_client.get_object("videos", object_name)        
 
-    def generate_thumbnail(self, video_bytes, video_id, time=5, size=(320, 320)):
+    def delete_videos(self, video_ids):
+        for video_id in video_ids:
+            video_object = f"{video_id}.mp4"
+            thumb_object = f"{video_id}.jpg"
+
+            self.minio_client.remove_object("videos", video_object)
+            self.minio_client.remove_object("thumbnails", thumb_object)
+
+    def generate_thumbnail(self, video_bytes, video_id, time=5, size=(320, 320), frame_index=None):
         tmp_video = None
         fps = None
-        length = None 
+        length = None
 
         try:
             # Save video
@@ -125,7 +134,8 @@ class MinioService:
                 fps = clip.fps
                 length = clip.duration
                 timestamp = min(time, clip.duration / 2)
-                frame = clip.get_frame(timestamp)
+                # frame = clip.get_frame(timestamp)
+                frame = frame_index if frame_index is not None else clip.get_frame(timestamp)
 
             # Convert to PIL Image and resize
             image = Image.fromarray(frame)
@@ -146,42 +156,72 @@ class MinioService:
                 content_type="image/jpeg",
             )
 
-            return self.minio_client.presigned_get_object(
-                bucket_name="thumbnails",
-                object_name=thumb_object,
-                expires=timedelta(days=7)
-            ), length, fps
+            return self.generate_thumbnail_link(video_id, frame)
+
+            # return (
+            #     self.minio_client.presigned_get_object(
+            #         bucket_name="thumbnails",
+            #         object_name=thumb_object,
+            #         expires=timedelta(days=7),
+            #     ),
+            #     length,
+            #     fps,
+            # )
 
         finally:
             if tmp_video and os.path.exists(tmp_video):
                 os.remove(tmp_video)
 
-    def delete_videos(self, video_ids):
-        for video_id in video_ids:
-            video_object = f"{video_id}.mp4"
-            thumb_object = f"{video_id}.jpg"
-
-            self.minio_client.remove_object("videos", video_object)
-            self.minio_client.remove_object("thumbnails", thumb_object)
-
-    async def generate_timeline_thumbnails(self, video_id, frame_index, size=(320, 320)):
-        video_duration = None
-        # get file from minio
+    def _generate_timeline_thumbnail_sync(self, video_id, frame_index, video_duration, video_fps, size=(320, 320)):
         video_object = f"{video_id}.mp4"
         response = self.minio_client.get_object("videos", video_object)
         video_bytes = response.read()
+
+        # generate 5 thumbnails
+        time = frame_index / video_fps
+        timestamps = [
+            max(time - 2, 0),
+            max(time - 1, 0),
+            time,
+            min(time + 1, video_duration),
+            min(time + 2, video_duration),
+        ]
+        thumbnail_urls = [
+            self.generate_thumbnail(video_bytes, video_id, t, size)[0]
+            for t in timestamps
+        ]
+        return thumbnail_urls
+
+    async def generate_timeline_thumbnails(self, video_id, frame_index, size=(320, 320)):
+        # get file from minio
+        # video_object = f"{video_id}.mp4"
+        # response = self.minio_client.get_object("videos", video_object)
+        # video_bytes = response.read()
         # get video metadata from mongodb so dont need to read video file to get duration
         video = await Video.get(video_id)
         video_duration = video.length
         video_fps = video.fps
 
-        # generate 5
+        # offload into blocking into thread
+        return await asyncio.to_thread(self._generate_timeline_thumbnail_sync,
+                                       video_id, frame_index, video_duration, video_fps, size
+        )
+
+    async def generate_thumbnail_links(self, video_id, frame_index):
+        video = await Video.get(video_id)
+        video_fps = video.fps
+        video_duration = video.length
         time = frame_index / video_fps
-        timestamp_3 = time
-        timestamp_2 = max(time - 1, 0)
-        timestamp_1 = max(time-2, 0)
-        timestamp_4 = min(time+1, video_duration)
-        timestamp_5 = min(time+2, video_duration)
-        timestamps = [timestamp_1, timestamp_2, timestamp_3, timestamp_4, timestamp_5]
-        thumbnail_urls = [self.generate_thumbnail(video_bytes, video_id, t, size)[0] for t in timestamps]
-        return thumbnail_urls
+
+        frames = [
+            max(time - 2, 0) / video_fps,
+            max(time - 1, 0) / video_fps,
+            frame_index,
+            min(time + 1, video_duration) / video_fps,
+            min(time + 2, video_duration) / video_fps,
+        ]
+
+        return [self.generate_thumbnail_link(video_id, f) for f in frames]
+
+    async def generate_thumbnail_link(self, video_id, frame_index):
+        return f"http://100.113.186.28:9000/thumbnails/{video_id}_{frame_index}.jpg"

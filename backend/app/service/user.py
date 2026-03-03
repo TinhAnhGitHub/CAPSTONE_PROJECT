@@ -371,4 +371,9 @@ class UserService:
             video_id, frame_index
         )
 
+        #  save the thumbnail urls to Chat document in mongodb, when the routine is complete
+
+        # socket.io to emit its done
+
         return thumbnail_urls
+        
