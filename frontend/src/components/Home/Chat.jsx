@@ -92,7 +92,6 @@ export default function Chat() {
       if (!session_id) return [];
       const response = await api.get(`/api/user/chat-history/${session_id}`);
       const chat = response.data.chat;
-      console.log("Fetched chat history:", chat);
       return chat;
     },
     onSuccess: (data) => {
@@ -110,7 +109,7 @@ export default function Chat() {
 
   // handle socket
   useEffect(() => {
-      // response stream bằng text
+    // response stream bằng text
     const handleResponse = (msg) => {
       // Ignore messages from other sessions
       if (msg.session_id && msg.session_id !== getSessionId()) return;
@@ -346,7 +345,7 @@ export default function Chat() {
           {chatMessages.map((m, i) => (
             <div key={i} className='w-full flex flex-col'>
               {m.blocks.map((block, j) => (
-                <BlockRenderer key={`${i}-${j}`} block={block} role={m.role} />
+                <BlockRenderer key={`${i}-${j}`} block={block} role={m.role} isLastMessage={i === chatMessages.length - 1} />
               ))}
             </div>
           ))}
@@ -411,7 +410,7 @@ export default function Chat() {
               </div>
             )}
 
-            <div className="flex  items-end gap-2 px-3 py-2">
+            <div className="flex items-end gap-2 px-3 py-2">
               <Textarea
                 {...register('prompt')}
                 ref={(e) => {
@@ -432,6 +431,7 @@ export default function Chat() {
                   e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
                 }}
                 onKeyDown={(e) => {
+                  if (querying) return;
                   const value = getValues('prompt')?.trim() || '';
                   if (e.key === 'Enter' && !e.shiftKey && value) {
                     e.preventDefault();

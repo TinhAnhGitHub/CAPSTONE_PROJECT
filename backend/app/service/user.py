@@ -36,8 +36,9 @@ from fastapi.encoders import jsonable_encoder
 
 from werkzeug.utils import secure_filename
 class UserService:
-    def __init__(self, minio_service: MinioService):
+    def __init__(self, minio_service: MinioService, sio):
         self.minio_service = minio_service
+        self.sio = sio
 
     def verify_google_id_token(self, id_token_str: str, access_token: str) -> dict:
         """Verify Google's JWT token and extract user info"""
@@ -366,14 +367,12 @@ class UserService:
             # right now for debugging, return empty list
             return []
             # raise HTTPException(status_code=500, detail="Minio service not available")
-        
+
         thumbnail_urls = await self.minio_service.generate_timeline_thumbnails(
             video_id, frame_index
         )
 
-        #  save the thumbnail urls to Chat document in mongodb, when the routine is complete
-
         # socket.io to emit its done
-
+        await self.sio.emit("thumbnails_generated", {"video_id": video_id, "thumbnail_urls": thumbnail_urls})
+    
         return thumbnail_urls
-        

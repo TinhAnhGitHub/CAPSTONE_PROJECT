@@ -67,17 +67,16 @@ class ToolsBlock(BaseModel):
 
 
 class VideoBlock(BaseModel):
-    """A representation of video data to directly pass to/from the LLM."""
 
     block_type: Literal["video"] = "video"
-    # video: bytes | None = None
-    # path: FilePath | None = None
     video_id: str | None = None
-    url: AnyUrl | str | None = None
-    video_mimetype: str | None = None
-    # detail: str | None = None
+
+    name: str | None = None
+    length: float | None = None
     fps: float | None = None
-    # length: float | None = None
+    url: AnyUrl | str | None = None
+    thumbnail: AnyUrl | str | None = None
+    
     segments: list[VideoSegment] | None = None
 
 

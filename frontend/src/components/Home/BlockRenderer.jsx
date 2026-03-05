@@ -7,7 +7,7 @@ const PREVIEW_COUNT = 6;
 
 // now add thinking block and tools block
 
-export default memo(function BlockRenderer({ block, role }) {
+export default memo(function BlockRenderer({ block, role, isLastMessage = false }) {
     const imageUrlsKey = block.block_type === 'image' ? JSON.stringify(block.url) : '[]';
 
     const allImages = useMemo(() => {
@@ -37,16 +37,17 @@ export default memo(function BlockRenderer({ block, role }) {
     }
 
     if (block.block_type === 'thinking') {
-        return <Thinking block={block.steps} />;
+        return <Thinking block={block.steps} isLastMessage={isLastMessage} />;
     }
     if (block.block_type === 'tools') {
-        return <Tools block={block.steps} />;
+        return <Tools block={block.steps} isLastMessage={isLastMessage} />;
     }
 
     return null;
 }, (prevProps, nextProps) => {
     if (prevProps.role !== nextProps.role) return false;
     if (prevProps.block.block_type !== nextProps.block.block_type) return false;
+    if (prevProps.isLastMessage !== nextProps.isLastMessage) return false;
 
     const prev = prevProps.block;
     const next = nextProps.block;

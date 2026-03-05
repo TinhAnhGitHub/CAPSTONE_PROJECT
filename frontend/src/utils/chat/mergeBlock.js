@@ -9,7 +9,11 @@ export default function mergeBlock(lastBlock, newBlock) {
         return { ...lastBlock, url: lastBlock.url.concat(newBlock.url) };
     }
     if (lastBlock.block_type === 'video' && newBlock.block_type === 'video') {
-        return { ...lastBlock, url: lastBlock.url.concat(newBlock.url) };
+        // Only merge if same video_id (same video, different segments)
+        if (lastBlock.video_id && newBlock.video_id && lastBlock.video_id !== newBlock.video_id) {
+            return null; // Different videos — don't merge, append as separate block
+        }
+        return { ...lastBlock, segments: [...(lastBlock.segments || []), ...(newBlock.segments || [])] };
     }
     if (lastBlock.block_type === 'tool_call' && newBlock.block_type === 'tool_call') {
         return {

@@ -32,6 +32,8 @@ from app.api.socket_handlers.agent_stream import handle_agent_stream
 from app.api.socket_handlers.save_thinking_block import save_thinking_block
 from app.api.socket_handlers.save_text_block import save_text_block
 from app.api.socket_handlers.save_tool_block import save_tool_block
+from app.core.lifespan import app_state
+from app.model.video import Video
 
 security = HTTPBearer(auto_error=False)
 
@@ -258,9 +260,6 @@ async def handle_stream_chat(socket_id, data: dict):
                                             video_id=video_id, url=url_list
                                         )
                                         accum.ai_message_blocks.append(image_block)
-                                        global_session_tasks[session_id][
-                                            "accum_blocks"
-                                        ].append(image_block)
                                         image_results.append(image_block)
                                     return {
                                         "media_type": "image",
@@ -280,13 +279,16 @@ async def handle_stream_chat(socket_id, data: dict):
                                     for video_id, segments in video_groups.items():
                                         segment_list = []
                                         for item in segments:
-                                            app_state.user_service.generate_video_thumbnails(
-                                                video_id=video_id,
-                                                frame_index=item["frame_range"][
-                                                    "start"
-                                                ],
+                                            # fire-and-forget: schedule but don't await
+                                            asyncio.create_task(
+                                                app_state.user_service.generate_video_thumbnails(
+                                                    video_id=video_id,
+                                                    frame_index=item["frame_range"][
+                                                        "start"
+                                                    ],
+                                                )
                                             )
-                                            thumbnail_urls = app_state.minio_service.generate_thumbnail_links(
+                                            thumbnail_urls = await app_state.minio_service.generate_thumbnail_links(
                                                 video_id=video_id,
                                                 frame_index=item["frame_range"][
                                                     "start"
@@ -302,17 +304,22 @@ async def handle_stream_chat(socket_id, data: dict):
                                             segment_list.append(segment)
                                         # sort segment_list based on start time
                                         segment_list.sort(key=lambda x: x.start)
+                                        video = await Video.get(video_id)
                                         video_block = VideoBlock(
                                             video_id=video_id,
                                             # public url
-                                            url=f"{http_base}videos/{video_id}.mp4",
-                                            fps=segments[0].get("fps", 30),
+                                            name=video.name,
+                                            length=video.length,
+                                            fps=(
+                                                video.fps
+                                                if video.fps is not None
+                                                else segments[0].get("fps", 30)
+                                            ),
+                                            url=video.url,
+                                            thumbnail=video.thumbnail,
                                             segments=segment_list,
                                         )
                                         accum.ai_message_blocks.append(video_block)
-                                        global_session_tasks[session_id][
-                                            "accum_blocks"
-                                        ].append(video_block)
                                         video_results.append(video_block)
 
                                     return {
@@ -396,7 +403,8 @@ async def save_message(session_id, accum):
         blocks=accum.ai_message_blocks,
     )
 
-    await app_state.chat_service.add_message(session_id, "assistant", ai_message)
+    # might put random id later
+    await app_state.chat_service.add_message(session_id, None, ai_message)
 
 
 @sio.on("join_session")

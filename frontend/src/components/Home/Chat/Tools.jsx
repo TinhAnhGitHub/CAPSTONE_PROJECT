@@ -38,7 +38,7 @@ const getToolIcon = (toolName) => {
     return toolIcons.default;
 };
 
-export default function ToolCallsteps({ block = [{
+export default function ToolCallsteps({ isLastMessage = false, block = [{
     tool_name: "Image Recognition",
     description: "Calling an image recognition model to analyze the provided image and extract relevant information.",
 },
@@ -57,8 +57,12 @@ export default function ToolCallsteps({ block = [{
     const [expandedSteps, setExpandedSteps] = useState(new Set());
 
     useEffect(() => {
-        setExpandedSteps(new Set([block.length - 1]));
-    }, [block.length]);
+        if (isLastMessage) {
+            setExpandedSteps(new Set([block.length - 1]));
+        } else {
+            setExpandedSteps(new Set());
+        }
+    }, [block.length, isLastMessage]);
 
     const toggleStep = (index) => {
 

@@ -1,10 +1,70 @@
-import React, { useState, useRef, useMemo, useCallback } from 'react'
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 import Modal from '../../Modal/modal'
 import VideoJS from '../../common/components/VideoPlayer/VideoJS'
 import { useStore } from '@/stores/chat'
 import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
 import Markdown from 'react-markdown'
 import SaveKeyframes from './Savekeyframes.jsx'
+
+const MAX_RETRIES = 20
+const RETRY_DELAY = 15000 // 15s between retries, gives up after ~5min
+
+function PreviewImage({ src, alt, className }) {
+  const [status, setStatus] = useState('loading') // 'loading' | 'loaded' | 'failed'
+  const [retries, setRetries] = useState(0)
+  const [imgSrc, setImgSrc] = useState(src)
+
+  useEffect(() => {
+    setStatus('loading')
+    setRetries(0)
+    setImgSrc(src)
+  }, [src])
+
+  const handleLoad = () => setStatus('loaded')
+
+  const handleError = () => {
+    if (retries < MAX_RETRIES) {
+      setStatus('loading')
+      setTimeout(() => {
+        setRetries(r => r + 1)
+        // cache-bust the retry
+        setImgSrc(`${src}${src.includes('?') ? '&' : '?'}retry=${retries + 1}`)
+      }, RETRY_DELAY)
+    } else {
+      setStatus('failed')
+    }
+  }
+
+  if (status === 'failed') {
+    return (
+      <div className={`${className} bg-surface-light flex items-center justify-center`} title="Image unavailable">
+        <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${className} relative`}>
+      {status === 'loading' && (
+        <div className="absolute inset-0 bg-surface-light flex items-center justify-center rounded-md">
+          <svg className="w-4 h-4 text-text-muted animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+      )}
+      <img
+        src={imgSrc}
+        alt={alt}
+        className={`rounded-md h-full w-full object-cover ${status === 'loading' ? 'invisible' : ''}`}
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+    </div>
+  )
+}
 
 export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -66,12 +126,12 @@ export default function VideoPlayer({ video }) {
     }) || []
     , [video.segments, frameDuration])
 
-  // Memoize video options to prevent VideoJS from re-initializing
   const videoJsOptions = useMemo(() => ({
     autoplay: false,
     controls: true,
     responsive: true,
     fluid: true,
+    poster: video.thumbnail,
     controlBar: {
       children: [
         'playToggle',
@@ -145,13 +205,16 @@ export default function VideoPlayer({ video }) {
     })
   }, [markers])
 
+  // toggle override videos
   const addVideoToChatSession = (e) => {
     e.stopPropagation()
-    // check if video already in overrideVideos
     if (overrideVideos.find(v => v.video_id === video.video_id)) {
-      return
+      // already added, remove it
+      setOverrideVideos(overrideVideos.filter(v => v.video_id !== video.video_id))
+    } else {
+      // not added, add it
+      setOverrideVideos([...overrideVideos, video])
     }
-    setOverrideVideos([...overrideVideos, video])
   }
 
   return (
@@ -162,11 +225,12 @@ export default function VideoPlayer({ video }) {
       >
         {/* Video thumbnail */}
         <div className="relative">
-          <video
+          {/* <video
             src={video.url}
             className="w-full h-auto"
             preload="metadata"
-          />
+          /> */}
+          <img src={video.thumbnail || '/images/video_placeholder.png'} alt={video.title} className="w-full h-auto object-cover" />
           <div className="absolute inset-0 flex items-center justify-center bg-black/30">
             <div className="w-12 h-12 rounded-full bg-white/80 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-800" fill="currentColor" viewBox="0 0 24 24">
@@ -238,11 +302,14 @@ export default function VideoPlayer({ video }) {
                       </div>
                       <div className='w-full justify-between flex gap-1 bg-black/70 rounded-lg '>
                         {
-                          // test 
-                          images.map((img, idx) => {
-                            // if segment is empty then render 5 placeholder images /test images/
-                            return <img key={idx} src={img} alt={`Segment ${i + 1} preview ${idx + 1}`} className="rounded-md h-12 object-cover  min-w-0" />
-                          })
+                          images.map((img, idx) => (
+                            <PreviewImage
+                              key={idx}
+                              src={img}
+                              alt={`Segment ${i + 1} preview ${idx + 1}`}
+                              className="rounded-md h-12 min-w-0 flex-1"
+                            />
+                          ))
                         }
                       </div>
                       {segment.caption && <div className="text-text-muted text-sm mb-1"><Markdown>{segment.caption}</Markdown></div>}
