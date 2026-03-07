@@ -9,8 +9,6 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 120
     cache_enabled: false
-    create_summary_artifact: true
-    create_progress_artifact: false
 
   autoshot_detection:
     name: "Autoshot Segment Detection"
@@ -21,9 +19,7 @@ tasks:
     retries: 3
     retry_delay_seconds: 10
     timeout_seconds: 600
-    cache_enabled: true
-    create_summary_artifact: true
-    create_progress_artifact: true
+    cache_enabled: false
 
     additional_kwargs:
       model_name: "autoshot"
@@ -39,8 +35,6 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: false
-    create_summary_artifact: true
-    create_progress_artifact: true
 
     additional_kwargs:
       model_name: "Qwen/Qwen3-ASR-0.6B"
@@ -56,8 +50,6 @@ tasks:
     retry_delay_seconds: 10
     timeout_seconds: 600
     cache_enabled: false
-    create_summary_artifact: false
-    create_progress_artifact: false
 
   image_extraction:
     name: "Image Extraction"
@@ -69,5 +61,105 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: false
-    create_summary_artifact: true
-    create_progress_artifact: true
+
+  image_caption:
+    name: "Image Caption"
+    description: "Caption extracted video frames using a VLM via OpenRouter and persist as ImageCaptionArtifacts"
+    stage: "Analysis"
+    tags:
+      - "llm-service"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: false
+
+    additional_kwargs:
+      model: "qwen/qwen3-vl-32b-instruct"
+      base_url: "https://openrouter.ai/api/v1"
+
+  image_caption_embedding:
+    name: "Image Caption Embedding"
+    description: "Embed caption texts using mmBERT and persist as TextCaptionEmbeddingArtifacts"
+    stage: "Indexing"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 120
+    cache_enabled: false
+
+    additional_kwargs:
+      model_name: "mmbert"
+      base_url: "http://mmbert:8000"
+
+  image_caption_multimodal_embedding:
+    name: "Image Caption Multimodal Embedding"
+    description: "Embed caption source images using QwenVL and persist as ImageCaptionMultimodalEmbeddingArtifacts"
+    stage: "Indexing"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: false
+
+    additional_kwargs:
+      base_url: "http://qwen_vl_embedding:8080/embedding"
+
+  image_ocr:
+    name: "Image OCR"
+    description: "Run OCR on extracted video frames using LightON and persist as ImageOCRArtifacts"
+    stage: "Analysis"
+    tags:
+      - "ocr-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: false
+
+    additional_kwargs:
+      model_name: "ocr_lighton"
+      base_url: "http://ocr_lighton:8000"
+
+  image_embedding:
+    name: "Image Embedding"
+    description: "Embed extracted video frames using QwenVL and persist as ImageEmbeddingArtifacts"
+    stage: "Analysis"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: false
+
+    additional_kwargs:
+      base_url: "http://qwen_vl_embedding:8080/embedding"
+
+  qdrant_indexing:
+    name: "Qdrant Indexing"
+    description: "Upsert image, caption, and multimodal embeddings into Qdrant with dense + sparse indexing"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: false
+
+    additional_kwargs:
+      # Base name for Qdrant collections.
+      # Two collections will be created: <collection_base>_image and <collection_base>_caption
+      collection_base: "video_embeddings"
+
+      # Vector dimensionalities (used as fallback when artifact metadata is missing)
+      image_dim: 1536      # QwenVL visual embedding dim
+      caption_dim: 768     # mmBERT text embedding dim
+      mm_dim: 1536         # QwenVL multimodal embedding dim
+
+      # Store vectors on disk (useful for large-scale deployments)
+      on_disk: false
+
+      # Qdrant client timeout in seconds
+      qdrant_timeout: 30
+

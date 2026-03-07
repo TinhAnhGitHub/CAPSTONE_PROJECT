@@ -10,6 +10,9 @@ from typing import Literal
 _ENV_FILE = Path(__file__).parent.parent.parent.parent / '.env'
 print(_ENV_FILE)
 
+from dotenv import load_dotenv
+load_dotenv(_ENV_FILE)
+
 import yaml
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
