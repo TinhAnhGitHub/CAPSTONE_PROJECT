@@ -7,12 +7,29 @@ from loguru import logger
 from pydantic import BaseModel
 
 
+
+def normalize_ocr(text: str) -> str:
+    t = text.strip()
+
+    markers = [
+        "![image](image_1.png)",
+        "![image](image.png)",
+        "![image]",
+        "\n![image](image_1.png)",
+    ]
+
+    for mark in markers:
+        t = t.replace(mark, '')
+
+    return t
+
+
 class LightONOCRConfig(BaseModel):
     model_name: str = "ocr_lighton"
     base_url: str = "http://localhost:8011"
     system_prompt: str = (
-        "You are an OCR engine. Extract all text from the image exactly as it "
-        "appears. Return only the extracted text with no commentary."
+        "Extract all text from the image"
+        "appears. Return only the extracted text with no commentary. If no text, return empty"
     )
     max_tokens: int = 2048
 
@@ -65,7 +82,7 @@ class LightONOCRClient:
             logger.error(f"LightON OCR health check error: {e}")
             return False
 
-    async def _ocr_one(self, image_path: str | Path) -> str | None:
+    async def _ocr_one(self, image_path: str | Path) -> str:
         try:
             b64, mime = self._encode_image(image_path)
             session = await self._get_session()
@@ -73,17 +90,12 @@ class LightONOCRClient:
                 "model": self.model_name,
                 "max_tokens": self.max_tokens,
                 "messages": [
-                    {"role": "system", "content": self.system_prompt},
                     {
                         "role": "user",
                         "content": [
                             {
                                 "type": "image_url",
                                 "image_url": {"url": f"data:{mime};base64,{b64}"},
-                            },
-                            {
-                                "type": "text",
-                                "text": "Extract all text from this image.",
                             },
                         ],
                     },
@@ -97,23 +109,25 @@ class LightONOCRClient:
                 if resp.status != 200:
                     body = await resp.text()
                     logger.error(f"LightON OCR HTTP {resp.status}: {body}")
-                    return None
+                    raise RuntimeError(
+                        f"OCR HTTP {resp.status}: {body[:500]}"
+                    )
                 data = await resp.json()
-                return data["choices"][0]["message"]["content"]
+                return normalize_ocr(data["choices"][0]["message"]["content"])
         except Exception:
             logger.exception(f"LightON OCR failed for {image_path}")
-            return None
+            raise
 
-    async def ainfer(self, image_paths: list[str | Path]) -> list[str | None] | None:
+    async def ainfer(self, image_paths: list[str | Path]) -> list[str]:
         try:
             tasks = [self._ocr_one(p) for p in image_paths]
             return list(await asyncio.gather(*tasks))
         except Exception:
             logger.exception("LightON OCR ainfer failed")
-            return None
+            raise
 
     async def batch_ainfer(
         self, path_groups: list[list[str | Path]]
-    ) -> list[list[str | None] | None]:
+    ) -> list[list[str]]:
         tasks = [self.ainfer(group) for group in path_groups]
         return list(await asyncio.gather(*tasks))

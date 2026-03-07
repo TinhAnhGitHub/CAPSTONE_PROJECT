@@ -19,7 +19,7 @@ class QdrantConfig(BaseSettings):
 class QdrantIndexConfig(BaseModel):
     vector_size: int
     distance: Distance
-    on_disk: bool
-    hnsw_config: HnswConfigDiff
-    quantization_config: QuantizationConfig
+    on_disk: bool = False
+    hnsw_config: HnswConfigDiff | None = None
+    quantization_config: QuantizationConfig | None = None
     is_sparse: bool = Field(default=False)

@@ -1,44 +1,18 @@
 import asyncio
 import base64
 import httpx
-from typing import List
+import numpy as np
+from typing import List, Optional
 from pydantic import BaseModel
 from loguru import logger
 
-
 class QwenVLEmbeddingConfig(BaseModel):
-    model_name: str = "qwen3-vl-embedding-2b"
-    base_url: str = "http://localhost:8010"
-
+    base_url: str 
 
 class QwenVLEmbeddingClient:
     def __init__(self, config: QwenVLEmbeddingConfig):
         self.base_url = config.base_url.rstrip("/")
-        self.model_name = config.model_name
-        self._client: httpx.AsyncClient | None = None
-
-    async def check_health(self) -> bool:
-        try:
-            client = await self._get_client()
-            # Checking the models endpoint is the standard way to verify readiness
-            resp = await client.get(f"{self.base_url}/v1/models")
-            if resp.status_code == 200:
-                data = resp.json()
-                models = [m["id"] for m in data.get("data", [])]
-                if self.model_name in models:
-                    logger.success(
-                        f"QwenVL healthy. Model '{self.model_name}' is loaded."
-                    )
-                    return True
-                logger.warning(
-                    f"Server up, but model '{self.model_name}' not found in {models}"
-                )
-                return False
-            logger.error(f"Health check failed with status: {resp.status_code}")
-            return False
-        except Exception as e:
-            logger.error(f"Could not connect to QwenVL server: {e}")
-            return False
+        self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -49,45 +23,63 @@ class QwenVLEmbeddingClient:
         if self._client:
             await self._client.aclose()
 
-    async def ainfer_text(self, texts: List[str]) -> List[List[float]]:
-        client = await self._get_client()
-        payload = {"model": self.model_name, "input": texts, "encoding_format": "float"}
-
-        response = await client.post(f"{self.base_url}/v1/embeddings", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        return [item["embedding"] for item in data["data"]]
-
-    async def _infer_single_image(
-        self, image_bytes: bytes, text: str = ""
-    ) -> List[float]:
-        """
-        Internal helper to process a single image as a standalone request.
-        """
-        client = await self._get_client()
-        b64_image = base64.b64encode(image_bytes).decode("utf-8")
-
-        content = [
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpg;base64,{b64_image}"},
-            }
-        ]
-        if text:
-            content.append({"type": "text", "text": text})
+    async def _get_embedding(self, prompt_string: str, multimodal_data: List[str] | None = None) -> List[float]:
+        """Core async method to send request to the server and return a normalized embedding."""
+        if multimodal_data is None:
+            multimodal_data = []
 
         payload = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": content}],
+            "content": [
+                {
+                    "prompt_string": prompt_string,
+                    "multimodal_data": multimodal_data
+                }
+            ]
         }
 
-        response = await client.post(f"{self.base_url}/pooling", json=payload)
+        client = await self._get_client()
+        response = await client.post(self.base_url, json=payload)
         response.raise_for_status()
-        data = response.json()
-        return data["data"][0]["data"][0]
 
-    async def ainfer_image(
-        self, images: List[bytes], text: str = ""
-    ) -> List[List[float]]:
+        tokens = np.array(response.json()[0]["embedding"])  
+        vec = tokens[-1]                                    
+        vec = vec / np.linalg.norm(vec)                     
+
+        return vec.tolist()
+
+    async def ainfer_text(self, texts: List[str]) -> List[List[float]]:
+        """Process a list of texts concurrently and return their embeddings."""
+        tasks = []
+        for text in texts:
+            prompt = f"Represent for retrieval: {text}"
+            tasks.append(self._get_embedding(prompt))
+        return await asyncio.gather(*tasks)
+
+    async def _infer_single_image(self, image_bytes: bytes, text: str = "") -> List[float]:
+        """Internal helper to process a single image as a standalone request."""
+        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        
+        prompt_string = "Image:\n<__media__>\nRepresent for retrieval."
+        if text:
+            prompt_string = f"Image:\n<__media__>\nRepresent for retrieval: {text}"
+            
+        return await self._get_embedding(prompt_string, [b64_image])
+
+    async def ainfer_image(self, images: List[bytes], text: str = "") -> List[List[float]]:
+        """Process multiple images independently, returning one embedding per image."""
         tasks = [self._infer_single_image(img, text) for img in images]
         return await asyncio.gather(*tasks)
+        
+    async def ainfer_video(self, frames: List[bytes], text: str = "") -> List[float]:
+        """
+        Process multiple video frames into a SINGLE embedding, 
+        mirroring the logic in your MAIN PIPELINE.
+        """
+        b64_frames = [base64.b64encode(frame).decode('utf-8') for frame in frames]
+        media_tags = " ".join(["<__media__>"] * len(b64_frames)) 
+        
+        prompt_string = f"Video:\n{media_tags}\nRepresent for later on retrieval."
+        if text:
+            prompt_string += f" {text}"
+            
+        return await self._get_embedding(prompt_string, b64_frames)

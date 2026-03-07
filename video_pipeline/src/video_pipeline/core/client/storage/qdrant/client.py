@@ -12,7 +12,6 @@ from loguru import logger
 from .config import QdrantConfig, QdrantIndexConfig
 from .exception import QdrantClientError
 
-
 class QdrantStorageClient:
     def __init__(self, config: QdrantConfig) -> None:
         self.config = config
@@ -36,6 +35,8 @@ class QdrantStorageClient:
                 grpc_port=6334,
                 prefer_grpc=self.prefer_grpc,
             )
+
+            self._client.set_sparse_model(embedding_model_name="prithivida/Splade_PP_en_v1")
             logger.info("qdrant_client_connected", host=self.host, port=self.port)
         except Exception as e:
             logger.exception("qdrant_connection_failed", error=str(e))
@@ -63,52 +64,54 @@ class QdrantStorageClient:
         self,
         index_configs_list: list[QdrantIndexConfig],
         embedding_field_name_list: list[str],
-    ):  # -> dict[Any, Any]:
+    ) -> tuple[dict[str, VectorParams], dict[str, SparseVectorParams]]:
+        
         assert len(index_configs_list) == len(
             embedding_field_name_list
         ), "Index configs and field name length must be the same."
 
-        vector_configs = {}
+        vectors_config = {}
+        sparse_vectors_config = {}
 
-        for field_name, embed_config in zip(
-            embedding_field_name_list, index_configs_list
-        ):
+        for field_name, embed_config in zip(embedding_field_name_list, index_configs_list):
             if not embed_config.is_sparse:
-                vector_configs[field_name] = VectorParams(
+                vectors_config[field_name] = VectorParams(
                     size=embed_config.vector_size,
                     distance=embed_config.distance,
                     on_disk=embed_config.on_disk,
                     hnsw_config=embed_config.hnsw_config,
                     quantization_config=embed_config.quantization_config,
                 )
-                continue
-
-            vector_configs[field_name] = SparseVectorParams(
-                index=SparseIndexParams(on_disk=embed_config.on_disk)
-            )
-        return vector_configs
+            else:
+                sparse_vectors_config[field_name] = SparseVectorParams(
+                    index=SparseIndexParams(on_disk=embed_config.on_disk)
+                )
+                
+        return vectors_config, sparse_vectors_config
 
     async def create_collection_if_not_exists(
         self,
         index_configs_list: list[QdrantIndexConfig],
         embedding_field_name_list: list[str],
     ):
+        self.embedding_field_name = embedding_field_name_list
+        self.index_configs = index_configs_list
+
         try:
-            exists = await self.client.collection_exists(self.collection_name)
+            exists = await self.has_user_collection()
             if exists:
                 logger.info(f"Qdrant collection exist: {self.collection_name=}")
                 return
 
-            self.embedding_field_name = embedding_field_name_list
-            self.index_configs = index_configs_list
-
-            vector_configs = self.build_vector_config(
+            vectors_config, sparse_vectors_config = self.build_vector_config(
                 index_configs_list=index_configs_list,
                 embedding_field_name_list=embedding_field_name_list,
             )
 
             await self.client.create_collection(
-                collection_name=self.collection_name, vectors_config=vector_configs
+                collection_name=self.collection_name, 
+                vectors_config=vectors_config or None, 
+                sparse_vectors_config=sparse_vectors_config or None
             )
             logger.info(
                 f"Qdrant collection name created: {self.collection_name=}",
@@ -118,9 +121,26 @@ class QdrantStorageClient:
             raise QdrantClientError(f"Failed to create collection: {e}") from e
 
     async def insert_vectors(self, data: list[dict[str, Any]]) -> list[str]:
+        """
+        Data example Structure
+        [
+            {
+                "id": "1", 
+                "text_dense": [0.1, 0.2, 0.3, ...], 
+                "text_sparse": Document("This is my raw text document. Qdrant will encode it."), 
+                "meta_title": "Hello World"
+            },
+            {
+                "id": "2", 
+                "text_dense":[0.1, 0.2, 0.3, ...],
+                "text_sparse": Document("Another document about AI and databases."), 
+                "meta_title": "Another Document"
+            }
+        ]
+        """
         assert (
             self.embedding_field_name
-        ), "Embedding name list is empty. Please create the collection first!"
+        ), "Embedding name list is empty. Please call create_collection_if_not_exists first!"
         try:
             points = []
             for item in data:
@@ -139,6 +159,7 @@ class QdrantStorageClient:
                         payload[key] = value
 
                 points.append(PointStruct(id=point_id, vector=vectors, payload=payload))
+            
             await self.client.upsert(
                 collection_name=self.collection_name, points=points
             )
@@ -162,9 +183,7 @@ class QdrantStorageClient:
                 "status": info.status,
             }
         except Exception as e:
-            logger.exception(
-                "qdrant_stats_failed",
-            )
+            logger.exception("qdrant_stats_failed")
             raise QdrantClientError(f"Failed to get stats: {e}") from e
 
     async def has_user_collection(self) -> bool:

@@ -1,3 +1,4 @@
+import json
 import asyncio
 from loguru import logger
 from openai import AsyncOpenAI
@@ -41,9 +42,9 @@ class QwenASRClient:
                 file=f,
                 response_format="text"
             )
-        return response
+        return json.loads(response)
 
-    async def ainfer(self, audio_paths: list[str]) -> list[str] | None:
+    async def ainfer(self, audio_paths: list[str]) -> list[dict] | None:
         """
         Transcribe a list of audio files concurrently.
         """
@@ -68,3 +69,9 @@ class QwenASRClient:
 
     async def close(self):
         await self.client.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self.close()

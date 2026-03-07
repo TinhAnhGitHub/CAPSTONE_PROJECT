@@ -67,16 +67,21 @@ class MinioStorageClient:
     ) -> str:
         self._ensure_bucket(bucket)
 
-        put_kwargs: dict[str, Any] = dict(
-            bucket_name=bucket,
-            object_name=object_name,
-            data=file_obj,
-            content_type=content_type,
-            metadata=metadata,
-        )
+        current_pos = file_obj.tell()
+        file_obj.seek(0, os.SEEK_END)
+        length = file_obj.tell()
+        file_obj.seek(current_pos)
+
 
         try:
-            self.client.put_object(**put_kwargs)
+            self.client.put_object(
+                bucket_name=bucket,
+                object_name=object_name,
+                data=file_obj,
+                length=length,
+                content_type=content_type,
+                metadata=metadata, #type:ignore
+            )
             uri = f"s3://{bucket}/{object_name}"
             logger.info(f"Uploaded object {uri}")
             return uri
@@ -131,8 +136,15 @@ class MinioStorageClient:
     @asynccontextmanager
     async def fetch_object_from_s3(self, s3_url: str, suffix: str):
         parsed = urlparse(s3_url)
-        bucket = parsed.netloc
-        object_name = parsed.path.lstrip("/")
+        if parsed.scheme == "s3":
+            # s3://bucket/object
+            bucket = parsed.netloc
+            object_name = parsed.path.lstrip("/")
+        else:
+            # http(s)://host:port/bucket/object
+            path_parts = parsed.path.lstrip("/").split("/", 1)
+            bucket = path_parts[0]
+            object_name = path_parts[1] if len(path_parts) > 1 else ""
 
         loop = asyncio.get_running_loop()
 

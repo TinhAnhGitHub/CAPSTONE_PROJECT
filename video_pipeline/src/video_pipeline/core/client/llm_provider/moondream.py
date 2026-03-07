@@ -3,7 +3,7 @@ Moondream Vision API Client
 1. Standard API: real-time caption & detect (async, aiohttp)
 2. Batch API: bulk processing via multipart upload for large-scale workloads
 """
-
+from tqdm.asyncio import tqdm
 import asyncio
 import base64
 import json
@@ -44,8 +44,6 @@ class BatchStatus(BaseModel):
     progress: dict | None = None
     outputs: list[dict] | None = None
     error: dict | None = None
-
-
 
 
 class MoondreamClient:
@@ -283,7 +281,7 @@ class MoondreamClient:
             chunk_size = self.batch_chunk_size
             total = len(jsonl_content)
 
-            for part_num, offset in enumerate(range(0, total, chunk_size), start=1):
+            for part_num, offset in tqdm(enumerate(range(0, total, chunk_size), start=1)):
                 chunk = jsonl_content[offset : offset + chunk_size]
                 url = (
                     f"{self.base_url}/batch/{file_id}"

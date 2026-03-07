@@ -11,8 +11,8 @@ class OpenRouterConfig(BaseModel):
     api_key: str
     base_url: str = "https://openrouter.ai/api/v1"
     model: str = "google/gemini-2.5-flash-preview"
-    max_tokens: int = 2048
-    temperature: float = 0.7
+    max_tokens: int = 4096
+    temperature: float = 0.6
     timeout: int = 120
 
 
@@ -278,7 +278,7 @@ class OpenRouterClient:
 
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def _limited(url: str, prompt: str):
+        async def _limited(url: str, prompt: str) -> OpenRouterResult | None:
             async with semaphore:
                 return await self.ainfer_image(
                     url, prompt=prompt, system_prompt=system_prompt, **kwargs
