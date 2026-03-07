@@ -3,8 +3,7 @@ import uuid
 from bson import ObjectId
 from prefect.deployments import run_deployment
 
-DEPLOYMENT_NAME = "Single Video Processing Flow/local-deployment"
-
+DEPLOYMENT_NAME = "Single Video Processing Flow/poc-deployment"
 
 async def trigger_video_pipeline(
     video_s3_path: str,
@@ -12,7 +11,7 @@ async def trigger_video_pipeline(
     timeout: int = 300,
 ):
     video_id = str(ObjectId())
-    user_id = str(uuid.uuid4())
+    user_id = "tinhanhuser"
 
     result = await run_deployment(  # type: ignore
         name=DEPLOYMENT_NAME,
@@ -48,11 +47,11 @@ async def trigger_concurrent(video_paths: list[str], timeout: int = 300):
         if isinstance(result, Exception):
             print(f"     FAILED: {result}")
         else:
-            run = result["flow_run"]
-            print(f"     video_id : {result['video_id']}")
-            print(f"     user_id  : {result['user_id']}")
-            print(f"     run name : {run.name}")
-            print(f"     state    : {run.state_name}")
+            run = result["flow_run"] #type:ignore
+            print(f"     video_id : {result['video_id']}") #type:ignore
+            print(f"     user_id  : {result['user_id']}") #type:ignore
+            print(f"     run name : {run.name}") #type:ignore
+            print(f"     state    : {run.state_name}") #type:ignore
         print()
 
     return results

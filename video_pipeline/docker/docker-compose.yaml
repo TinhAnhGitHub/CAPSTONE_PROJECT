@@ -77,8 +77,8 @@ services:
   
   # prefect-worker:
   #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.worker
+  #     context: ..
+  #     dockerfile: docker/Dockerfile.worker
   #   depends_on:
   #     prefect-server:
   #       condition: service_healthy
@@ -90,12 +90,12 @@ services:
   #     PREFECT_API_URL: http://prefect-server:4200/api
 
   #   volumes:
-  #     - .:/app
+  #     - ..:/app
 
   #   working_dir: /app
   #   entrypoint: >
   #     bash -c "
-  #     ./prefect-init.sh &&
+  #     cd /app && ./scripts/prefect-init.sh &&
   #     prefect worker start --pool local-pool
   #     "
   #   restart: "on-failure"
@@ -103,8 +103,8 @@ services:
 
   prefect-worker-poc:
     build:
-      context: .
-      dockerfile: Dockerfile.worker
+      context: ..
+      dockerfile: docker/Dockerfile.worker
     depends_on:
       prefect-server:
         condition: service_healthy
@@ -115,11 +115,11 @@ services:
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
     volumes:
-      - .:/app
+      - ..:/app
     working_dir: /app
     entrypoint: >
       bash -c "
-      ./prefect-init.poc.sh &&
+      cd /app && ./scripts/prefect-init.poc.sh &&
       prefect worker start --pool poc-pool
       "
     restart: "on-failure"
@@ -130,8 +130,8 @@ services:
 
   video-pipeline-api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ..
+      dockerfile: docker/Dockerfile.api
     depends_on:
       prefect-server:
         condition: service_healthy
