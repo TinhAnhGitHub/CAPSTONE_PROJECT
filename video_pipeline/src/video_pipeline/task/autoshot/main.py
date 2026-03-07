@@ -1,9 +1,12 @@
 from __future__ import annotations
+import re
 import tempfile
 import numpy as np
 from prefect import get_run_logger, task
+from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
 
-from video_pipeline.task.base.base_task import TaskExecutionContext, BaseTask, TaskConfig
+from video_pipeline.task.base.base_task import BaseTask, TaskConfig
+from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import VideoArtifact, AutoshotArtifact
 from video_pipeline.core.client.inference.autoshot_client import AutoShotClient, AutoshotConfig
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
@@ -18,18 +21,14 @@ from .helper import (
     postprocess_output_client,
     predictions_to_scenes,
 )
-
-
 AUTOSHOT_CONFIG = TaskConfig.from_yaml("autoshot_detection")
 
-
+@StageRegistry.register
 class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
-
-    config = AUTOSHOT_CONFIG
 
     async def preprocess(
         self, input_data: VideoArtifact
-    ) -> list[tuple[np.ndarray, VideoArtifact]]:
+    ) -> tuple[np.ndarray, VideoArtifact]:
         """Extract frames from video for autoshot processing.
 
         Args:
@@ -50,13 +49,12 @@ class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
             tmp_file.flush()
             frames = get_frames_fast(tmp_file.name)
 
-        return [(frames, input_data)]
+        return (frames, input_data)
 
-    async def execute_single(
+    async def execute(
         self,
-        item: tuple[np.ndarray, VideoArtifact],
+        preprocessed: tuple[np.ndarray, VideoArtifact],
         client: AutoShotClient,
-        context: TaskExecutionContext,
     ) -> tuple[np.ndarray, VideoArtifact]:
         """Run autoshot inference on video frames.
 
@@ -71,7 +69,7 @@ class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
         Raises:
             ValueError: If autoshot client returns None
         """
-        frames, artifact = item
+        frames, artifact = preprocessed
         results = []
 
         for batch in get_batches(frames=frames):
@@ -113,36 +111,84 @@ class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
 
         return autoshot_artifact
 
-    def format_result(self, result: AutoshotArtifact) -> str:
-        """Format AutoshotArtifact into Markdown for summary artifact.
+    @staticmethod
+    async def summary_artifact(final_result: AutoshotArtifact) -> None:
+        """Create a Prefect markdown artifact summarising autoshot detection results."""
+        segments: list = (
+            final_result.metadata.get("segments", []) if final_result.metadata else []
+        )
+        fps = final_result.related_video_fps
 
-        Args:
-            result: Autoshot artifact to format
+        raw_key = f"autoshot-{final_result.related_video_id}".lower()
+        key = re.sub(r"[^a-z0-9-]", "-", raw_key)
 
-        Returns:
-            Markdown formatted string
-        """
-        segments = result.metadata.get("segments", [])  # type: ignore
-        segment_count = len(segments)
+        shot_rows = ""
+        for i, seg in enumerate(segments):
+            start_frame, end_frame = seg[0], seg[1]
+            start_ts = f"{start_frame / fps:.2f}s" if fps else "N/A"
+            end_ts = f"{end_frame / fps:.2f}s" if fps else "N/A"
+            shot_rows += f"| {i + 1} | {start_frame} | {end_frame} | {start_ts} | {end_ts} |\n"
 
-        preview_segments = segments[:5]
-        preview_str = ", ".join(
-            [f"[{round(s[0], 2)}s → {round(s[1], 2)}s]" for s in preview_segments]
+        shots_table = (
+f"## Detected Shots ({len(segments)})\n\n"
+f"| # | Start Frame | End Frame | Start Time | End Time |\n"
+f"|---|-------------|-----------|------------|----------|\n"
+f"{shot_rows}"
+        ) if segments else "## Detected Shots\n\n_No shots detected._\n"
+
+        markdown = (
+f"# Autoshot Detection Summary\n\n"
+f"| Field | Value |\n"
+f"|-------|-------|\n"
+f"| **Artifact ID** | `{final_result.artifact_id}` |\n"
+f"| **Related Video ID** | `{final_result.related_video_id}` |\n"
+f"| **User ID** | `{final_result.user_id}` |\n"
+f"| **Extension** | `{final_result.related_video_extension}` |\n"
+f"| **FPS** | `{fps}` |\n"
+f"| **Total Shots** | `{len(segments)}` |\n\n"
+f"{shots_table}"
         )
 
-        return f"""### Autoshot Result
+        await acreate_markdown_artifact(
+            key=key,
+            markdown=markdown,
+            description=f"Autoshot detection summary for video {final_result.related_video_id}",
+        )
 
-- **Video ID:** `{result.related_video_id}`
-- **FPS:** {result.related_video_fps}
-- **Total Segments:** {segment_count}
-- **First 5 Segments:** {preview_str}
-"""
+        await acreate_table_artifact(
+            table=[
+                {"Field": "Artifact ID", "Value": str(final_result.artifact_id)},
+                {"Field": "Related Video ID", "Value": str(final_result.related_video_id)},
+                {"Field": "User ID", "Value": str(final_result.user_id)},
+                {"Field": "Extension", "Value": str(final_result.related_video_extension)},
+                {"Field": "FPS", "Value": str(fps)},
+                {"Field": "Total Shots", "Value": str(len(segments))},
+            ],
+            key=f"{key}-summary-table",
+            description=f"Autoshot summary table for video {final_result.related_video_id}",
+        )
+
+        if segments:
+            shots_table = [
+                {
+                    "#": i + 1,
+                    "Start Frame": seg[0],
+                    "End Frame": seg[1],
+                    "Start Time": f"{seg[0] / fps:.2f}s" if fps else "N/A",
+                    "End Time": f"{seg[1] / fps:.2f}s" if fps else "N/A",
+                }
+                for i, seg in enumerate(segments)
+            ]
+            await acreate_table_artifact(
+                table=shots_table,
+                key=f"{key}-shots-table",
+                description=f"Detected shots for video {final_result.related_video_id}",
+            )
 
 
 @task(**AUTOSHOT_CONFIG.to_task_kwargs())
 async def autoshot_task(
     video_artifact: VideoArtifact,
-    context: TaskExecutionContext,
 ) -> AutoshotArtifact:
     logger = get_run_logger()
 
@@ -179,37 +225,9 @@ async def autoshot_task(
 
     task_impl = AutoshotTask(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
-        minio_client=MinioStorageClient(
-            endpoint=settings.minio.endpoint,
-            access_key=settings.minio.access_key,
-            secret_key=settings.minio.secret_key,
-            secure=settings.minio.secure,
-        ),
+        minio_client=minio_client
     )
-
-    all_produced_artifacts: list[AutoshotArtifact] = []
-
-    logger.info(f"[AutoshotTask] Connecting to Triton at {settings.triton.url}...")
     async with AutoShotClient(url=settings.triton.url, config=autoshot_config) as client:
-        logger.info("[AutoshotTask] Preprocessing — extracting frames from video...")
-        preprocessed = await task_impl.preprocess(input_data=video_artifact)
-        logger.info(f"[AutoshotTask] Preprocessing done — {len(preprocessed)} batch(es) ready for inference")
+        artifact = await task_impl.execute_template(video_artifact, client)
 
-        async for result in task_impl.execute(preprocessed, client, context):
-            artifact = await task_impl.postprocess(result)
-            all_produced_artifacts.append(artifact)
-            segments = artifact.metadata.get("segments", []) if artifact.metadata else []
-            logger.info(
-                f"[AutoshotTask] Artifact persisted | "
-                f"video_id={artifact.related_video_id} shots={len(segments)}"
-            )
-
-            
-
-    await task_impl.create_summary_artifact(all_produced_artifacts, context)
-    logger.info(
-        f"[AutoshotTask] Complete | {len(all_produced_artifacts)} artifact(s) | "
-        f"total_time={context.total_time_ms:.0f}ms"
-    )
-
-    return all_produced_artifacts[0] #intentional: ignore
+    return artifact

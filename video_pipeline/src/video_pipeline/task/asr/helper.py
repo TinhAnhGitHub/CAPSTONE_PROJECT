@@ -8,8 +8,12 @@ import ffmpeg
 
 def split_minio_url(uri: str) -> tuple[str, str]:
     parsed = urlparse(uri)
-    bucket = parsed.netloc
-    object_name = parsed.path.lstrip("/")
+    if parsed.scheme == "s3":
+        return parsed.netloc, parsed.path.lstrip("/")
+    # http(s)://host:port/bucket/object
+    path_parts = parsed.path.lstrip("/").split("/", 1)
+    bucket = path_parts[0]
+    object_name = path_parts[1] if len(path_parts) > 1 else ""
     return bucket, object_name
 
 
@@ -85,5 +89,5 @@ def parse_asr_response(raw: str) -> str:
     Returns::
         "Hello world.你好。"
     """
-    text = re.sub(r"language \w+<asr_text>", "", raw)
+    text = re.sub(r"language\s+[^<]+<asr_text>", "", raw)
     return text.strip()

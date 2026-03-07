@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel
 
 from prefect import get_run_logger, task
+from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
 
 from video_pipeline.task.base.base_task import (
-    TaskExecutionContext,
     BaseTask,
     TaskConfig,
 )
+from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import VideoArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
@@ -32,20 +35,16 @@ class VideoInput(BaseModel):
 VIDEO_CONFIG = TaskConfig.from_yaml("video_registration")
 
 
+@StageRegistry.register
 class VideoRegistryTask(BaseTask[VideoInput, VideoArtifact]):
-    """Task implementation for video registration and metadata extraction."""
-
-    config = VIDEO_CONFIG
-
-    async def preprocess(self, input_data: VideoInput) -> list[VideoInput]:
+    async def preprocess(self, input_data: VideoInput) -> VideoInput:
         """Wrap single video input into a list for execution."""
-        return [input_data]
+        return input_data
 
-    async def execute_single(
+    async def execute(
         self,
-        item: VideoInput,
+        preprocessed: VideoInput,
         client: None,
-        context: TaskExecutionContext,
     ) -> VideoArtifact:
         """Extract video metadata and create artifact.
 
@@ -58,13 +57,13 @@ class VideoRegistryTask(BaseTask[VideoInput, VideoArtifact]):
             VideoArtifact with extracted metadata
         """
         logger = get_run_logger()
-        logger.info(f"Processing video: {item.video_id} from {item.video_s3_url}")
+        logger.info(f"Processing video: {preprocessed.video_id} from {preprocessed.video_s3_url}")
 
-        _, object_name = parse_s3_url(item.video_s3_url)
-        video_extension = extract_extension(item.video_s3_url)
+        bucket, object_name = parse_s3_url(preprocessed.video_s3_url)
+        video_extension = extract_extension(preprocessed.video_s3_url)
 
         async with self.minio_client.fetch_object_from_s3(
-            s3_url=item.video_s3_url,
+            s3_url=preprocessed.video_s3_url,
             suffix=f".{video_extension}",
         ) as video_tmp_path:
             fps = get_video_fps(video_tmp_path)
@@ -73,11 +72,11 @@ class VideoRegistryTask(BaseTask[VideoInput, VideoArtifact]):
         metadata = {"fps": fps, "extension": video_extension, "duration": duration}
 
         video_artifact = VideoArtifact(
-            artifact_id=item.video_id,
-            user_id=item.user_id,
-            video_id=item.video_id,
+            artifact_id=preprocessed.video_id,
+            user_id=preprocessed.user_id,
+            video_id=preprocessed.video_id,
             video_extension=video_extension,
-            video_minio_url=item.video_s3_url,
+            video_minio_url=f"s3://{bucket}/{object_name}",
             fps=fps,
             object_name=object_name,
             metadata=metadata,
@@ -96,33 +95,55 @@ class VideoRegistryTask(BaseTask[VideoInput, VideoArtifact]):
         await self.artifact_visitor.visit_artifact(result)
         return result
 
-    def format_result(self, result: VideoArtifact) -> str:
-        """Format VideoArtifact into Markdown for summary artifact.
+    @staticmethod
+    async def summary_artifact(final_result: VideoArtifact) -> None:
+        """Create a Prefect markdown artifact summarising video registration results."""
+        duration = (
+            final_result.metadata.get("duration", "N/A")
+            if final_result.metadata
+            else "N/A"
+        )
 
-        Args:
-            result: Video artifact to format
+        raw_key = f"video-reg-{final_result.video_id}".lower()
+        key = re.sub(r"[^a-z0-9-]", "-", raw_key)
 
-        Returns:
-            Markdown formatted string
-        """
-        duration = result.metadata.get("duration") #type:ignore
-        fps = result.fps
+        markdown = (
+f"# Video Registration Summary\n\n"
+f"| Field | Value |\n"
+f"|-------|-------|\n"
+f"| **Video ID** | `{final_result.video_id}` |\n"
+f"| **User ID** | `{final_result.user_id}` |\n"
+f"| **Extension** | `{final_result.video_extension}` |\n"
+f"| **FPS** | `{final_result.fps}` |\n"
+f"| **Duration** | `{duration}s` |\n"
+f"| **MinIO URL** | `{final_result.video_minio_url}` |\n"
+f"| **Artifact ID** | `{final_result.artifact_id}` |\n"
+        )
 
-        return f"""### Video `{result.video_id}`
+        await acreate_markdown_artifact(
+            key=key,
+            markdown=markdown,
+            description=f"Video registration summary for video {final_result.video_id}",
+        )
 
-- **User ID:** `{result.user_id}`
-- **Object Name:** `{result.object_name}`
-- **Extension:** `{result.video_extension}`
-- **FPS:** `{fps}`
-- **Duration:** `{duration}` seconds
-- **MinIO URL:** `{result.video_minio_url}`
-"""
+        await acreate_table_artifact(
+            table=[
+                {"Field": "Video ID", "Value": str(final_result.video_id)},
+                {"Field": "User ID", "Value": str(final_result.user_id)},
+                {"Field": "Extension", "Value": str(final_result.video_extension)},
+                {"Field": "FPS", "Value": str(final_result.fps)},
+                {"Field": "Duration", "Value": f"{duration}s"},
+                {"Field": "MinIO URL", "Value": str(final_result.video_minio_url)},
+                {"Field": "Artifact ID", "Value": str(final_result.artifact_id)},
+            ],
+            key=f"{key}-table",
+            description=f"Video registration table for video {final_result.video_id}",
+        )
 
 
 @task(**VIDEO_CONFIG.to_task_kwargs())
 async def video_reg_task(
     video_input: VideoInput,
-    context: TaskExecutionContext,
 ) -> VideoArtifact:
     """Prefect task for video registration.
 
@@ -168,29 +189,8 @@ async def video_reg_task(
         minio_client=minio_client
     )
 
-    all_produced_artifacts: list[VideoArtifact] = []
-
     logger.info("[VideoRegTask] Preprocessing input...")
     preprocessed = await task_impl.preprocess(input_data=video_input)
-    logger.info(f"[VideoRegTask] Preprocessing done — {len(preprocessed)} item(s) to process")
-
-    async for result in task_impl.execute(
-        preprocessed=preprocessed,
-        client=None,
-        context=context,
-    ):
-        artifact = await task_impl.postprocess(result)
-        all_produced_artifacts.append(artifact)
-        logger.info(
-            f"[VideoRegTask] Artifact persisted | "
-            f"video_id={artifact.video_id} fps={artifact.fps} "
-            f"ext={artifact.video_extension} duration={artifact.metadata.get('duration')}s"
-        )
-
-    await task_impl.create_summary_artifact(all_produced_artifacts, context)
-    logger.info(
-        f"[VideoRegTask] Complete | {len(all_produced_artifacts)} artifact(s) produced | "
-        f"total_time={context.total_time_ms:.0f}ms"
-    )
-
-    return all_produced_artifacts[0]
+    result = await task_impl.execute(preprocessed, client=None)
+    artifact = await task_impl.postprocess(result)
+    return artifact

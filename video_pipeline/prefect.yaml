@@ -5,3 +5,10 @@ deployments:
       name: local-pool
     parameters: {}
     concurrency_limit: null
+
+  - name: poc-deployment
+    entrypoint: src/video_pipeline/flow/submain.py:single_video_processing_flow
+    work_pool:
+      name: poc-pool
+    parameters: {}
+    concurrency_limit: null

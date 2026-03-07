@@ -1,33 +1,46 @@
 [project]
 name = "video_pipeline"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "Video Pipeline Ingestion"
 readme = "README.md"
 requires-python = ">=3.12"
+
 dependencies = [
     "aiohttp>=3.13.3",
     "asyncpg>=0.31.0",
-    "av>=16.1.0",
+    "dotenv>=0.9.9",
     "fastapi>=0.129.0",
-    "ffmpeg-python>=0.2.0",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
-    "minio>=7.2.20",
-    "numpy<2",
-    "openai>=2.21.0",
-    "opencv-python>=4.11.0.86",
-    "pillow>=12.1.1",
-    "prefect[dask]>=3.6.18",
+    "prefect>=3.6.18",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
     "pyyaml>=6.0.3",
-    "qdrant-client>=1.12.1",
     "requests>=2.32.5",
     "sqlalchemy>=2.0.46",
-    "torch>=2.10.0",
-    "tritonclient>=2.65.0",
     "urllib3>=2.6.3",
+    "uvicorn>=0.41.0",
 ]
+
+
+[project.optional-dependencies]
+worker = [
+    "av>=16.1.0",
+    "ffmpeg-python>=0.2.0",
+    "llm-json>=0.1.5",
+    "minio>=7.2.20",
+    "numpy<2",
+    "openai>=2.21.0",
+    "fastembed>=0.2.7",
+    "opencv-python>=4.11.0.86",
+    "pillow>=12.1.1",
+    "prefect[dask]>=3.6.18",
+    "qdrant-client>=1.12.1",
+    "tritonclient>=2.65.0",
+]
+
+[project.scripts]
+video-pipeline-api = "video_pipeline.api.app:main"
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -10,11 +10,17 @@ from urllib.parse import urlparse
 
 
 def parse_s3_url(s3_url: str) -> tuple[str, str]:
+    """Return (bucket, object_name) from an s3:// or http(s):// MinIO URL."""
     parsed = urlparse(s3_url)
-    return parsed.netloc, parsed.path.lstrip("/")
+    path_parts = parsed.path.lstrip("/").split("/", 1)
+    bucket = path_parts[0]
+    object_name = path_parts[1] if len(path_parts) > 1 else ""
+    return bucket, object_name
 
-def extract_extension(s3_link:str) ->str:
-    return s3_link.split('.')[-1]
+def extract_extension(s3_link: str) -> str:
+    """Extract file extension, ignoring query parameters."""
+    path = urlparse(s3_link).path
+    return path.rsplit(".", 1)[-1]
 
 def valid_video_files(file: UploadFile) -> bool:
     video_mime_types = {

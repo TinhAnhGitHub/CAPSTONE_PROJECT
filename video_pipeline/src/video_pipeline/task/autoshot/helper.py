@@ -1,5 +1,3 @@
-import torch
-from contextlib import contextmanager
 from typing import Iterator
 import ffmpeg
 import numpy as np
@@ -98,12 +96,10 @@ def preprocess_input_client(batch: np.ndarray):
     return batch
 
 def postprocess_output_client(one_hot: np.ndarray) -> np.ndarray:
-    tensor = torch.tensor(one_hot)
+    if isinstance(one_hot, tuple):
+        one_hot = one_hot[0]
 
-    if isinstance(tensor, tuple):
-        tensor = tensor[0]
-
-    prediction = torch.sigmoid(tensor[0]).cpu().numpy()
+    prediction = 1 / (1 + np.exp(-one_hot[0]))
     return prediction[25:75]
 
 
