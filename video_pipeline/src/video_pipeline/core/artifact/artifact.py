@@ -136,6 +136,22 @@ class SegmentCaptionArtifact(BaseArtifact):
         return f"caption/segment/{self.related_video_id}/{self.start_frame}_{self.end_frame}_{self.start_timestamp}_{self.end_timestamp}.json"
 
 
+class ImageOCRArtifact(BaseArtifact):
+    frame_index: int
+    time_stamp: str
+    related_video_id: str
+    related_video_fps: float
+    extension: str
+    image_minio_url: str
+    image_id: str
+
+    def construct_object_name(self) -> str:
+        return f"ocr/image/{self.related_video_id}/{self.frame_index:08d}_{self.time_stamp}.json"
+
+    def _build_lineage_parents(self) -> list[str]:
+        return [self.image_id]
+
+
 class ImageCaptionArtifact(BaseArtifact):
     frame_index: int
     time_stamp: str
@@ -183,6 +199,23 @@ class TextCaptionEmbeddingArtifact(BaseArtifact):
 
     def construct_object_name(self) -> str | None:
         return f"embedding/image_caption/{self.related_video_id}/{self.frame_index:08d}_{self.time_stamp}.npy"
+
+
+class ImageCaptionMultimodalEmbeddingArtifact(BaseArtifact):
+    time_stamp: str
+    related_frame_fps: float
+    frame_index: int
+    related_video_id: str
+    image_caption_minio_url: str
+    caption_id: str
+    image_id: str
+    image_minio_url: str
+
+    def _build_lineage_parents(self) -> list[str]:
+        return [self.caption_id]
+
+    def construct_object_name(self) -> str:
+        return f"embedding/multimodal_caption/{self.related_video_id}/{self.frame_index:08d}_{self.time_stamp}.npy"
 
 
 class TextCapSegmentEmbedArtifact(BaseArtifact):
