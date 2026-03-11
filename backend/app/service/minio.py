@@ -85,11 +85,7 @@ class MinioService:
                 part_size=10 * 1024 * 1024,
                 content_type="video/mp4",
             )
-            video_url = self.minio_client.presigned_get_object(
-                bucket_name="videos",
-                object_name=object_name,
-                expires=timedelta(days=7),
-            )
+            video_url = self.generate_video_link(video_id)
             # video_url = f"s3://videos/{object_name}"
             thumbnail_url, length, fps = self.generate_thumbnail(video_bytes, video_id)
 
@@ -237,3 +233,6 @@ class MinioService:
 
     def generate_thumbnail_link(self, video_id, frame_index):
         return f"http://100.113.186.28:9000/thumbnails/{video_id}_{frame_index}.jpg"
+
+    def generate_video_link(self, video_id):
+        return f"http://100.113.186.29:9000/videos/{video_id}.mp4"
