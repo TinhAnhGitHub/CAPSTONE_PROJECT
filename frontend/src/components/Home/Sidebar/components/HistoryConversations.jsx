@@ -9,6 +9,8 @@ import SessionDropdownList from './SessionDropdownList';
 import { PencilSquareIcon } from '@heroicons/react/20/solid';
 import { useCreateNewChat } from '@/api/services/hooks/query';
 import ChatHistory from './ChatHistory';
+import SearchDialog from './SearchDialog';
+import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 
 export default function HistoryConversations() {
   const chatHistory = useStoreChat((state) => state.chatHistory);
@@ -42,6 +44,7 @@ export default function HistoryConversations() {
     createNewChatMutation.mutate();
   }
 
+  const [searchOpen, setSearchOpen] = useState(false);
 
   function handleEditChat(chatId, newName) {
     // Update local state optimistically
@@ -55,15 +58,22 @@ export default function HistoryConversations() {
 
 
   return (
-    <div className='relative flex flex-col h-full'>
+    <div className='relative flex flex-col h-full '>
       {/* New Chat Button */}
-      <div className='sticky flex top-0 px-2 py-2 border-b border-surface-light h-14'>
+      <div className='sticky flex gap-2  top-0 px-2 py-2 border-b border-surface-light h-14'>
         <button
           onClick={createNewChat}
           className='flex items-center gap-2 self-center w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
         >
           <PencilSquareIcon className="w-5 h-5" />
           <span>New Chat</span>
+        </button>
+        <button
+          onClick={() => setSearchOpen(true)}
+          className='flex items-center justify-center self-center px-3 py-2 rounded-lg bg-surface-hover hover:bg-surface-light text-text-muted hover:text-text transition-colors cursor-pointer'
+          title='Search chats'
+        >
+          <MagnifyingGlassIcon className="w-5 h-5" />
         </button>
       </div>
 
@@ -83,6 +93,8 @@ export default function HistoryConversations() {
           }
         </div>
       </div>
+
+      <SearchDialog isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   )
 }

@@ -70,6 +70,8 @@ export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const playerRef = useRef(null)
 
+  console.log(video)
+
   const setOverrideVideos = useStore((state) => state.setOverrideVideos)
   const overrideVideos = useStore((state) => state.overrideVideos)
   const openVideoModal = () => {
@@ -267,7 +269,7 @@ export default function VideoPlayer({ video }) {
             <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
             {/* settings like, save allkeyframes, save all images from keyframe */}
             <div className='m-2'>
-              <SaveKeyframes segments={video.segments} />
+              <SaveKeyframes segments={video.segments} videoId={video.video_id} videoName={video.title} />
             </div>
           </div>
           {/* 1 part */}

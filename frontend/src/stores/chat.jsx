@@ -54,6 +54,10 @@ export const useStore = create(
             sidebarOpen: false,
             setSidebarOpen: (open) => set({ sidebarOpen: open }),
             toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
+
+            targetMessageId: null,
+            setTargetMessageId: (id) => set({ targetMessageId: id }),
+            clearTargetMessageId: () => set({ targetMessageId: null }),
         }),
         {
             name: "chatState", // key in localStorage

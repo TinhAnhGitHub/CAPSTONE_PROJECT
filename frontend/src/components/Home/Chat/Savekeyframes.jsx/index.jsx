@@ -14,23 +14,30 @@ import { DocumentTextIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import JSZip from 'jszip';
 
 export default function SaveKeyframes({ segments, videoId, videoName }) {
+    console.log("SaveKeyframes segments:", segments);
 
-    const handleSaveImages = () => {
-        const imageUrls = segments.map(segment => segment.preview_images?.[2])
+    const handleSaveImages = async () => {
+        const imageUrls = segments.map(segment => segment.preview_images?.[2]).filter(Boolean)
+    
         const zip = new JSZip();
         const imgFolder = zip.folder("keyframe_images");
-        imageUrls.forEach((url, index) => {
-            if (url) {
-                imgFolder.file(`keyframe_${index + 1}.jpg`, url.split(',')[1], { base64: true });
-            }
-        });
-        zip.generateAsync({ type: "blob" }).then((content) => {
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(content);
-            link.download = "keyframe_images.zip";
-            link.click();
-        });
-    }
+
+        await Promise.all(
+            imageUrls.map(async (url, index) => {
+                const response = await fetch(url);
+                const blob = await response.blob();
+
+                imgFolder.file(`${videoName}_${videoId}_${index + 1}.jpg`, blob);
+            })
+        );
+
+        const content = await zip.generateAsync({ type: "blob" });
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(content);
+        link.download = "keyframe_images.zip";
+        link.click();
+    };
 
     const handleSaveTextFiles = () => {
         // create a text file with the keyframe information, by dumping the segments data into a text file
@@ -38,7 +45,7 @@ export default function SaveKeyframes({ segments, videoId, videoName }) {
         const blob = new Blob([textContent], { type: 'text/plain' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'keyframe_info.txt';
+        link.download = `${videoName}_${videoId}.txt`;
         link.click();
     }
 

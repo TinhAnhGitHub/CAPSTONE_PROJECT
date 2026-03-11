@@ -159,6 +159,17 @@ async def get_chat_history(user_service: UserServiceDep, user=Depends(verify_tok
     return {"chats": chats}
 
 
+@router.get("/chat-history/search")
+async def search_chat_history(
+    user_service: UserServiceDep,
+    query_text: str = Query(..., description="Search query for chat history"),
+    user=Depends(verify_token),
+):
+    user_id = user["user_id"]
+    search_results = await user_service.search_text_messages(user_id, query_text)
+    return {"results": search_results}
+
+
 @router.get("/chat-history/{session_id}")
 async def get_chat_detail(session_id: str, user_service: UserServiceDep):
     chat = await user_service.get_user_chat_detail(session_id)

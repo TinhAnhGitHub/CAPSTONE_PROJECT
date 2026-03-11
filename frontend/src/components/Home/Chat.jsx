@@ -34,6 +34,8 @@ export default function Chat() {
 
   const getSessionId = useStoreChat((state) => state.getSessionId);
   const session_id = useStoreChat((state) => state.session_id);
+  const targetMessageId = useStoreChat((state) => state.targetMessageId);
+  const clearTargetMessageId = useStoreChat((state) => state.clearTargetMessageId);
   const user = useStore((state) => state.user);
   const userId = user?.id;
 
@@ -64,6 +66,21 @@ export default function Chat() {
       bottomRef.current?.scrollIntoView({ behavior: 'instant' });
     });
   }, [session_id]);
+
+  // Scroll to a specific message when targetMessageId is set (from search)
+  useEffect(() => {
+    if (!targetMessageId || chatMessages.length === 0) return;
+    // Wait for DOM to render
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-message-id="${targetMessageId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('animate-highlight-pulse');
+        setTimeout(() => el.classList.remove('animate-highlight-pulse'), 2000);
+        clearTargetMessageId();
+      }
+    });
+  }, [targetMessageId, chatMessages]);
 
   // báo join session, mà hình như api bên be có tự động check on session hay sao
   useEffect(() => {
@@ -343,7 +360,7 @@ export default function Chat() {
         {/* Centered content container with max-width */}
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-3 py-6">
           {chatMessages.map((m, i) => (
-            <div key={i} className='w-full flex flex-col'>
+            <div key={i} data-message-id={m._id} className='w-full flex flex-col'>
               {m.blocks.map((block, j) => (
                 <BlockRenderer key={`${i}-${j}`} block={block} role={m.role} isLastMessage={i === chatMessages.length - 1} />
               ))}

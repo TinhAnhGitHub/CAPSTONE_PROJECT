@@ -18,7 +18,7 @@ export function useVideos(groupId, sessionId) {
     });
 }
 
-export function useRenameVideo(){
+export function useRenameVideo() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({ videoId, newName }) =>
@@ -176,3 +176,16 @@ export const useRenameGroup = () => {
         },
     });
 };
+
+export const useSearchChatHistory = (searchTerm) => {
+    return useQuery({
+        queryKey: ['searchChatHistory', searchTerm],
+        queryFn: async () => {
+            const res = await api.get('/api/user/chat-history/search', {
+                params: { query_text: searchTerm },
+            });
+            return res.data.results;
+        },
+        enabled: !!searchTerm,
+    });
+}

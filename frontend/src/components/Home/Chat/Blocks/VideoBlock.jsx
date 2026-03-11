@@ -27,7 +27,7 @@ export default function VideoBlock({ block }) {
         : block.segments;
 
     return (
-        <div className="grid grid-cols-3 gap-2 py-2 px-4">
+        <div className="grid max-md:grid-cols-2 grid-cols-3 gap-2 py-2 px-4">
             <VideoPlayer
                 video={{
                     video_id: block.video_id,

@@ -35,6 +35,8 @@ from app.model.session_message import SessionMessage
 from fastapi.encoders import jsonable_encoder
 
 from werkzeug.utils import secure_filename
+
+
 class UserService:
     def __init__(self, minio_service: MinioService, sio):
         self.minio_service = minio_service
@@ -169,7 +171,8 @@ class UserService:
     async def create_new_chat_session(self, user_id: str):
         session_id = PydanticObjectId()
         new_chat_his = ChatHistory(
-            id=session_id, user_id=PydanticObjectId(user_id),
+            id=session_id,
+            user_id=PydanticObjectId(user_id),
         )
         await new_chat_his.insert()
         return str(session_id)
@@ -208,7 +211,7 @@ class UserService:
         ]
         # get video ids # order true
         inserted_videos = await Video.insert_many(new_videos)
-        video_ids = inserted_videos.inserted_ids # pydantic object ids
+        video_ids = inserted_videos.inserted_ids  # pydantic object ids
         new_group_videos = [
             SessionVideo(
                 session_id=PydanticObjectId(session_id),
@@ -219,11 +222,17 @@ class UserService:
         ]
         await SessionVideo.insert_many(new_group_videos)
         # save videos to minio
-        video_id_video_url_thumbnail_url_length_fps_obj = self.minio_service.save_videos(
-            video_ids, files
+        video_id_video_url_thumbnail_url_length_fps_obj = (
+            self.minio_service.save_videos(video_ids, files)
         )
         # update video thumbnail urls
-        for video_id, video_url, thumbnail_url, length, fps in video_id_video_url_thumbnail_url_length_fps_obj:
+        for (
+            video_id,
+            video_url,
+            thumbnail_url,
+            length,
+            fps,
+        ) in video_id_video_url_thumbnail_url_length_fps_obj:
             video = await Video.get(video_id)
             if video:
                 video.thumbnail = thumbnail_url
@@ -317,7 +326,9 @@ class UserService:
                         json={"video_id": str(vid)},
                     )
                 except Exception as e:
-                    print(f"Error notifying ingestion service to delete video {vid}: {e}")
+                    print(
+                        f"Error notifying ingestion service to delete video {vid}: {e}"
+                    )
 
         # also delete from minio
         self.minio_service.delete_videos(video_ids)
@@ -326,16 +337,24 @@ class UserService:
 
     async def delete_session(self, session_id: str):
         # xoá chat_messages
-        await SessionMessage.find(SessionMessage.session_id == PydanticObjectId(session_id)).delete()
+        await SessionMessage.find(
+            SessionMessage.session_id == PydanticObjectId(session_id)
+        ).delete()
         # xoá session_videos
-        await SessionVideo.find(SessionVideo.session_id == PydanticObjectId(session_id)).delete()
+        await SessionVideo.find(
+            SessionVideo.session_id == PydanticObjectId(session_id)
+        ).delete()
         # xoá session (chat_history)
-        await ChatHistory.find_one(ChatHistory.id == PydanticObjectId(session_id)).delete()
+        await ChatHistory.find_one(
+            ChatHistory.id == PydanticObjectId(session_id)
+        ).delete()
 
         return True
 
     async def rename_session(self, session_id: str, new_name: str):
-        chat_history = await ChatHistory.find_one(ChatHistory.id == PydanticObjectId(session_id))
+        chat_history = await ChatHistory.find_one(
+            ChatHistory.id == PydanticObjectId(session_id)
+        )
         if chat_history:
             chat_history.name = new_name
             await chat_history.save()
@@ -373,6 +392,55 @@ class UserService:
         )
 
         # socket.io to emit its done
-        await self.sio.emit("thumbnails_generated", {"video_id": video_id, "thumbnail_urls": thumbnail_urls})
-    
+        await self.sio.emit(
+            "thumbnails_generated",
+            {"video_id": video_id, "thumbnail_urls": thumbnail_urls},
+        )
+
         return thumbnail_urls
+
+    async def search_text_messages(self, user_id: str, query: str):
+        # Get all sessions for this user
+        sessions = await ChatHistory.find(
+            ChatHistory.user_id == PydanticObjectId(user_id)
+        ).to_list()
+        session_map = {s.id: s.name for s in sessions}
+        session_ids = list(session_map.keys())
+
+        if not session_ids:
+            return []
+
+        # Fetch all messages across user's sessions
+        messages = await SessionMessage.find(
+            {"session_id": {"$in": session_ids}}
+        ).to_list()
+
+        query_lower = query.lower()
+        results = []
+
+        for msg in messages:
+            for block in msg.blocks:
+                if block.block_type == "text" and query_lower in block.text.lower():
+                    sid = msg.session_id
+                    text = block.text
+                    idx = text.lower().find(query_lower)
+                    start = max(0, idx - 40)
+                    end = min(len(text), idx + len(query) + 40)
+                    snippet = (
+                        ("..." if start > 0 else "")
+                        + text[start:end]
+                        + ("..." if end < len(text) else "")
+                    )
+
+                    results.append(
+                        {
+                            "session_id": str(sid),
+                            "message_id": str(msg.id),
+                            "name": session_map.get(sid, str(sid)),
+                            "snippet": snippet,
+                            "role": str(msg.role),
+                        }
+                    )
+                    break
+
+        return results

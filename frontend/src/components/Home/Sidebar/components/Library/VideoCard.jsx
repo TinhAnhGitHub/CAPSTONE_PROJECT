@@ -79,6 +79,9 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                     alt="thumbnail"
                     className="w-full h-full object-cover"
                 />
+                <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
+                    {formatVideoLength(video.length)}
+                </span>
                 {!failed && <div className='absolute inset-0 flex items-center justify-center'>
                     <IngestedStatus percentage={video.ingested_status} />
                 </div>}
@@ -130,9 +133,11 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                         </h3>
                     )}
 
-                    <p className="text-xs text-text-dim">
+                    
+
+                    {/* <p className="text-xs text-text-dim">
                         {formatVideoLength(video.length || 60)}
-                    </p>
+                    </p> */}
                 </div>
 
                 {/* 3-dots */}
