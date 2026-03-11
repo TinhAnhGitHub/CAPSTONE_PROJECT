@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useMutation, useQueryClient } from 'react-query';
 import api from '@/api/api';
 import VideoDropdownList from './VideoDropdownList';
@@ -9,6 +9,7 @@ import { ingested, errorIngested } from '@/utils/library';
 import IngestedStatus from './IngestedStatus/IngestedStatus';
 import useEdit from '@/api/services/hooks/edit';
 import { ArrowPathIcon } from '@heroicons/react/20/solid';
+import { FilmIcon } from '@heroicons/react/24/outline';
 import { formatVideoLength } from '@/utils/format';
 import { useVideoModalStore } from '@/stores/videoModal';
 
@@ -65,6 +66,9 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
         openModal(video);
     }
 
+    const [imgLoaded, setImgLoaded] = useState(false);
+    const [imgError, setImgError] = useState(false);
+
     return (
         <div className={clsx(
             "group relative rounded-xl p-2 cursor-pointer transition-all",
@@ -73,12 +77,23 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
             isHighlighted && "animate-highlight-pulse ring-2 ring-accent ring-offset-2 ring-offset-background rounded-xl")}
             onClick={handleOpenModal}>
             {/* Thumbnail */}
-            <div className='relative aspect-video rounded-lg overflow-hidden bg-black'>
-                <img
-                    src={video.thumbnail || "/images/testImage.png"}
-                    alt="thumbnail"
-                    className="w-full h-full object-cover"
-                />
+            <div className='relative aspect-video rounded-lg overflow-hidden bg-black/40'>
+                {!imgLoaded && !imgError && (
+                    <div className="absolute inset-0 animate-pulse bg-black/30 rounded" />
+                )}
+                {imgError ? (
+                    <div className="absolute inset-0 flex items-center justify-center  text-text-dim">
+                        <FilmIcon className="w-10 h-10" />
+                    </div>
+                ) : (
+                    <img
+                        src={video.thumbnail || "/images/testImage.png"}
+                        alt="thumbnail"
+                        className={`w-full h-full object-cover transition-opacity duration-200 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+                        onLoad={() => setImgLoaded(true)}
+                        onError={() => setImgError(true)}
+                    />
+                )}
                 <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
                     {formatVideoLength(video.length)}
                 </span>
@@ -133,7 +148,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                         </h3>
                     )}
 
-                    
+
 
                     {/* <p className="text-xs text-text-dim">
                         {formatVideoLength(video.length || 60)}

@@ -1,9 +1,35 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useVideos } from '@/api/services/hooks/query';
 import { useStore } from '@/stores/chat';
 import LibraryModal from '../Library/LibraryModal';
 import { FilmIcon } from '@heroicons/react/24/outline';
 import { formatVideoLength } from '@/utils/format';
+
+function VideoThumbnail({ src }) {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+
+  return (
+    <div className="relative w-full aspect-video bg-surface rounded overflow-hidden">
+      {!loaded && !error && (
+        <div className="absolute inset-0 animate-pulse bg-surface-hover rounded" />
+      )}
+      {error ? (
+        <div className="absolute inset-0 flex items-center justify-center  text-text-dim">
+          <FilmIcon className="w-8 h-8" />
+        </div>
+      ) : (
+        <img
+          src={src || "/images/testImage.png"}
+          alt="thumbnail"
+          className={`w-full aspect-video object-cover transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function VideosInConversation() {
   const groupId = useStore((state) => state.currentGroup);
@@ -65,11 +91,7 @@ export default function VideosInConversation() {
                 onClick={() => handleVideoClick(video._id)}
               >
                 <div className='relative overflow-hidden rounded-lg border border-white/10  transition-colors'>
-                  <img
-                    src={video.thumbnail || "/images/testImage.png"}
-                    alt="thumbnail"
-                    className='w-full aspect-video object-cover'
-                  />
+                  <VideoThumbnail src={video.thumbnail} />
                   {/* Duration badge */}
                   <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
                     {formatVideoLength(video.length)}
