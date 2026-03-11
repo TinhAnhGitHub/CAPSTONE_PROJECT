@@ -110,7 +110,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
             </div>
 
             {/* Info */}
-            <div className="relative mt-2">
+            <div className="relative my-2">
                 <div className="pr-6">
                     {isEditing ? (
                         <input

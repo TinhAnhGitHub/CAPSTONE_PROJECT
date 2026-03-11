@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Any, Optional, Type, TypeVar, Literal, Annotated, Union
-from beanie import Document, PydanticObjectId
+from beanie import Document, PydanticObjectId, after_event, Insert
 from datetime import datetime
 from abc import abstractmethod, ABC
 from llama_index.core.base.llms.types import (
@@ -38,7 +38,7 @@ class ToolCallBlock(BaseModel):
 class VideoSegment(BaseModel):
     start: float
     end: float
-    preview_images: list[AnyUrl | str] = [] # 5 images
+    preview_images: list[AnyUrl | str] = []  # 5 images
     caption: Optional[str] = None
 
 
@@ -49,6 +49,7 @@ class ThinkingStep(BaseModel):
 
 class ThinkingBlock(BaseModel):
     """A representation of thinking state as a sequence of steps."""
+
     block_type: Literal["thinking"] = "thinking"
     steps: list[ThinkingStep] = []
 
@@ -76,7 +77,7 @@ class VideoBlock(BaseModel):
     fps: float | None = None
     url: AnyUrl | str | None = None
     thumbnail: AnyUrl | str | None = None
-    
+
     segments: list[VideoSegment] | None = None
 
 
@@ -146,3 +147,13 @@ class SessionMessage(Document):
     class Settings:
         name = settings.CHAT_MESSAGE_COLLECTION_NAME
         indexes = ["role", [("timestamp", -1)], [("last_updated", -1)]]
+
+    @after_event(Insert)
+    async def update_chat_history_timestamp(self):
+        if self.session_id:
+            from app.model.chat_history import ChatHistory
+
+            chat = await ChatHistory.get(self.session_id)
+            if chat:
+                chat.last_updated = datetime.now()
+                await chat.save()

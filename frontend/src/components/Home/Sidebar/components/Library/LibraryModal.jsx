@@ -88,7 +88,7 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
                 </div>
                 <div className="relative md:w-[80%] h-[70vh] flex flex-col">
                     <div className="flex-1 overflow-y-auto px-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
-                        <div className=" grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-2">
+                        <div className=" grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-2">
                             {videos.map((video, idx) => (
                                 <div
                                     key={idx}
