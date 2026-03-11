@@ -26,6 +26,7 @@ export default function SearchDialog({ isOpen, onClose }) {
     const inputRef = useRef(null)
     const setSessionId = useStoreChat((state) => state.setSessionId)
     const setTargetMessageId = useStoreChat((state) => state.setTargetMessageId)
+    const setSidebarOpen = useStoreChat((state) => state.setSidebarOpen)
     const [selectedIndex, setSelectedIndex] = useState(0)
 
     const { data: results, isLoading } = useSearchChatHistory(debouncedQuery)
@@ -55,8 +56,9 @@ export default function SearchDialog({ isOpen, onClose }) {
     const selectResult = useCallback((sessionId, messageId) => {
         setSessionId(sessionId)
         setTargetMessageId(messageId)
+        setSidebarOpen(false)
         onClose()
-    }, [setSessionId, setTargetMessageId, onClose])
+    }, [setSessionId, setTargetMessageId, setSidebarOpen, onClose])
 
     function handleKeyDown(e) {
         if (!results?.length) return
