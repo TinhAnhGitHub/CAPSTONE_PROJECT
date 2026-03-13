@@ -39,7 +39,6 @@
 # Documentation
 AGENTS.md
 CLAUDE.md
-README.md
 
 # Docker (already in docker/)
 docker/

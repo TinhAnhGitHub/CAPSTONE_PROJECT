@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN uv venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY pyproject.toml  README.md .
+COPY pyproject.toml README.md .
 
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \

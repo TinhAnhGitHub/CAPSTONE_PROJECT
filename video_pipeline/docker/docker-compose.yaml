@@ -75,33 +75,7 @@ services:
     command: prefect server services start
     networks: [shared]
   
-  # prefect-worker:
-  #   build:
-  #     context: ..
-  #     dockerfile: docker/Dockerfile.worker
-  #   depends_on:
-  #     prefect-server:
-  #       condition: service_healthy
-  #     prefect-services:
-  #       condition: service_started
-  #   ports:
-  #     - "8787:8787"   
-  #   environment:
-  #     PREFECT_API_URL: http://prefect-server:4200/api
-
-  #   volumes:
-  #     - ..:/app
-
-  #   working_dir: /app
-  #   entrypoint: >
-  #     bash -c "
-  #     cd /app && ./scripts/prefect-init.sh &&
-  #     prefect worker start --pool local-pool
-  #     "
-  #   restart: "on-failure"
-  #   networks: [shared]
-
-  prefect-worker-poc:
+  prefect-worker:
     build:
       context: ..
       dockerfile: docker/Dockerfile.worker
@@ -111,21 +85,47 @@ services:
       prefect-services:
         condition: service_started
     ports:
-      - "8788:8787"
+      - "8787:8787"
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
+      FASTEMBED_CACHE_PATH: /models/fastembed
+    env_file: .env
     volumes:
       - ..:/app
     working_dir: /app
     entrypoint: >
       bash -c "
-      cd /app && ./scripts/prefect-init.poc.sh &&
-      prefect worker start --pool poc-pool
+      cd /app && ./scripts/prefect-init.sh &&
+      prefect worker start --pool local-pool
       "
     restart: "on-failure"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks: [shared]
+
+  # prefect-worker-poc:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile.worker
+  #   depends_on:
+  #     prefect-server:
+  #       condition: service_healthy
+  #     prefect-services:
+  #       condition: service_started
+  #   ports:
+  #     - "8788:8787"
+  #   environment:
+  #     PREFECT_API_URL: http://prefect-server:4200/api
+  #   volumes:
+  #     - ..:/app
+  #   working_dir: /app
+  #   entrypoint: >
+  #     bash -c "
+  #     cd /app && ./scripts/prefect-init.poc.sh &&
+  #     prefect worker start --pool poc-pool
+  #     "
+  #   restart: "on-failure"
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks: [shared]
 
 
   video-pipeline-api:
@@ -184,6 +184,8 @@ services:
       - 6335
     volumes:
       - ${DOCKER_LOCAL_VOLUME}/qdrant_data:/qdrant/storage
+    
+    networks: [shared]
       
   arangodb:
     image: arangodb:latest
@@ -199,6 +201,9 @@ services:
     volumes:
       - ${DOCKER_LOCAL_VOLUME}/arangodb_data:/var/lib/arangodb3
     
+    networks: [shared]
+
+  
 networks:
   shared:
     external: true

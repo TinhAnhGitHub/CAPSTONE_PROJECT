@@ -1,21 +1,37 @@
 services:
-
   mmbert:
-    image: ghcr.io/ggml-org/llama.cpp:server
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: te_mmbert
+    shm_size: "4gb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     ports:
       - "${MMBERT_PORT}:8000"
     volumes:
       - "${MMBERT_MODEL_DIR}:/models:ro"
+    cap_add:
+      - IPC_LOCK  
+    ulimits:
+      memlock: -1 
+      stack: 67108864
     command: >
       -m /models/${MMBERT_MODEL}
       --embedding
-      --ctx-size 8192
-      --batch-size 256
-      --threads 8
+      --ctx-size 20480
+      --parallel 10
+      --batch-size 8192
+      --ubatch-size 8192
+      --cache-ram 4096
+      --threads 18
       --host 0.0.0.0
       --port 8000
       --mlock
+      --cont-batching
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
       interval: 30s
@@ -28,6 +44,7 @@ services:
   qwen_vl_embedding:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     container_name: qwen_vl_embedding
+    shm_size: "8gb"
     deploy:
       resources:
         reservations:
@@ -43,49 +60,56 @@ services:
       -m /models/${QWEN_VL_EMBEDDING_MODEL}
       --mmproj /models/${QWEN_VL_EMBEDDING_MODEL_MMPROJ}
       --embedding
-      --ctx-size 8192
-      --batch-size 4096
-      --ubatch-size 4096
+      -nkvo
+      -c 32768
+      --ctx-size 16384
+      --batch-size 13000
+      --ubatch-size 13000
       --port 8080
       --pooling none
-      --no-warmup
-      -t 10
-      --threads-batch 10
-      --n-gpu-layers 25
+      -t 6
+      --threads-batch 6
+      --n-gpu-layers 10
+      --flash-attn on
       -ctk q8_0 
       -ctv q8_0
+      --flash-attn on 
+      --cont-batching
     restart: unless-stopped
     networks: [shared]
 
-  
-
-
-  ocr_lighton:
-    image: ghcr.io/ggml-org/llama.cpp:server
-    container_name: ocr_lighton
-    ports:
-      - "${OCR_LIGHTON_PORT}:8000"
-    volumes:
-      - "${OCR_LIGHTON_MODEL_DIR}:/models"
-    command: >
-      --model /models/${OCR_LIGHTON_MODEL}
-      --mmproj /models/${OCR_LIGHTON_MMPROJ}
-      --host 0.0.0.0
-      --port 8000
-      --ctx-size 4096
-      --threads 8
-      --batch-size 512
-      --parallel 2
-      --mlock
-      --verbose
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    restart: unless-stopped
-    networks: [shared]
+  # ocr_lighton:
+  #   image: ghcr.io/ggml-org/llama.cpp:server-cuda
+  #   container_name: ocr_lighton
+  #   ports:
+  #     - "${OCR_LIGHTON_PORT}:8000"
+  #   volumes:
+  #     - "${OCR_LIGHTON_MODEL_DIR}:/models"
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   command: >
+  #     --model /models/${OCR_LIGHTON_MODEL}
+  #     --mmproj /models/${OCR_LIGHTON_MMPROJ}
+  #     --host 0.0.0.0
+  #     --port 8000
+  #     --ctx-size 4096
+  #     --n-gpu-layers 20
+  #     --threads 8
+  #     --batch-size 1024
+  #     --mlock
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 60s
+  #   restart: unless-stopped
+  #   networks: [shared]
 
   triton-server:
     image: nvcr.io/nvidia/tritonserver:25.11-py3
