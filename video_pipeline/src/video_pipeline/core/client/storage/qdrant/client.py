@@ -28,6 +28,11 @@ class QdrantStorageClient:
 
     async def connect(self) -> None:
         try:
+            try:
+                import fastembed  # noqa: F401
+            except ImportError:
+                pass  
+
             self._client = AsyncQdrantClient(
                 host=self.host,
                 port=self.port,

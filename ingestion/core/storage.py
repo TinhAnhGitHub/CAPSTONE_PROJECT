@@ -82,7 +82,6 @@ class StorageClient:
         try:
             self.client.put_object(**put_kwargs)
             uri = f"s3://{bucket}/{object_name}"
-            logger.info(f"Uploaded object {uri}")
             return uri
         except S3Error as exc:
             logger.exception("Failed to upload %s to bucket %s", object_name, bucket)
