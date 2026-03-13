@@ -17,10 +17,14 @@ from video_pipeline.core.artifact import (
     ImageEmbeddingArtifact,
     TextCaptionEmbeddingArtifact,
     ImageCaptionMultimodalEmbeddingArtifact,
+    SegmentEmbeddingArtifact,
+    SegmentCaptionArtifact,
+    TextCapSegmentEmbedArtifact,
+    SegmentCaptionMultimodalEmbedArtifact,
 )
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.core.client.storage.qdrant.client import QdrantStorageClient
 from video_pipeline.core.client.storage.qdrant.config import QdrantConfig, QdrantIndexConfig
 from video_pipeline.config import get_settings
@@ -30,25 +34,27 @@ QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("qdrant_indexing")
 _base_kwargs = QDRANT_INDEXING_CONFIG.to_task_kwargs()
 _akwargs: dict[str, Any] = QDRANT_INDEXING_CONFIG.additional_kwargs
 
-# Qdrant vector field names
+
 IMAGE_DENSE_FIELD = "image_dense"
 CAPTION_TEXT_DENSE_FIELD = "caption_text_dense"
 CAPTION_MM_DENSE_FIELD = "caption_mm_dense"
 CAPTION_SPARSE_FIELD = "caption_sparse"
 
-# Types
+
 _ImagePreprocessed = tuple[ImageEmbeddingArtifact, list[float]]
 _CaptionPair = tuple[TextCaptionEmbeddingArtifact, ImageCaptionMultimodalEmbeddingArtifact]
 _CaptionPreprocessed = tuple[
     TextCaptionEmbeddingArtifact,
     ImageCaptionMultimodalEmbeddingArtifact,
-    list[float],   # text dense vector
-    list[float],   # multimodal dense vector
+    list[float],  # text dense vector
+    list[float],  # multimodal dense vector
     SparseVector,  # SPLADE sparse vector
 ]
 
 
-def _load_npy_from_minio(minio_client: MinioStorageClient, user_id: str, object_name: str) -> list[float]:
+def _load_npy_from_minio(
+    minio_client: MinioStorageClient, user_id: str, object_name: str
+) -> list[float]:
     """Download a .npy embedding file from MinIO and return as a Python list of floats."""
     data = minio_client.get_object_bytes(bucket=user_id, object_name=object_name)
     arr = np.load(io.BytesIO(data))
@@ -105,6 +111,7 @@ def _caption_index_configs() -> tuple[list[QdrantIndexConfig], list[str]]:
 # Image indexing (dense only)
 # ---------------------------------------------------------------------------
 
+
 @StageRegistry.register
 class ImageQdrantIndexingTask(BaseTask[list[ImageEmbeddingArtifact], list[str]]):
     """Index image embeddings into Qdrant as dense vectors.
@@ -116,17 +123,25 @@ class ImageQdrantIndexingTask(BaseTask[list[ImageEmbeddingArtifact], list[str]])
 
     config = QDRANT_INDEXING_CONFIG
 
-    async def preprocess(self, input_data: list[ImageEmbeddingArtifact]) -> list[_ImagePreprocessed]:
+    async def preprocess(
+        self, input_data: list[ImageEmbeddingArtifact]
+    ) -> list[_ImagePreprocessed]:
         logger = get_run_logger()
-        logger.info(f"[ImageQdrantIndexingTask] Downloading {len(input_data)} embedding(s) from MinIO")
+        logger.info(
+            f"[ImageQdrantIndexingTask] Downloading {len(input_data)} embedding(s) from MinIO"
+        )
 
         preprocessed: list[_ImagePreprocessed] = []
         for artifact in input_data:
-            assert artifact.object_name, f"ImageEmbeddingArtifact {artifact.artifact_id} has no object_name"
+            assert artifact.object_name, (
+                f"ImageEmbeddingArtifact {artifact.artifact_id} has no object_name"
+            )
             vector = _load_npy_from_minio(self.minio_client, artifact.user_id, artifact.object_name)
             preprocessed.append((artifact, vector))
 
-        logger.info(f"[ImageQdrantIndexingTask] Preprocessing done — {len(preprocessed)} vector(s) ready")
+        logger.info(
+            f"[ImageQdrantIndexingTask] Preprocessing done — {len(preprocessed)} vector(s) ready"
+        )
         return preprocessed
 
     async def execute(
@@ -191,6 +206,7 @@ class ImageQdrantIndexingTask(BaseTask[list[ImageEmbeddingArtifact], list[str]])
 # Caption indexing (hybrid: text dense + multimodal dense + sparse)
 # ---------------------------------------------------------------------------
 
+
 @StageRegistry.register
 class CaptionQdrantIndexingTask(BaseTask[list[_CaptionPair], list[str]]):
     """Index caption embeddings into Qdrant as hybrid vectors.
@@ -213,13 +229,15 @@ class CaptionQdrantIndexingTask(BaseTask[list[_CaptionPair], list[str]]):
         logger.info(f"[CaptionQdrantIndexingTask] Preprocessing {len(input_data)} pair(s)")
 
         # Download dense vectors
-        pairs_with_vectors: list[tuple[
-            TextCaptionEmbeddingArtifact,
-            ImageCaptionMultimodalEmbeddingArtifact,
-            list[float],
-            list[float],
-            str,  # raw caption text for sparse encoding
-        ]] = []
+        pairs_with_vectors: list[
+            tuple[
+                TextCaptionEmbeddingArtifact,
+                ImageCaptionMultimodalEmbeddingArtifact,
+                list[float],
+                list[float],
+                str,  # raw caption text for sparse encoding
+            ]
+        ] = []
 
         for text_artifact, mm_artifact in input_data:
             assert text_artifact.object_name, (
@@ -229,14 +247,20 @@ class CaptionQdrantIndexingTask(BaseTask[list[_CaptionPair], list[str]]):
                 f"ImageCaptionMultimodalEmbeddingArtifact {mm_artifact.artifact_id} has no object_name"
             )
 
-            text_vec = _load_npy_from_minio(self.minio_client, text_artifact.user_id, text_artifact.object_name)
-            mm_vec = _load_npy_from_minio(self.minio_client, mm_artifact.user_id, mm_artifact.object_name)
+            text_vec = _load_npy_from_minio(
+                self.minio_client, text_artifact.user_id, text_artifact.object_name
+            )
+            mm_vec = _load_npy_from_minio(
+                self.minio_client, mm_artifact.user_id, mm_artifact.object_name
+            )
 
             caption_text: str = (text_artifact.metadata or {}).get("caption", "")
             pairs_with_vectors.append((text_artifact, mm_artifact, text_vec, mm_vec, caption_text))
 
         # Batch-encode sparse vectors with SPLADE
-        logger.info(f"[CaptionQdrantIndexingTask] Encoding {len(pairs_with_vectors)} sparse vector(s) via SPLADE")
+        logger.info(
+            f"[CaptionQdrantIndexingTask] Encoding {len(pairs_with_vectors)} sparse vector(s) via SPLADE"
+        )
         texts = [caption_text for *_, caption_text in pairs_with_vectors]
         sparse_model = SparseTextEmbedding(model_name="prithivida/Splade_PP_en_v1")
         sparse_embeddings = list(sparse_model.embed(texts))
@@ -251,7 +275,9 @@ class CaptionQdrantIndexingTask(BaseTask[list[_CaptionPair], list[str]]):
             )
             preprocessed.append((text_artifact, mm_artifact, text_vec, mm_vec, sparse_vector))
 
-        logger.info(f"[CaptionQdrantIndexingTask] Preprocessing done — {len(preprocessed)} item(s) ready")
+        logger.info(
+            f"[CaptionQdrantIndexingTask] Preprocessing done — {len(preprocessed)} item(s) ready"
+        )
         return preprocessed
 
     async def execute(
@@ -260,7 +286,9 @@ class CaptionQdrantIndexingTask(BaseTask[list[_CaptionPair], list[str]]):
         client: QdrantStorageClient,
     ) -> list[str]:
         logger = get_run_logger()
-        logger.info(f"[CaptionQdrantIndexingTask] Indexing {len(preprocessed)} caption hybrid point(s)")
+        logger.info(
+            f"[CaptionQdrantIndexingTask] Indexing {len(preprocessed)} caption hybrid point(s)"
+        )
 
         index_configs, field_names = _caption_index_configs()
         await client.create_collection_if_not_exists(index_configs, field_names)
@@ -325,6 +353,7 @@ class CaptionQdrantIndexingTask(BaseTask[list[_CaptionPair], list[str]]):
 # Prefect task functions (fan-out compatible via .map())
 # ---------------------------------------------------------------------------
 
+
 def _make_qdrant_client(collection_name: str) -> QdrantStorageClient:
     settings = get_settings()
     timeout: int = _akwargs.get("qdrant_timeout", 30)
@@ -361,9 +390,7 @@ async def image_qdrant_indexing_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
+    postgres_client = await get_postgres_client()
 
     qdrant_client = _make_qdrant_client(_build_image_collection_name())
     await qdrant_client.connect()
@@ -377,6 +404,7 @@ async def image_qdrant_indexing_chunk_task(
         indexed_ids = await task_impl.execute_template(items, qdrant_client)
     finally:
         await qdrant_client.close()
+        await shutdown_postgres_client(postgres_client)
 
     logger.info(f"[ImageQdrantIndexingChunk] Done | {len(indexed_ids)} point(s) indexed")
     return indexed_ids
@@ -416,14 +444,17 @@ async def caption_qdrant_indexing_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
+    postgres_client = await get_postgres_client()
 
     qdrant_client = _make_qdrant_client(_build_caption_collection_name())
     await qdrant_client.connect()
 
-    pairs: list[_CaptionPair] = list(zip(text_items, mm_items))
+    text_by_caption_id = {a.caption_id: a for a in text_items}
+    pairs: list[_CaptionPair] = [
+        (text_by_caption_id[mm_artifact.caption_id], mm_artifact)
+        for mm_artifact in mm_items
+        if mm_artifact.caption_id in text_by_caption_id
+    ]
 
     task_impl = CaptionQdrantIndexingTask(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
@@ -434,6 +465,395 @@ async def caption_qdrant_indexing_chunk_task(
         indexed_ids = await task_impl.execute_template(pairs, qdrant_client)
     finally:
         await qdrant_client.close()
+        await shutdown_postgres_client(postgres_client)
 
     logger.info(f"[CaptionQdrantIndexingChunk] Done | {len(indexed_ids)} hybrid point(s) indexed")
+    return indexed_ids
+
+
+# ---------------------------------------------------------------------------
+# Segment Embedding indexing (dense only)
+# ---------------------------------------------------------------------------
+
+SEGMENT_DENSE_FIELD = "segment_dense"
+
+_SegmentPreprocessed = tuple[SegmentEmbeddingArtifact, list[float]]
+
+
+@StageRegistry.register
+class SegmentQdrantIndexingTask(BaseTask[list[SegmentEmbeddingArtifact], list[str]]):
+    """Index segment embeddings into Qdrant as dense vectors."""
+
+    config = QDRANT_INDEXING_CONFIG
+
+    async def preprocess(
+        self, input_data: list[SegmentEmbeddingArtifact]
+    ) -> list[_SegmentPreprocessed]:
+        logger = get_run_logger()
+        logger.info(
+            f"[SegmentQdrantIndexingTask] Downloading {len(input_data)} segment embedding(s) from MinIO"
+        )
+
+        preprocessed: list[_SegmentPreprocessed] = []
+        for artifact in input_data:
+            assert artifact.object_name, (
+                f"SegmentEmbeddingArtifact {artifact.artifact_id} has no object_name"
+            )
+            vector = _load_npy_from_minio(self.minio_client, artifact.user_id, artifact.object_name)
+            preprocessed.append((artifact, vector))
+
+        logger.info(
+            f"[SegmentQdrantIndexingTask] Preprocessing done — {len(preprocessed)} vector(s) ready"
+        )
+        return preprocessed
+
+    async def execute(
+        self,
+        preprocessed: list[_SegmentPreprocessed],
+        client: QdrantStorageClient,
+    ) -> list[str]:
+        logger = get_run_logger()
+        logger.info(
+            f"[SegmentQdrantIndexingTask] Indexing {len(preprocessed)} segment embedding(s)"
+        )
+
+        on_disk: bool = _akwargs.get("on_disk", False)
+        segment_dim: int = _akwargs.get("image_dim", 1536)  # Reuse image_dim config
+
+        index_configs = [
+            QdrantIndexConfig(
+                vector_size=segment_dim,
+                distance=Distance.COSINE,
+                on_disk=on_disk,
+            )
+        ]
+        field_names = [SEGMENT_DENSE_FIELD]
+
+        await client.create_collection_if_not_exists(index_configs, field_names)
+
+        data = [
+            {
+                "id": artifact.artifact_id,
+                SEGMENT_DENSE_FIELD: vector,
+                "related_audio_segment_artifact_id": artifact.related_audio_segment_artifact_id,
+                "related_video_id": artifact.related_video_id,
+                "start_frame": artifact.start_frame,
+                "end_frame": artifact.end_frame,
+                "start_timestamp": artifact.start_timestamp,
+                "end_timestamp": artifact.end_timestamp,
+                "frame_indices": artifact.frame_indices,
+                "embedding_dim": artifact.embedding_dim,
+                "user_id": artifact.user_id,
+                "minio_url": artifact.minio_url_path,
+            }
+            for artifact, vector in preprocessed
+        ]
+
+        inserted_ids = await client.insert_vectors(data)
+        logger.info(f"[SegmentQdrantIndexingTask] Indexed {len(inserted_ids)} point(s)")
+        return inserted_ids
+
+    async def postprocess(self, result: list[str]) -> list[str]:
+        return result
+
+    @staticmethod
+    async def summary_artifact(final_result: list[str]) -> None:
+        if not final_result:
+            return
+        collection_name = f"{_akwargs.get('collection_base', 'video_embeddings')}_segment"
+        key = re.sub(r"[^a-z0-9-]", "-", "segment-qdrant-indexing")
+        markdown = (
+            f"# Segment Qdrant Indexing Summary\n\n"
+            f"| Field | Value |\n"
+            f"|-------|-------|\n"
+            f"| **Collection** | `{collection_name}` |\n"
+            f"| **Points Indexed** | `{len(final_result)}` |\n"
+        )
+        await acreate_markdown_artifact(
+            key=key,
+            markdown=markdown,
+            description="Segment embedding index summary",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Segment Caption indexing (hybrid: text dense + multimodal dense + sparse)
+# ---------------------------------------------------------------------------
+
+_SegmentCaptionPair = tuple[TextCapSegmentEmbedArtifact, SegmentCaptionMultimodalEmbedArtifact]
+_SegmentCaptionPreprocessed = tuple[
+    TextCapSegmentEmbedArtifact,
+    SegmentCaptionMultimodalEmbedArtifact,
+    list[float],  # text dense vector
+    list[float],  # multimodal dense vector
+    SparseVector,  # sparse
+]
+
+
+@StageRegistry.register
+class SegmentCaptionQdrantIndexingTask(BaseTask[list[_SegmentCaptionPair], list[str]]):
+    """Index segment caption embeddings into Qdrant as hybrid vectors.
+
+    Each point carries:
+      - caption_text_dense   : dense mmBERT text embedding
+      - caption_mm_dense     : dense QwenVL multimodal embedding
+      - caption_sparse       : sparse SPLADE encoding of the summary caption text
+
+    preprocess() downloads both .npy files per pair and encodes sparse vectors
+                 in batch using fastembed SPLADE.
+    execute()    creates the caption collection and upserts hybrid points.
+    postprocess() returns upserted point IDs.
+    """
+
+    config = QDRANT_INDEXING_CONFIG
+
+    async def preprocess(self, input_data: list[_SegmentCaptionPair]) -> list[_SegmentCaptionPreprocessed]:
+        logger = get_run_logger()
+        logger.info(f"[SegmentCaptionQdrantIndexingTask] Preprocessing {len(input_data)} pair(s)")
+
+        # Download dense vectors and collect texts for sparse encoding
+        pairs_with_vectors: list[
+            tuple[
+                TextCapSegmentEmbedArtifact,
+                SegmentCaptionMultimodalEmbedArtifact,
+                list[float],
+                list[float],
+                str,  # raw caption text for sparse encoding
+            ]
+        ] = []
+
+        for text_artifact, mm_artifact in input_data:
+            assert text_artifact.object_name, (
+                f"TextCapSegmentEmbedArtifact {text_artifact.artifact_id} has no object_name"
+            )
+            assert mm_artifact.object_name, (
+                f"SegmentCaptionMultimodalEmbedArtifact {mm_artifact.artifact_id} has no object_name"
+            )
+
+            text_vec = _load_npy_from_minio(
+                self.minio_client, text_artifact.user_id, text_artifact.object_name
+            )
+            mm_vec = _load_npy_from_minio(
+                self.minio_client, mm_artifact.user_id, mm_artifact.object_name
+            )
+
+            # Get the summary caption text from metadata for sparse encoding
+            caption_text: str = (text_artifact.metadata or {}).get("summary_caption", "")
+            pairs_with_vectors.append((text_artifact, mm_artifact, text_vec, mm_vec, caption_text))
+
+        # Batch-encode sparse vectors with SPLADE
+        logger.info(
+            f"[SegmentCaptionQdrantIndexingTask] Encoding {len(pairs_with_vectors)} sparse vector(s) via SPLADE"
+        )
+        texts = [caption_text for *_, caption_text in pairs_with_vectors]
+        sparse_model = SparseTextEmbedding(model_name="prithivida/Splade_PP_en_v1")
+        sparse_embeddings = list(sparse_model.embed(texts))
+
+        preprocessed: list[_SegmentCaptionPreprocessed] = []
+        for (text_artifact, mm_artifact, text_vec, mm_vec, _), sparse_emb in zip(
+            pairs_with_vectors, sparse_embeddings
+        ):
+            sparse_vector = SparseVector(
+                indices=sparse_emb.indices.tolist(),
+                values=sparse_emb.values.tolist(),
+            )
+            preprocessed.append((text_artifact, mm_artifact, text_vec, mm_vec, sparse_vector))
+
+        logger.info(
+            f"[SegmentCaptionQdrantIndexingTask] Preprocessing done — {len(preprocessed)} item(s) ready"
+        )
+        return preprocessed
+
+    async def execute(
+        self,
+        preprocessed: list[_SegmentCaptionPreprocessed],
+        client: QdrantStorageClient,
+    ) -> list[str]:
+        logger = get_run_logger()
+        logger.info(
+            f"[SegmentCaptionQdrantIndexingTask] Indexing {len(preprocessed)} segment caption hybrid point(s)"
+        )
+
+        index_configs, field_names = _caption_index_configs()
+        await client.create_collection_if_not_exists(index_configs, field_names)
+
+        data = [
+            {
+                "id": text_artifact.artifact_id,
+                CAPTION_TEXT_DENSE_FIELD: text_vec,
+                CAPTION_MM_DENSE_FIELD: mm_vec,
+                CAPTION_SPARSE_FIELD: sparse_vec,
+                # payload
+                "related_video_id": text_artifact.related_video_id,
+                "related_video_fps": text_artifact.related_video_fps,
+                "start_frame": text_artifact.start_frame,
+                "end_frame": text_artifact.end_frame,
+                "start_timestamp": text_artifact.start_time,
+                "end_timestamp": text_artifact.end_time,
+                "segment_caption_minio_url": text_artifact.related_segment_caption_url,
+                "segment_cap_id": text_artifact.segment_cap_id,
+                "user_id": text_artifact.user_id,
+                "mm_embedding_minio_url": mm_artifact.minio_url_path,
+            }
+            for text_artifact, mm_artifact, text_vec, mm_vec, sparse_vec in preprocessed
+        ]
+
+        inserted_ids = await client.insert_vectors(data)
+        logger.info(
+            f"[SegmentCaptionQdrantIndexingTask] Indexed {len(inserted_ids)} hybrid point(s)"
+        )
+        return inserted_ids
+
+    async def postprocess(self, result: list[str]) -> list[str]:
+        return result
+
+    @staticmethod
+    async def summary_artifact(final_result: list[str]) -> None:
+        if not final_result:
+            return
+        key = re.sub(r"[^a-z0-9-]", "-", "segment-caption-qdrant-indexing")
+        markdown = (
+            f"# Segment Caption Qdrant Indexing Summary\n\n"
+            f"| Field | Value |\n"
+            f"|-------|-------|\n"
+            f"| **Collection** | `{_build_caption_collection_name()}` |\n"
+            f"| **Index type** | Hybrid (text dense + multimodal dense + SPLADE sparse) |\n"
+            f"| **Points Indexed** | `{len(final_result)}` |\n"
+        )
+        await acreate_markdown_artifact(
+            key=key,
+            markdown=markdown,
+            description="Segment caption hybrid index summary",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Prefect task functions for segment indexing
+# ---------------------------------------------------------------------------
+
+
+def _make_segment_qdrant_client() -> QdrantStorageClient:
+    settings = get_settings()
+    timeout: int = _akwargs.get("qdrant_timeout", 30)
+    collection_name = f"{_akwargs.get('collection_base', 'video_embeddings')}_segment"
+    config = QdrantConfig(
+        host=settings.qdrant.host,
+        port=settings.qdrant.port,
+        collection_name=collection_name,
+        timeout=timeout,
+        use_grpc=True,
+        prefer_grpc=True,
+    )
+    return QdrantStorageClient(config=config)
+
+
+def _make_segment_caption_qdrant_client() -> QdrantStorageClient:
+    settings = get_settings()
+    timeout: int = _akwargs.get("qdrant_timeout", 30)
+    config = QdrantConfig(
+        host=settings.qdrant.host,
+        port=settings.qdrant.port,
+        collection_name=_build_caption_collection_name(),
+        timeout=timeout,
+        use_grpc=True,
+        prefer_grpc=True,
+    )
+    return QdrantStorageClient(config=config)
+
+
+@task(**{**_base_kwargs, "name": "Segment Qdrant Indexing Chunk"})  # type: ignore
+async def segment_qdrant_indexing_chunk_task(
+    items: list[SegmentEmbeddingArtifact],
+) -> list[str]:
+    """Index a batch of segment embeddings into Qdrant."""
+    logger = get_run_logger()
+    settings = get_settings()
+    logger.info(f"[SegmentQdrantIndexingChunk] Starting | {len(items)} artifact(s) in batch")
+
+    minio_client = MinioStorageClient(
+        endpoint=settings.minio.endpoint,
+        access_key=settings.minio.access_key,
+        secret_key=settings.minio.secret_key,
+        secure=settings.minio.secure,
+    )
+    postgres_client = await get_postgres_client()
+
+    qdrant_client = _make_segment_qdrant_client()
+    await qdrant_client.connect()
+
+    task_impl = SegmentQdrantIndexingTask(
+        artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
+        minio_client=minio_client,
+    )
+
+    try:
+        indexed_ids = await task_impl.execute_template(items, qdrant_client)
+    finally:
+        await qdrant_client.close()
+        await shutdown_postgres_client(postgres_client)
+
+    logger.info(f"[SegmentQdrantIndexingChunk] Done | {len(indexed_ids)} point(s) indexed")
+    return indexed_ids
+
+
+@task(**{**_base_kwargs, "name": "Segment Caption Qdrant Indexing Chunk"})  # type: ignore
+async def segment_caption_qdrant_indexing_chunk_task(
+    text_items: list[TextCapSegmentEmbedArtifact],
+    mm_items: list[SegmentCaptionMultimodalEmbedArtifact],
+) -> list[str]:
+    """Index a batch of segment caption embeddings into Qdrant as hybrid points.
+
+    Pairs text embedding artifacts with multimodal embedding artifacts by position.
+    The two lists must be aligned (same segment order).
+
+    Args:
+        text_items: Batch of TextCapSegmentEmbedArtifacts (mmBERT dense).
+        mm_items:   Batch of SegmentCaptionMultimodalEmbedArtifacts (QwenVL dense).
+
+    Returns:
+        List of Qdrant point IDs that were upserted.
+    """
+    logger = get_run_logger()
+    settings = get_settings()
+    logger.info(
+        f"[SegmentCaptionQdrantIndexingChunk] Starting | "
+        f"{len(text_items)} text + {len(mm_items)} multimodal artifact(s)"
+    )
+
+    assert len(text_items) == len(mm_items), (
+        f"text_items ({len(text_items)}) and mm_items ({len(mm_items)}) must have the same length"
+    )
+
+    minio_client = MinioStorageClient(
+        endpoint=settings.minio.endpoint,
+        access_key=settings.minio.access_key,
+        secret_key=settings.minio.secret_key,
+        secure=settings.minio.secure,
+    )
+    postgres_client = await get_postgres_client()
+
+    qdrant_client = _make_segment_caption_qdrant_client()
+    await qdrant_client.connect()
+
+    text_by_segment_cap_id = {a.segment_cap_id: a for a in text_items}
+    pairs: list[_SegmentCaptionPair] = [
+        (text_by_segment_cap_id[mm_artifact.segment_cap_id], mm_artifact)
+        for mm_artifact in mm_items
+        if mm_artifact.segment_cap_id in text_by_segment_cap_id
+    ]
+
+    task_impl = SegmentCaptionQdrantIndexingTask(
+        artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
+        minio_client=minio_client,
+    )
+
+    try:
+        indexed_ids = await task_impl.execute_template(pairs, qdrant_client)
+    finally:
+        await qdrant_client.close()
+        await shutdown_postgres_client(postgres_client)
+
+    logger.info(
+        f"[SegmentCaptionQdrantIndexingChunk] Done | {len(indexed_ids)} hybrid point(s) indexed"
+    )
     return indexed_ids

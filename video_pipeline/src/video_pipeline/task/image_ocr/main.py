@@ -16,7 +16,7 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ImageArtifact, ImageOCRArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.core.client.inference.ocr_client import LightONOCRClient, LightONOCRConfig
 from video_pipeline.config import get_settings
 
@@ -251,9 +251,7 @@ async def image_ocr_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
+    postgres_client = await get_postgres_client()
     logger.info(f"[ImageOCRChunk] Clients initialized | minio={settings.minio.endpoint}")
 
     ocr_config = LightONOCRConfig(
@@ -272,6 +270,7 @@ async def image_ocr_chunk_task(
         all_artifacts = await task_impl.execute_template(items, client)
     finally:
         await client.close()
+        await shutdown_postgres_client(postgres_client)
 
     logger.info(f"[ImageOCRChunk] Done | {len(all_artifacts)} artifact(s) produced")
     return all_artifacts

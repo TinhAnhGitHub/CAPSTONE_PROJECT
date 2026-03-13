@@ -6,11 +6,14 @@ from typing import (
     Any,
 )
 from pathlib import Path
+from datetime import timedelta
 import yaml
 
 from prefect import get_run_logger
+from prefect.cache_policies import INPUTS, NO_CACHE
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
+from video_pipeline.task.base.cache_keys import CACHE_KEY_FUNCTIONS
 
 
 InputT = TypeVar('InputT')
@@ -31,9 +34,10 @@ class TaskConfig(BaseModel):
     retry_delay_seconds: int = Field(default=5, ge=0)
     timeout_seconds: int = Field(default=30, ge=1)
     cache_enabled: bool = Field(default=False)
+    cache_expiration_seconds: int | None = Field(default=None, ge=1)
+    cache_key_fn: str | None = Field(default=None)  # Name of predefined cache key function
     create_summary_artifact: bool = Field(default=True)
     create_progress_artifact: bool = Field(default=True)
-
     additional_kwargs: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator('tags')
@@ -79,16 +83,28 @@ class TaskConfig(BaseModel):
         return cls(**task_data)
 
     def to_task_kwargs(self) -> dict[str, Any]:
-        from prefect.cache_policies import INPUTS, NO_CACHE
-        return {
+        kwargs: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "tags": self.tags,
             "retries": self.retries,
             "retry_delay_seconds": self.retry_delay_seconds,
             "timeout_seconds": self.timeout_seconds,
-            "cache_policy": INPUTS if self.cache_enabled else NO_CACHE,
         }
+
+        if self.cache_enabled:
+            if self.cache_key_fn and self.cache_key_fn in CACHE_KEY_FUNCTIONS:
+                kwargs["cache_key_fn"] = CACHE_KEY_FUNCTIONS[self.cache_key_fn]
+            else:
+                kwargs["cache_policy"] = INPUTS
+
+            if self.cache_expiration_seconds:
+                kwargs["cache_expiration"] = timedelta(seconds=self.cache_expiration_seconds)
+        else:
+            kwargs["cache_policy"] = NO_CACHE
+
+        return kwargs
+
 
 class BaseTask(ABC, Generic[InputT, OutputT]):
     def __init__(

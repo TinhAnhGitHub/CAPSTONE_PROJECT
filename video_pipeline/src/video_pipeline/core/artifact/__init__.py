@@ -10,7 +10,11 @@ from .artifact import (
     ImageCaptionMultimodalEmbeddingArtifact,
     SegmentCaptionArtifact,
     TextCapSegmentEmbedArtifact,
+    SegmentCaptionMultimodalEmbedArtifact,
     ASRArtifact,
+    AudioSegmentArtifact,
+    SegmentEmbeddingArtifact,
+    SegmentCaptionArtifact,
 )
 
 __all__ = [
@@ -25,5 +29,9 @@ __all__ = [
     "ImageCaptionMultimodalEmbeddingArtifact",
     "SegmentCaptionArtifact",
     "TextCapSegmentEmbedArtifact",
+    "SegmentCaptionMultimodalEmbedArtifact",
     "ASRArtifact",
+    "AudioSegmentArtifact",
+    "SegmentEmbeddingArtifact",
+    "SegmentCaptionArtifact",
 ]

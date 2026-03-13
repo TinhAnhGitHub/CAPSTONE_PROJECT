@@ -12,7 +12,7 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ImageArtifact, ImageEmbeddingArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.core.client.inference.qwenvl_embed import QwenVLEmbeddingClient, QwenVLEmbeddingConfig
 from video_pipeline.config import get_settings
 
@@ -215,9 +215,7 @@ async def image_embedding_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
+    postgres_client = await get_postgres_client()
     logger.info(f"[ImageEmbeddingChunk] Clients initialized | minio={settings.minio.endpoint}")
 
     embedding_config = QwenVLEmbeddingConfig(
@@ -233,9 +231,10 @@ async def image_embedding_chunk_task(
 
     try:
         all_artifacts = await task_impl.execute_template(items, client)
-        
+
     finally:
         await client.close()
+        await shutdown_postgres_client(postgres_client)
 
     logger.info(f"[ImageEmbeddingChunk] Done | {len(all_artifacts)} artifact(s) produced")
     return all_artifacts

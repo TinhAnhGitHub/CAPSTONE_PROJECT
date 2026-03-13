@@ -15,6 +15,7 @@ Dense Caption (Global Semantic Anchor)
   - the primary visible activity or event occurring in the image
 - Avoid speculation, emotions, or inferred intent.
 - Use neutral, descriptive phrasing suitable for embedding and retrieval.
+- Around 50-120 words.
 
 OUTPUT FORMAT:
 A single dense caption

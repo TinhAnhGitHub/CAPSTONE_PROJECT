@@ -11,7 +11,7 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import AutoshotArtifact, ImageArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.config import get_settings
 
 from .helper import FastFrameReader, frames_to_timestamp
@@ -207,20 +207,21 @@ async def image_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
+    postgres_client = await get_postgres_client()
     task_impl = ImageExtractionTask(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
         minio_client=minio_client,
     )
 
-    artifacts = []
-    preprocessed = await task_impl.preprocess(items)
-    for preproc in preprocessed:
-        result = await task_impl.execute(preproc, None)
-        artifact = await task_impl.postprocess(result)
-        artifacts.append(artifact)    
-   
+    try:
+        artifacts = []
+        preprocessed = await task_impl.preprocess(items)
+        for preproc in preprocessed:
+            result = await task_impl.execute(preproc, None)
+            artifact = await task_impl.postprocess(result)
+            artifacts.append(artifact)
+    finally:
+        await shutdown_postgres_client(postgres_client)
+
     logger.info(f"[ImageChunk] Done | {len(artifacts)} artifact(s) produced")
     return artifacts

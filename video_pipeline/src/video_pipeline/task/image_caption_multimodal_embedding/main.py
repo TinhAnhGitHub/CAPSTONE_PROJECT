@@ -11,7 +11,7 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ImageCaptionArtifact, ImageCaptionMultimodalEmbeddingArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.core.client.inference.qwenvl_embed import QwenVLEmbeddingClient, QwenVLEmbeddingConfig
 from video_pipeline.config import get_settings
 
@@ -47,34 +47,33 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
         )
         return preprocessed
 
-    async def execute_single(
+    async def execute(
         self,
-        item: list[_PreprocessedItem],
+        preprocessed: list[_PreprocessedItem],
         client: QwenVLEmbeddingClient,
     ) -> list[tuple[ImageCaptionMultimodalEmbeddingArtifact, bytes]]:
         """Embed the batch of images via QwenVL multimodal model.
 
         Args:
-            item: list of (ImageCaptionArtifact, image_bytes) — the full batch.
+            preprocessed: list of (ImageCaptionArtifact, image_bytes) — the full batch.
             client: QwenVL embedding client.
-            context: Task execution context.
 
         Returns:
             list of (ImageCaptionMultimodalEmbeddingArtifact, npy_bytes).
         """
         logger = get_run_logger()
-        logger.info(f"[ImageCaptionMultimodalEmbeddingTask] Batch embedding {len(item)} image(s)")
+        logger.info(f"[ImageCaptionMultimodalEmbeddingTask] Batch embedding {len(preprocessed)} image(s)")
 
         def _to_jpeg(data: bytes) -> bytes:
             buf = io.BytesIO()
             PILImage.open(io.BytesIO(data)).convert("RGB").save(buf, format="JPEG", quality=90)
             return buf.getvalue()
 
-        jpeg_list = [_to_jpeg(image_bytes) for _, image_bytes in item]
+        jpeg_list = [_to_jpeg(image_bytes) for _, image_bytes in preprocessed]
         embeddings: list[list[float]] = await client.ainfer_image(jpeg_list)
 
         output: list[tuple[ImageCaptionMultimodalEmbeddingArtifact, bytes]] = []
-        for (caption_artifact, _), embedding_vector in zip(item, embeddings):
+        for (caption_artifact, _), embedding_vector in zip(preprocessed, embeddings):
             logger.info(
                 f"[ImageCaptionMultimodalEmbeddingTask] Done | "
                 f"frame={caption_artifact.frame_index} dim={len(embedding_vector)}"
@@ -125,6 +124,50 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
             f"- **Embedding Dim:** {dim}\n"
         )
 
+    @staticmethod
+    async def summary_artifact(final_result: list[ImageCaptionMultimodalEmbeddingArtifact]) -> None:
+        """Create a Prefect markdown artifact summarising caption multimodal embedding results."""
+        if not final_result:
+            return
+
+        first = final_result[0]
+        import re
+        from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
+
+        raw_key = f"caption-mm-embedding-{first.related_video_id}".lower()
+        key = re.sub(r"[^a-z0-9-]", "-", raw_key)
+
+        total_dim = sum(
+            (a.metadata or {}).get("embedding_dim", 0)
+            for a in final_result
+        )
+        avg_dim = total_dim / max(len(final_result), 1)
+
+        markdown = (
+f"# Caption Multimodal Embedding Summary\n\n"
+f"| Field | Value |\n"
+f"|-------|-------|\n"
+f"| **Video ID** | `{first.related_video_id}` |\n"
+f"| **Total Embeddings** | `{len(final_result)}` |\n"
+f"| **Avg Embedding Dim** | `{avg_dim:.1f}` |\n"
+        )
+
+        await acreate_markdown_artifact(
+            key=key,
+            markdown=markdown,
+            description=f"Caption multimodal embedding summary for video {first.related_video_id}",
+        )
+
+        await acreate_table_artifact(
+            table=[
+                {"Field": "Video ID", "Value": str(first.related_video_id)},
+                {"Field": "Total Embeddings", "Value": str(len(final_result))},
+                {"Field": "Avg Embedding Dim", "Value": f"{avg_dim:.1f}"},
+            ],
+            key=f"{key}-table",
+            description=f"Caption multimodal embedding stats for video {first.related_video_id}",
+        )
+
 
 @task(**{**_base_kwargs, "name": "Image Caption Multimodal Embedding Chunk"})  # type: ignore
 async def image_caption_multimodal_embedding_chunk_task(
@@ -155,9 +198,6 @@ async def image_caption_multimodal_embedding_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
 
     embedding_config = QwenVLEmbeddingConfig(
         base_url=IMAGE_CAPTION_MULTIMODAL_EMBEDDING_CONFIG.additional_kwargs.get(
@@ -168,20 +208,22 @@ async def image_caption_multimodal_embedding_chunk_task(
         f"[ImageCaptionMultimodalEmbeddingChunk] QwenVL config | base_url={embedding_config.base_url}"
     )
 
+    # Create fresh PostgresClient for this task (avoids cross-loop issues)
+    postgres_client = await get_postgres_client()
+
     task_impl = ImageCaptionMultimodalEmbeddingTask(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
         minio_client=minio_client,
     )
-    client = QwenVLEmbeddingClient(config=embedding_config)
+    embedding_client = QwenVLEmbeddingClient(config=embedding_config)
 
     try:
-        preprocessed = await task_impl.preprocess(items)
-        batch_result = await task_impl.execute_single(preprocessed, client=client)
-        batch_artifacts = await task_impl.postprocess(batch_result)
+        all_artifacts = await task_impl.execute_template(items, embedding_client)
     finally:
-        await client.close()
+        await embedding_client.close()
+        await shutdown_postgres_client(postgres_client)
 
     logger.info(
-        f"[ImageCaptionMultimodalEmbeddingChunk] Done | {len(batch_artifacts)} artifact(s) produced"
+        f"[ImageCaptionMultimodalEmbeddingChunk] Done | {len(all_artifacts)} artifact(s) produced"
     )
-    return batch_artifacts
+    return all_artifacts

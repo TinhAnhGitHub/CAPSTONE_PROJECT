@@ -11,7 +11,7 @@ from video_pipeline.core.artifact import VideoArtifact, AutoshotArtifact
 from video_pipeline.core.client.inference.autoshot_client import AutoShotClient, AutoshotConfig
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 
 from video_pipeline.config import get_settings
 
@@ -29,14 +29,6 @@ class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
     async def preprocess(
         self, input_data: VideoArtifact
     ) -> tuple[np.ndarray, VideoArtifact]:
-        """Extract frames from video for autoshot processing.
-
-        Args:
-            input_data: Video artifact containing video metadata
-
-        Returns:
-            List of tuples containing (frames, video_artifact)
-        """
         logger = get_run_logger()
         logger.debug(f"Preprocessing video for autoshot: {input_data.video_id}")
 
@@ -207,11 +199,7 @@ async def autoshot_task(
     )
     logger.info(f"[AutoshotTask] MinIO client initialized at {settings.minio.endpoint}")
 
-    postgres_client = PostgresClient(
-        config=PgConfig( #type:ignore
-            database_url=settings.postgres.connection_string,
-        )
-    )
+    postgres_client = await get_postgres_client()
     logger.info("[AutoshotTask] Postgres client initialized")
 
     autoshot_config = AutoshotConfig(
@@ -227,7 +215,12 @@ async def autoshot_task(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
         minio_client=minio_client
     )
-    async with AutoShotClient(url=settings.triton.url, config=autoshot_config) as client:
-        artifact = await task_impl.execute_template(video_artifact, client)
+    try:
+        async with AutoShotClient(url=settings.triton.url, config=autoshot_config) as client:
+            logger.info("[AutoshotTask] Starting execute_template (preprocess -> execute -> postprocess)")
+            artifact = await task_impl.execute_template(video_artifact, client)
+            logger.info(f"[AutoshotTask] Completed | artifact_id={artifact.artifact_id}")
+    finally:
+        await shutdown_postgres_client(postgres_client)
 
     return artifact

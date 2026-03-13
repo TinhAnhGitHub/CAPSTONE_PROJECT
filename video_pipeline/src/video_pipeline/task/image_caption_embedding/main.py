@@ -10,7 +10,7 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ImageCaptionArtifact, TextCaptionEmbeddingArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.core.client.inference.te_client import MMBertClient, MMBertConfig
 from video_pipeline.config import get_settings
 
@@ -46,33 +46,31 @@ class ImageCaptionEmbeddingTask(BaseTask[list[ImageCaptionArtifact], list[TextCa
         logger.info(f"[ImageCaptionEmbeddingTask] Preprocessing done — {len(preprocessed)} caption(s) ready")
         return preprocessed
 
-    async def execute_single(
+    async def execute(
         self,
-        item: list[_PreprocessedItem],
+        preprocessed: list[_PreprocessedItem],
         client: MMBertClient,
-        context: TaskExecutionContext,
     ) -> list[tuple[TextCaptionEmbeddingArtifact, bytes]]:
         """Embed a batch of caption texts via mmBERT in one request.
 
         Args:
-            item: list of (ImageCaptionArtifact, caption_text) — the full batch.
+            preprocessed: list of (ImageCaptionArtifact, caption_text) — the full batch.
             client: mmBERT embedding client.
-            context: Task execution context.
 
         Returns:
             list of (TextCaptionEmbeddingArtifact, npy_bytes) ready for postprocess.
         """
         logger = get_run_logger()
-        logger.info(f"[ImageCaptionEmbeddingTask] Embedding {len(item)} caption(s) via mmBERT")
+        logger.info(f"[ImageCaptionEmbeddingTask] Embedding {len(preprocessed)} caption(s) via mmBERT")
 
-        texts = [caption_text for _, caption_text in item]
+        texts = [caption_text for _, caption_text in preprocessed]
         embeddings: list[list[float]] | None = await client.ainfer(texts)
 
         if embeddings is None:
             raise RuntimeError("mmBERT ainfer returned None — check server health")
 
         output: list[tuple[TextCaptionEmbeddingArtifact, bytes]] = []
-        for (caption_artifact, caption_text), embedding_vector in zip(item, embeddings):
+        for (caption_artifact, caption_text), embedding_vector in zip(preprocessed, embeddings):
             logger.info(
                 f"[ImageCaptionEmbeddingTask] Embedding done | frame={caption_artifact.frame_index} "
                 f"dim={len(embedding_vector)} text={caption_text[:60]!r}"
@@ -121,11 +119,54 @@ class ImageCaptionEmbeddingTask(BaseTask[list[ImageCaptionArtifact], list[TextCa
             f"- **Embedding Dim:** {dim}\n"
         )
 
+    @staticmethod
+    async def summary_artifact(final_result: list[TextCaptionEmbeddingArtifact]) -> None:
+        """Create a Prefect markdown artifact summarising caption embedding results."""
+        if not final_result:
+            return
+
+        first = final_result[0]
+        import re
+        from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
+
+        raw_key = f"caption-embedding-{first.related_video_id}".lower()
+        key = re.sub(r"[^a-z0-9-]", "-", raw_key)
+
+        total_dim = sum(
+            (a.metadata or {}).get("embedding_dim", 0)
+            for a in final_result
+        )
+        avg_dim = total_dim / max(len(final_result), 1)
+
+        markdown = (
+f"# Caption Embedding Summary\n\n"
+f"| Field | Value |\n"
+f"|-------|-------|\n"
+f"| **Video ID** | `{first.related_video_id}` |\n"
+f"| **Total Embeddings** | `{len(final_result)}` |\n"
+f"| **Avg Embedding Dim** | `{avg_dim:.1f}` |\n"
+        )
+
+        await acreate_markdown_artifact(
+            key=key,
+            markdown=markdown,
+            description=f"Caption embedding summary for video {first.related_video_id}",
+        )
+
+        await acreate_table_artifact(
+            table=[
+                {"Field": "Video ID", "Value": str(first.related_video_id)},
+                {"Field": "Total Embeddings", "Value": str(len(final_result))},
+                {"Field": "Avg Embedding Dim", "Value": f"{avg_dim:.1f}"},
+            ],
+            key=f"{key}-table",
+            description=f"Caption embedding stats for video {first.related_video_id}",
+        )
+
 
 @task(**{**_base_kwargs, "name": "Image Caption Embedding Chunk"})  # type: ignore
 async def image_caption_embedding_chunk_task(
     items: list[ImageCaptionArtifact],
-    context: TaskExecutionContext,
 ) -> list[TextCaptionEmbeddingArtifact]:
     """Embed a batch of caption texts using mmBERT.
 
@@ -133,7 +174,6 @@ async def image_caption_embedding_chunk_task(
 
     Args:
         items: Batch of ImageCaptionArtifacts whose text to embed.
-        context: Task execution context.
 
     Returns:
         List of TextCaptionEmbeddingArtifacts, one per caption in the batch.
@@ -149,9 +189,7 @@ async def image_caption_embedding_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
+    postgres_client = await get_postgres_client()
 
     mmbert_config = MMBertConfig(
         model_name=IMAGE_CAPTION_EMBEDDING_CONFIG.additional_kwargs.get("model_name", "mmbert"),
@@ -166,14 +204,10 @@ async def image_caption_embedding_chunk_task(
     client = MMBertClient(config=mmbert_config)
 
     try:
-        preprocessed = await task_impl.preprocess(items)
-        all_artifacts: list[TextCaptionEmbeddingArtifact] = []
-        async for batch_result in task_impl.execute([preprocessed], client, context):
-            batch_artifacts = await task_impl.postprocess(batch_result)
-            all_artifacts.extend(batch_artifacts)
-        await task_impl.create_summary_artifact(all_artifacts, context)
+        all_artifacts = await task_impl.execute_template(items, client)
     finally:
         await client.close()
+        await shutdown_postgres_client(postgres_client)
 
     logger.info(f"[ImageCaptionEmbeddingChunk] Done | {len(all_artifacts)} artifact(s) produced")
     return all_artifacts

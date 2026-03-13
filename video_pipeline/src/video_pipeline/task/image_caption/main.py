@@ -13,7 +13,7 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ImageArtifact, ImageCaptionArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient, OpenRouterConfig
 from video_pipeline.config import get_settings
 
@@ -83,10 +83,11 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
             for _, frame_bytes in preprocessed
         ]
         results = await client.batch_ainfer_image(
-            data_uris, prompts=DEFAULT_PROMPT, max_concurrent=max_concurrent
+            data_uris, prompts=DEFAULT_PROMPT, max_concurrent=max_concurrent #type:ignore
         )
 
-        
+        if results is None:
+            raise RuntimeError("OpenRouter batch_ainfer_image returned None — API call failed")
 
         output: list[tuple[ImageCaptionArtifact, bytes]] = []
         total_usage: dict[str, float] = {
@@ -97,7 +98,12 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
         }
 
         for (image_artifact, _), result in zip(preprocessed, results):
-            dense_caption = result.content if result else ""
+            if result is None:
+                raise RuntimeError(
+                    f"OpenRouter returned None for frame {image_artifact.frame_index} — API call failed"
+                )
+
+            dense_caption = result.content or ""
             usage: dict = result.usage or {} if result else {}
 
             for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
@@ -172,7 +178,6 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
     @staticmethod
     async def summary_artifact(
         final_result: list[ImageCaptionArtifact],
-        model: str = "unknown",
     ) -> None:
         """Create Prefect artifacts: a markdown stats summary + image artifacts per sample frame."""
         if not final_result:
@@ -207,20 +212,6 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
         step = max(len(final_result) // sample_size, 1)
         samples = final_result[::step][:sample_size]
 
-        for artifact in samples:
-            meta = artifact.metadata or {}
-            caption = meta.get("caption", "")
-            display_caption = (caption[:120] + "…") if len(caption) > 120 else caption
-            image_http_url = s3_to_http(artifact.image_minio_url)
-            frame_key = re.sub(
-                r"[^a-z0-9-]", "-",
-                f"image-caption-frame-{video_id}-{artifact.frame_index}".lower()
-            )
-            await acreate_image_artifact(
-                image_url=image_http_url,
-                key=frame_key,
-                description=f"Frame {artifact.frame_index} @ {artifact.time_stamp} — {display_caption}",
-            )
 
         gallery_rows = ""
         for artifact in samples:
@@ -232,6 +223,7 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
                 f"| {display_caption} |\n"
             )
 
+        model = ImageCaptionTask.config.additional_kwargs["model"]
         markdown = (
 f"# Image Caption Summary\n\n"
 f"| Field | Value |\n"
@@ -314,9 +306,7 @@ async def image_caption_chunk_task(
         secret_key=settings.minio.secret_key,
         secure=settings.minio.secure,
     )
-    postgres_client = PostgresClient(
-        config=PgConfig(database_url=settings.postgres.connection_string)  # type: ignore
-    )
+    postgres_client = await get_postgres_client()
     logger.info(f"[ImageCaptionChunk] Clients initialized | minio={settings.minio.endpoint}")
 
     openrouter_config = OpenRouterConfig(
@@ -334,9 +324,9 @@ async def image_caption_chunk_task(
 
     try:
         all_artifacts = await task_impl.execute_template(items, client)
-        await ImageCaptionTask.summary_artifact(all_artifacts, model=openrouter_config.model)
     finally:
         await client.close()
+        await shutdown_postgres_client(postgres_client)
 
     logger.info(f"[ImageCaptionChunk] Done | {len(all_artifacts)} artifact(s) produced")
     return all_artifacts

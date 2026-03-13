@@ -15,7 +15,7 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import VideoArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg import PostgresClient, PgConfig
+from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.config import get_settings
 
 from .helper import (
@@ -172,13 +172,7 @@ async def video_reg_task(
     )
     logger.info(f"[VideoRegTask] MinIO client initialized at {settings.minio.endpoint}")
 
-    logger.debug(f"[VideoRegTask] Postgres config: {settings.postgres=}")
-    postgres_client = PostgresClient(
-        config=PgConfig( #type:ignore
-            database_url=settings.postgres.connection_string,
-        )
-    )
-    await postgres_client.initialize()
+    postgres_client = await get_postgres_client()
     logger.info("[VideoRegTask] Postgres client initialized")
 
     task_impl = VideoRegistryTask(
@@ -190,7 +184,11 @@ async def video_reg_task(
     )
 
     logger.info("[VideoRegTask] Preprocessing input...")
-    preprocessed = await task_impl.preprocess(input_data=video_input)
-    result = await task_impl.execute(preprocessed, client=None)
-    artifact = await task_impl.postprocess(result)
-    return artifact
+
+    try:
+        preprocessed = await task_impl.preprocess(input_data=video_input)
+        result = await task_impl.execute(preprocessed, client=None)
+        artifact = await task_impl.postprocess(result)
+        return artifact
+    finally:
+        await shutdown_postgres_client(postgres_client)

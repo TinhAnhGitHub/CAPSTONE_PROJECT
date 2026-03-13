@@ -8,13 +8,22 @@ import ffmpeg
 import hashlib
 from urllib.parse import urlparse
 
-
 def parse_s3_url(s3_url: str) -> tuple[str, str]:
     """Return (bucket, object_name) from an s3:// or http(s):// MinIO URL."""
-    parsed = urlparse(s3_url)
-    path_parts = parsed.path.lstrip("/").split("/", 1)
-    bucket = path_parts[0]
-    object_name = path_parts[1] if len(path_parts) > 1 else ""
+    
+    if s3_url.startswith('s3://'):
+        # Strip the prefix and split by the first slash
+        # s3://bucket/path/to/file -> bucket, path/to/file
+        path = s3_url.replace("s3://", "", 1)
+        parts = path.split("/", 1)
+    else:
+        # Standard http/https parsing
+        parsed = urlparse(s3_url)
+        # lstrip("/") handles the leading slash in /bucket/object
+        parts = parsed.path.lstrip("/").split("/", 1)
+
+    bucket = parts[0]
+    object_name = parts[1] if len(parts) > 1 else ""
     return bucket, object_name
 
 def extract_extension(s3_link: str) -> str:
