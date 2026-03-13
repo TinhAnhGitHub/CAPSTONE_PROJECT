@@ -3,7 +3,7 @@ import uuid
 from bson import ObjectId
 from prefect.deployments import run_deployment
 
-DEPLOYMENT_NAME = "Single Video Processing Flow/poc-deployment"
+DEPLOYMENT_NAME = "Single Video Processing Flow/local-deployment"
 
 async def trigger_video_pipeline(
     video_s3_path: str,
@@ -16,7 +16,7 @@ async def trigger_video_pipeline(
     result = await run_deployment(  # type: ignore
         name=DEPLOYMENT_NAME,
         parameters={
-            "video_id": video_id,
+            "video_id": '69afd284e1fa982f740cb545',
             "user_id": user_id,
             "video_file_path": video_s3_path,
             "additional_flow_description": additional_flow_description,
