@@ -8,7 +8,9 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 120
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "video_registration_cache_key"
 
   autoshot_detection:
     name: "Autoshot Segment Detection"
@@ -19,7 +21,9 @@ tasks:
     retries: 3
     retry_delay_seconds: 10
     timeout_seconds: 600
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "video_artifact_cache_key"
 
     additional_kwargs:
       model_name: "autoshot"
@@ -34,11 +38,101 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "asr_batch_cache_key"
 
     additional_kwargs:
       model_name: "Qwen/Qwen3-ASR-0.6B"
       client_url: "http://qwen3-asr:80/v1"
+
+  audio_segmentation:
+    name: "Audio Segmentation"
+    description: "Segment ASR results into semantically meaningful chunks using LLM or rule-based fallback"
+    stage: "Analysis"
+    tags:
+      - "audio-segment-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "audio_segment_cache_key"
+
+    additional_kwargs:
+      model: "openrouter/hunter-alpha"
+      batch_size: 10
+      min_duration_sec: 30
+
+  segment_embedding:
+    name: "Segment Embedding"
+    description: "Extract 6 frames from audio segments and embed using QwenVL"
+    stage: "Analysis"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "segment_embedding_cache_key"
+
+    additional_kwargs:
+      base_url: "http://qwen_vl_embedding:8080/embedding"
+      n_frames: 6
+
+  segment_caption:
+    name: "Segment Caption"
+    description: "Generate captions for audio segments using VLM with visual frames and audio transcript"
+    stage: "Analysis"
+    tags:
+      - "segment-caption-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "segment_caption_cache_key"
+
+    additional_kwargs:
+      model: "openrouter/healer-alpha"
+      base_url: "https://openrouter.ai/api/v1"
+      n_frames: 6
+      max_concurrent: 5
+
+  segment_caption_embedding:
+    name: "Segment Caption Embedding"
+    description: "Embed segment caption texts using mmBERT and persist as TextCapSegmentEmbedArtifacts"
+    stage: "Indexing"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 120
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "segment_caption_embedding_cache_key"
+
+    additional_kwargs:
+      model_name: "mmbert"
+      base_url: "http://mmbert:8000"
+
+  segment_caption_multimodal_embedding:
+    name: "Segment Caption Multimodal Embedding"
+    description: "Embed segment frames using QwenVL and persist as SegmentCaptionMultimodalEmbedArtifacts"
+    stage: "Indexing"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "segment_caption_multimodal_embedding_cache_key"
+
+    additional_kwargs:
+      base_url: "http://qwen_vl_embedding:8080/embedding"
+      n_frames: 6
 
   video_preprocess:
     name: "Video Preprocess"
@@ -60,7 +154,9 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "image_extraction_batch_cache_key"
 
   image_caption:
     name: "Image Caption"
@@ -71,10 +167,12 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_batch_cache_key_caption"
 
     additional_kwargs:
-      model: "qwen/qwen3-vl-32b-instruct"
+      model: "openrouter/healer-alpha"
       base_url: "https://openrouter.ai/api/v1"
 
   image_caption_embedding:
@@ -86,7 +184,9 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 120
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "caption_embedding_batch_cache_key"
 
     additional_kwargs:
       model_name: "mmbert"
@@ -101,7 +201,9 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "caption_multimodal_embedding_batch_cache_key"
 
     additional_kwargs:
       base_url: "http://qwen_vl_embedding:8080/embedding"
@@ -115,7 +217,9 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_batch_cache_key_ocr"
 
     additional_kwargs:
       model_name: "ocr_lighton"
@@ -130,7 +234,9 @@ tasks:
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
-    cache_enabled: false
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_batch_cache_key_embedding"
 
     additional_kwargs:
       base_url: "http://qwen_vl_embedding:8080/embedding"
@@ -148,18 +254,87 @@ tasks:
     cache_enabled: false
 
     additional_kwargs:
-      # Base name for Qdrant collections.
-      # Two collections will be created: <collection_base>_image and <collection_base>_caption
-      collection_base: "video_embeddings"
+      collection_base: "video_embedding2"
 
-      # Vector dimensionalities (used as fallback when artifact metadata is missing)
-      image_dim: 1536      # QwenVL visual embedding dim
+      image_dim: 2048      # QwenVL visual embedding dim
       caption_dim: 768     # mmBERT text embedding dim
-      mm_dim: 1536         # QwenVL multimodal embedding dim
+      mm_dim: 2048         # QwenVL multimodal embedding dim
 
-      # Store vectors on disk (useful for large-scale deployments)
       on_disk: false
 
-      # Qdrant client timeout in seconds
       qdrant_timeout: 30
+
+  image_qdrant_indexing:
+    name: "Image Qdrant Indexing"
+    description: "Upsert image embeddings into Qdrant as dense vectors"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "image_qdrant_indexing_cache_key"
+
+  caption_qdrant_indexing:
+    name: "Caption Qdrant Indexing"
+    description: "Upsert caption embeddings into Qdrant as hybrid vectors (dense + sparse)"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "caption_qdrant_indexing_cache_key"
+
+  segment_qdrant_indexing:
+    name: "Segment Qdrant Indexing"
+    description: "Upsert segment embeddings into Qdrant vector database"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "segment_qdrant_indexing_cache_key"
+
+  segment_caption_qdrant_indexing:
+    name: "Segment Caption Qdrant Indexing"
+    description: "Upsert segment caption embeddings into Qdrant as hybrid vectors (dense + sparse)"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  # 30 days
+    cache_key_fn: "segment_caption_qdrant_indexing_cache_key"
+
+  kg_extraction:
+    name: "Knowledge Graph Extraction"
+    description: "Extract entities, micro-events, and relationships from segment captions using LLM"
+    stage: "Analysis"
+    tags:
+      - "kg-task"
+      - "llm-service"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 600
+    cache_enabled: false
+
+    additional_kwargs:
+      model: "qwen/qwen3-coder-next"
+      base_url: "https://openrouter.ai/api/v1"
+      max_tokens: 10000
+      max_concurrent: 5
 

@@ -58,7 +58,7 @@ class PostgresSettings(BaseSettings):
 class QdrantSettings(BaseSettings):
     """Qdrant vector database configuration."""
 
-    host: str = Field(default="localhost")
+    host: str = Field(default="qdrant")
     port: int = Field(default=6333)
     api_key: str | None = Field(default=None)
     collection_name: str = Field(default="video_embeddings")
