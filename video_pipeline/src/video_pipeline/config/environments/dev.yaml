@@ -22,7 +22,7 @@ qdrant:
   host: "qdrant"
   port: 6333
   api_key: null
-  collection_name: "video_embeddings_dev"
+  collection_base: "video_embeddings_dev"
 
 dask:
   n_workers: 4

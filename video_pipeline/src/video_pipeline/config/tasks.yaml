@@ -79,14 +79,14 @@ tasks:
 
     additional_kwargs:
       base_url: "http://qwen_vl_embedding:8080/embedding"
-      n_frames: 6
+      n_frames: 4
 
   segment_caption:
     name: "Segment Caption"
     description: "Generate captions for audio segments using VLM with visual frames and audio transcript"
     stage: "Analysis"
     tags:
-      - "segment-caption-task"
+      - "llm-task"
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
@@ -95,9 +95,9 @@ tasks:
     cache_key_fn: "segment_caption_cache_key"
 
     additional_kwargs:
-      model: "openrouter/healer-alpha"
+      model: "nvidia/nemotron-nano-12b-v2-vl:free"
       base_url: "https://openrouter.ai/api/v1"
-      n_frames: 6
+      n_frames: 4
       max_concurrent: 5
 
   segment_caption_embedding:
@@ -132,7 +132,7 @@ tasks:
 
     additional_kwargs:
       base_url: "http://qwen_vl_embedding:8080/embedding"
-      n_frames: 6
+      n_frames: 4
 
   video_preprocess:
     name: "Video Preprocess"
@@ -150,12 +150,12 @@ tasks:
     description: "Extract representative frames from video segments and persist as ImageArtifacts"
     stage: "Analysis"
     tags:
-      - "image-task"
+      - "image-chunk-task"
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "image_extraction_batch_cache_key"
 
   image_caption:
@@ -163,7 +163,7 @@ tasks:
     description: "Caption extracted video frames using a VLM via OpenRouter and persist as ImageCaptionArtifacts"
     stage: "Analysis"
     tags:
-      - "llm-service"
+      - "llm-task"
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
@@ -172,7 +172,7 @@ tasks:
     cache_key_fn: "image_batch_cache_key_caption"
 
     additional_kwargs:
-      model: "openrouter/healer-alpha"
+      model: "qwen/qwen3-vl-8b-instruct"
       base_url: "https://openrouter.ai/api/v1"
 
   image_caption_embedding:
@@ -245,9 +245,6 @@ tasks:
     name: "Qdrant Indexing"
     description: "Upsert image, caption, and multimodal embeddings into Qdrant with dense + sparse indexing"
     stage: "Indexing"
-    tags:
-      - "qdrant-task"
-      - "indexing-task"
     retries: 2
     retry_delay_seconds: 10
     timeout_seconds: 300
@@ -255,13 +252,18 @@ tasks:
 
     additional_kwargs:
       collection_base: "video_embedding2"
-
       image_dim: 2048      # QwenVL visual embedding dim
+      image_dense_field: "image_dense"
+
       caption_dim: 768     # mmBERT text embedding dim
-      mm_dim: 2048         # QwenVL multimodal embedding dim
+      caption_text_dense_field: "caption_text_dense"
+      caption_sparse_field: "caption_sparse"
+      
+      mm_dim: 2048         
+      caption_mm_dense_field: "caption_mm_dense"
 
-      on_disk: false
-
+      on_disk: true
+      
       qdrant_timeout: 30
 
   image_qdrant_indexing:

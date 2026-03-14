@@ -15,8 +15,9 @@ echo "Ensuring work pool exists..."
 prefect work-pool create --type process local-pool || true
 
 echo "Ensuring concurrency limits..."
-# prefect concurrency-limit create llm-service 3 || true
-prefect concurrency-limit create embedding-task 5 || true
+prefect concurrency-limit create llm-task 5 || true
+prefect concurrency-limit create embedding-task 50 || true
+prefect concurrency-limit create image-chunk-task 10 || true
 # prefect concurrency-limit create autoshot-task 20 || true
 # # prefect concurrency-limit create asr-task 20 || true
 # prefect concurrency-limit create video-registry 1 || true

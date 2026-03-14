@@ -16,7 +16,7 @@ async def trigger_video_pipeline(
     result = await run_deployment(  # type: ignore
         name=DEPLOYMENT_NAME,
         parameters={
-            "video_id": '69afd284e1fa982f740cb545',
+            "video_id": "73b4ez43a2209d7fe4a86606",
             "user_id": user_id,
             "video_file_path": video_s3_path,
             "additional_flow_description": additional_flow_description,
@@ -59,12 +59,7 @@ async def trigger_concurrent(video_paths: list[str], timeout: int = 300):
 
 if __name__ == "__main__":
     video_paths = [
-        "s3://video/veratasium1.mp4",
-        # "s3://video/veratasium2.mp4",
-        # "s3://video/veratasium3.mp4",
-        # "s3://video/veratasium1.mp4",
-        # "s3://video/veratasium2.mp4",
-        # "s3://video/veratasium3.mp4",
+        "s3://video/veritasium_00.mp4",
     ]
 
     asyncio.run(trigger_concurrent(video_paths))

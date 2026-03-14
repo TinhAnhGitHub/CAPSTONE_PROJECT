@@ -1,15 +1,15 @@
 services:
   mmbert:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    image: ghcr.io/ggml-org/llama.cpp:server
     container_name: te_mmbert
     shm_size: "4gb"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
     ports:
       - "${MMBERT_PORT}:8000"
     volumes:
@@ -22,12 +22,11 @@ services:
     command: >
       -m /models/${MMBERT_MODEL}
       --embedding
-      --ctx-size 20480
-      --parallel 10
+      --ctx-size 40960
+      --parallel 5
       --batch-size 8192
       --ubatch-size 8192
-      --cache-ram 4096
-      --threads 18
+      --threads 12
       --host 0.0.0.0
       --port 8000
       --mlock
@@ -63,13 +62,13 @@ services:
       -nkvo
       -c 32768
       --ctx-size 16384
-      --batch-size 13000
-      --ubatch-size 13000
+      --batch-size 8192
+      --ubatch-size 8192
       --port 8080
       --pooling none
       -t 6
       --threads-batch 6
-      --n-gpu-layers 10
+      --n-gpu-layers 2
       --flash-attn on
       -ctk q8_0 
       -ctv q8_0

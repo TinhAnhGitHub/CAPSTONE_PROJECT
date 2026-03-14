@@ -6,11 +6,9 @@ import os
 from pathlib import Path
 from typing import Literal
 
-
-_ENV_FILE = Path(__file__).parent.parent.parent.parent / '.env'
-print(_ENV_FILE)
-
 from dotenv import load_dotenv
+
+_ENV_FILE = Path(__file__).parent.parent.parent.parent / ".env"
 load_dotenv(_ENV_FILE)
 
 import yaml
@@ -26,10 +24,7 @@ class MinioSettings(BaseSettings):
     bucket_name: str = Field(default="video-pipeline")
 
     model_config = SettingsConfigDict(
-        env_prefix="MINIO_",
-        env_file=_ENV_FILE,
-        extra="ignore",
-        case_sensitive=False
+        env_prefix="MINIO_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
     )
 
 
@@ -43,10 +38,7 @@ class PostgresSettings(BaseSettings):
     password: str = Field(default="postgres")
 
     model_config = SettingsConfigDict(
-        env_prefix="POSTGRES_",
-        env_file=_ENV_FILE,
-        extra="ignore",
-        case_sensitive=False
+        env_prefix="POSTGRES_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
     )
 
     @property
@@ -61,13 +53,10 @@ class QdrantSettings(BaseSettings):
     host: str = Field(default="qdrant")
     port: int = Field(default=6333)
     api_key: str | None = Field(default=None)
-    collection_name: str = Field(default="video_embeddings")
+    collection_base: str = Field(default="video_embeddings")
 
     model_config = SettingsConfigDict(
-        env_prefix="QDRANT_",
-        env_file=_ENV_FILE,
-        extra="ignore",
-        case_sensitive=False
+        env_prefix="QDRANT_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
     )
 
 
@@ -80,10 +69,7 @@ class DaskSettings(BaseSettings):
     scheduler_address: str | None = Field(default=None)
 
     model_config = SettingsConfigDict(
-        env_prefix="DASK_",
-        env_file=_ENV_FILE,
-        extra="ignore",
-        case_sensitive=False
+        env_prefix="DASK_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
     )
 
     def to_cluster_kwargs(self) -> dict[str, int | bool]:
@@ -103,10 +89,7 @@ class TaskConfigSettings(BaseSettings):
     default_timeout: int = Field(default=300, ge=1)
 
     model_config = SettingsConfigDict(
-        env_prefix="TASK_",
-        env_file=_ENV_FILE,
-        extra="ignore",
-        case_sensitive=False
+        env_prefix="TASK_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
     )
 
 
@@ -117,10 +100,7 @@ class TritonSettings(BaseSettings):
     timeout: int = Field(default=30)
 
     model_config = SettingsConfigDict(
-        env_prefix="TRITON_",
-        env_file=_ENV_FILE,
-        extra="ignore",
-        case_sensitive=False
+        env_prefix="TRITON_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
     )
 
 
@@ -140,10 +120,7 @@ class AppSettings(BaseSettings):
     triton: TritonSettings = Field(default_factory=TritonSettings)
 
     model_config = SettingsConfigDict(
-        env_file=_ENV_FILE,
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=False
+        env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore", case_sensitive=False
     )
 
     @classmethod
