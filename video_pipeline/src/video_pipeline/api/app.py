@@ -9,6 +9,7 @@ from loguru import logger
 from video_pipeline.api.lifespan import lifespan
 from video_pipeline.api.routers.health import router as health_router
 from video_pipeline.api.routers.upload import router as upload_router
+from video_pipeline.api.routers.videos import router as videos_router
 
 app = FastAPI(
     title="Video Pipeline API",
@@ -32,6 +33,7 @@ app.add_middleware(
 
 app.include_router(upload_router, prefix="")
 app.include_router(health_router, prefix="")
+app.include_router(videos_router, prefix="")
 
 
 @app.get("/")
@@ -42,6 +44,7 @@ async def root() -> dict:
         "docs": "/docs",
         "endpoints": {
             "upload": "/api/uploads",
+            "delete_video": "/api/videos/{video_id}",
             "health": "/api/health",
             "prefect_health": "/api/health/prefect",
         },
