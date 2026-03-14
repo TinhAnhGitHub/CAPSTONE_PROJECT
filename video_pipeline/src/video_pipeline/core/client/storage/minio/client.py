@@ -167,3 +167,16 @@ class MinioStorageClient:
                 os.remove(tmp.name)
             except FileNotFoundError:
                 pass
+    
+    def delete_object(self, bucket: str, object_name: str) -> None:
+        self._ensure_bucket(bucket)
+
+        try:
+            self.client.remove_object(bucket, object_name)
+            logger.info(f"Delete {object_name=} in {bucket=}")
+        except S3Error as exc:
+            logger.exception(f"Failed to delete {object_name} from {bucket}")
+            raise MinioStorageError(
+                f"Failed to delete object {bucket}/{object_name}: {exc}"
+            ) from exc
+    

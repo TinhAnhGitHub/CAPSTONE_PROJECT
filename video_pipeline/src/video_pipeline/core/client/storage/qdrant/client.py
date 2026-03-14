@@ -1,4 +1,5 @@
 from typing import Any
+from grpc import StatusCode
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
     VectorParams,
@@ -113,17 +114,34 @@ class QdrantStorageClient:
                 embedding_field_name_list=embedding_field_name_list,
             )
 
-            await self.client.create_collection(
-                collection_name=self.collection_name, 
-                vectors_config=vectors_config or None, 
-                sparse_vectors_config=sparse_vectors_config or None
-            )
-            logger.info(
-                f"Qdrant collection name created: {self.collection_name=}",
-            )
+            try:
+                await self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=vectors_config or None,
+                    sparse_vectors_config=sparse_vectors_config or None
+                )
+                logger.info(
+                    f"Qdrant collection name created: {self.collection_name=}",
+                )
+            except Exception as e:
+                # Handle race condition: another task may have created it first
+                if self._is_already_exists_error(e):
+                    logger.info(f"Qdrant collection already exists (race): {self.collection_name=}")
+                else:
+                    raise
         except Exception as e:
             logger.exception(f"Failed to create collection: {e}")
             raise QdrantClientError(f"Failed to create collection: {e}") from e
+
+    def _is_already_exists_error(self, error: Exception) -> bool:
+        """Check if the error is 'already exists' from gRPC or REST."""
+        error_str = str(error).lower()
+        if "already_exists" in error_str or "already exists" in error_str:
+            return True
+        # Check gRPC status code
+        if hasattr(error, "_state") and hasattr(error._state, "code"):
+            return error._state.code == StatusCode.ALREADY_EXISTS
+        return False
 
     async def insert_vectors(self, data: list[dict[str, Any]]) -> list[str]:
         """
