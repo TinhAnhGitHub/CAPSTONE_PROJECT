@@ -18,6 +18,6 @@ Dense Caption (Global Semantic Anchor)
 - Around 50-120 words.
 
 OUTPUT FORMAT:
-A single dense caption
+A single clean caption with text.
 ```
 """

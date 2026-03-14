@@ -11,7 +11,10 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import AutoshotArtifact, ImageArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
+from video_pipeline.core.client.storage.pg.runtime import (
+    get_postgres_client,
+    shutdown_postgres_client,
+)
 from video_pipeline.config import get_settings
 
 from .helper import FastFrameReader, frames_to_timestamp
@@ -43,8 +46,7 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
         video_extension = autoshot_artifact.related_video_extension
 
         logger.info(
-            f"[ImageExtractionTask] Preprocessing {len(input_data)} frame(s) | "
-            f"video={video_url}"
+            f"[ImageExtractionTask] Preprocessing {len(input_data)} frame(s) | video={video_url}"
         )
 
         preprocessed: list[_PreprocessedImageItem] = []
@@ -56,9 +58,12 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
                 video_bytes = f.read()
 
             reader = FastFrameReader(video_bytes)
-            for artifact, frame_index in input_data:
-                frame_bytes = reader.get_frame(frame_index)
-                preprocessed.append((artifact, frame_index, frame_bytes))
+            try:
+                for artifact, frame_index in input_data:
+                    frame_bytes = reader.get_frame(frame_index)
+                    preprocessed.append((artifact, frame_index, frame_bytes))
+            finally:
+                reader.close()
 
         logger.info(
             f"[ImageExtractionTask] Preprocessing done — {len(preprocessed)} frame(s) extracted"
@@ -84,6 +89,7 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
         autoshot_artifact, frame_index, frame_bytes = preprocessed
         fps = autoshot_artifact.related_video_fps
         timestamp = frames_to_timestamp(frame_index, fps)
+        timestamp_sec = frame_index / fps  # Numeric seconds for filtering
         artifact = ImageArtifact(
             frame_index=frame_index,
             extension=".webp",
@@ -92,6 +98,7 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
             related_video_extension=autoshot_artifact.related_video_extension,
             related_video_fps=fps,
             timestamp=timestamp,
+            timestamp_sec=timestamp_sec,
             autoshot_artifact_id=str(autoshot_artifact.artifact_id),
             user_id=autoshot_artifact.user_id,
             content_type="image/webp",
@@ -106,15 +113,6 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
             artifact, upload_to_minio=io.BytesIO(frame_bytes)
         )
         return artifact
-
-    def format_result(self, result: ImageArtifact) -> str:
-        return f"""### Image Frame
-
-- **Frame Index:** {result.frame_index}
-- **Timestamp:** {result.timestamp}
-- **MinIO URL:** `{result.minio_url_path}`
-- **Autoshot Artifact ID:** `{result.autoshot_artifact_id}`
-"""
 
     @staticmethod
     async def summary_artifact(final_result: list[ImageArtifact]) -> None:
@@ -134,18 +132,18 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
             )
 
         markdown = (
-f"# Image Extraction Summary\n\n"
-f"| Field | Value |\n"
-f"|-------|-------|\n"
-f"| **Related Video ID** | `{first.related_video_id}` |\n"
-f"| **Autoshot Artifact ID** | `{first.autoshot_artifact_id}` |\n"
-f"| **User ID** | `{first.user_id}` |\n"
-f"| **FPS** | `{first.related_video_fps}` |\n"
-f"| **Frames Extracted** | `{len(final_result)}` |\n\n"
-f"## Extracted Frames\n\n"
-f"| Frame Index | Timestamp | MinIO URL | Artifact ID |\n"
-f"|-------------|-----------|-----------|-------------|\n"
-f"{frame_rows}"
+            f"# Image Extraction Summary\n\n"
+            f"| Field | Value |\n"
+            f"|-------|-------|\n"
+            f"| **Related Video ID** | `{first.related_video_id}` |\n"
+            f"| **Autoshot Artifact ID** | `{first.autoshot_artifact_id}` |\n"
+            f"| **User ID** | `{first.user_id}` |\n"
+            f"| **FPS** | `{first.related_video_fps}` |\n"
+            f"| **Frames Extracted** | `{len(final_result)}` |\n\n"
+            f"## Extracted Frames\n\n"
+            f"| Frame Index | Timestamp | MinIO URL | Artifact ID |\n"
+            f"|-------------|-----------|-----------|-------------|\n"
+            f"{frame_rows}"
         )
 
         await acreate_markdown_artifact(

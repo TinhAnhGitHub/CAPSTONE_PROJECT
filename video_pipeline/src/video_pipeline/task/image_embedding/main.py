@@ -72,9 +72,11 @@ class ImageEmbeddingTask(BaseTask[list[ImageArtifact], list[ImageEmbeddingArtifa
         logger.info(f"[ImageEmbeddingTask] Batch embedding {len(preprocessed)} frame(s)")
 
         
-        def _to_jpeg(data: bytes) -> bytes:
+        def _to_jpeg(data: bytes, size: int = 640) -> bytes:
             buf = io.BytesIO()
-            PILImage.open(io.BytesIO(data)).convert("RGB").save(buf, format="JPEG", quality=90)
+            img = PILImage.open(io.BytesIO(data)).convert("RGB")
+            img = img.resize((size, size), PILImage.Resampling.LANCZOS)
+            img.save(buf, format="JPEG", quality=90)
             return buf.getvalue()
 
         image_bytes_list = [_to_jpeg(frame_bytes) for _, frame_bytes in preprocessed]
@@ -89,7 +91,8 @@ class ImageEmbeddingTask(BaseTask[list[ImageArtifact], list[ImageEmbeddingArtifa
 
             artifact = ImageEmbeddingArtifact(
                 frame_index=image_artifact.frame_index,
-                time_stamp=image_artifact.timestamp,
+                timestamp=image_artifact.timestamp,
+                timestamp_sec=image_artifact.timestamp_sec,
                 related_video_id=image_artifact.related_video_id,
                 related_video_fps=image_artifact.related_video_fps,
                 image_minio_url=image_artifact.minio_url_path,
@@ -137,7 +140,7 @@ class ImageEmbeddingTask(BaseTask[list[ImageArtifact], list[ImageEmbeddingArtifa
         frame_rows = ""
         for artifact in final_result:
             frame_rows += (
-                f"| {artifact.frame_index} | {artifact.time_stamp} "
+                f"| {artifact.frame_index} | {artifact.timestamp} "
                 f"| `{artifact.minio_url_path}` |\n"
             )
 
@@ -178,7 +181,7 @@ f"{frame_rows}"
             table=[
                 {
                     "Frame": artifact.frame_index,
-                    "Timestamp": artifact.time_stamp,
+                    "Timestamp": artifact.timestamp,
                     "Embedding (.npy)": str(artifact.minio_url_path),
                 }
                 for artifact in final_result

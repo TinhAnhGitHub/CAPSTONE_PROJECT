@@ -5,7 +5,7 @@ from PIL import Image as PILImage
 import numpy as np
 
 from prefect import get_run_logger, task
-from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
+from prefect.artifacts import acreate_markdown_artifact
 
 from video_pipeline.task.base.base_task import TaskConfig, BaseTask
 from video_pipeline.core.client.progress import StageRegistry
@@ -92,9 +92,11 @@ class SegmentEmbeddingTask(BaseTask[list[AudioSegmentArtifact], list[SegmentEmbe
                 logger.warning(f"No frames extracted for segment {seg.segment_index}, skipping")
                 continue
 
-            def _to_jpeg(data: bytes) -> bytes:
+            def _to_jpeg(data: bytes, size: int = 640) -> bytes:
                 buf = io.BytesIO()
-                PILImage.open(io.BytesIO(data)).convert("RGB").save(buf, format="JPEG", quality=90)
+                img = PILImage.open(io.BytesIO(data)).convert("RGB")
+                img = img.resize((size, size), PILImage.Resampling.LANCZOS)
+                img.save(buf, format="JPEG", quality=90)
                 return buf.getvalue()
 
             jpeg_list = [_to_jpeg(img) for img in image_bytes_list]
@@ -111,6 +113,8 @@ class SegmentEmbeddingTask(BaseTask[list[AudioSegmentArtifact], list[SegmentEmbe
                     end_frame=end_frame,
                     start_timestamp=seg.start_timestamp,
                     end_timestamp=seg.end_timestamp,
+                    start_sec=seg.start_sec,
+                    end_sec=seg.end_sec,
                     frame_indices=frame_indices,
                     embedding_dim=len(embedding),
                     user_id=seg.user_id,

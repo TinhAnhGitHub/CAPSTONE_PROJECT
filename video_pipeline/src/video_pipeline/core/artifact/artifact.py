@@ -38,7 +38,7 @@ class BaseArtifact(ABC, BaseModel):
 
     async def accept_check_exist(self, visitor: "ArtifactPersistentVisitor") -> bool:
         return await visitor._check_exist(self)
-    
+
 
 class VideoArtifact(BaseArtifact):
     video_id: str
@@ -125,6 +125,8 @@ class SegmentEmbeddingArtifact(BaseArtifact):
     end_frame: int
     start_timestamp: str
     end_timestamp: str
+    start_sec: float
+    end_sec: float
     frame_indices: list[int]
     embedding_dim: int = 1536
 
@@ -142,6 +144,8 @@ class SegmentCaptionArtifact(BaseArtifact):
     end_frame: int
     start_timestamp: str
     end_timestamp: str
+    start_sec: float
+    end_sec: float
     audio_text: str
     summary_caption: str
     event_captions: list[str] = Field(default_factory=list)
@@ -158,6 +162,7 @@ class ImageArtifact(BaseArtifact):
     related_video_extension: str
     related_video_fps: float
     timestamp: str
+    timestamp_sec: float
     autoshot_artifact_id: str
     content_type: str
 
@@ -167,7 +172,8 @@ class ImageArtifact(BaseArtifact):
 
 class ImageOCRArtifact(BaseArtifact):
     frame_index: int
-    time_stamp: str
+    timestamp: str
+    timestamp_sec: float
     related_video_id: str
     related_video_fps: float
     extension: str
@@ -180,7 +186,8 @@ class ImageOCRArtifact(BaseArtifact):
 
 class ImageCaptionArtifact(BaseArtifact):
     frame_index: int
-    time_stamp: str
+    timestamp: str
+    timestamp_sec: float
     related_video_id: str
     related_video_fps: float
     extension: str
@@ -192,7 +199,8 @@ class ImageCaptionArtifact(BaseArtifact):
 
 
 class ImageEmbeddingArtifact(BaseArtifact):
-    time_stamp: str
+    timestamp: str
+    timestamp_sec: float
     frame_index: int
     related_video_id: str
     related_video_fps: float
@@ -205,8 +213,9 @@ class ImageEmbeddingArtifact(BaseArtifact):
 
 
 class TextCaptionEmbeddingArtifact(BaseArtifact):
-    time_stamp: str
-    related_frame_fps: float
+    timestamp: str
+    timestamp_sec: float
+    related_video_fps: float
     frame_index: int
     related_video_id: str
     image_caption_minio_url: str
@@ -219,8 +228,9 @@ class TextCaptionEmbeddingArtifact(BaseArtifact):
 
 
 class ImageCaptionMultimodalEmbeddingArtifact(BaseArtifact):
-    time_stamp: str
-    related_frame_fps: float
+    timestamp: str
+    timestamp_sec: float
+    related_video_fps: float
     frame_index: int
     related_video_id: str
     image_caption_minio_url: str
@@ -237,8 +247,10 @@ class TextCapSegmentEmbedArtifact(BaseArtifact):
     related_video_id: str
     start_frame: int
     end_frame: int
-    start_time: str
-    end_time: str
+    start_timestamp: str
+    end_timestamp: str
+    start_sec: float
+    end_sec: float
     related_segment_caption_url: str
     segment_cap_id: str
 
@@ -248,66 +260,17 @@ class TextCapSegmentEmbedArtifact(BaseArtifact):
 
 class SegmentCaptionMultimodalEmbedArtifact(BaseArtifact):
     """Multimodal embedding artifact for segment captions using QwenVL."""
+
     related_video_fps: float
     related_video_id: str
     start_frame: int
     end_frame: int
     start_timestamp: str
     end_timestamp: str
+    start_sec: float
+    end_sec: float
     related_segment_caption_url: str
     segment_cap_id: str
 
     def _build_lineage_parents(self) -> list[str]:
         return [self.segment_cap_id]
-
-
-##### Graph entities
-class EntityDoc(BaseModel):
-    video_id: str
-    entity_id: str
-    entity_name: str
-    entity_type: str
-    desc: str
-
-
-class MicroEventDoc(BaseModel):
-    video_id: str
-    event_id: str
-    event_des: str
-
-class RelationshipDoc(BaseModel):
-    video_id: str
-    subject_id: str
-    relation_desc: str
-    object_id: str
-
-class GraphArtifact(BaseArtifact):
-    """
-    Graph Extraction
-    """
-    related_video_fps: float
-    related_video_id: str
-    start_frame: int
-    end_frame: int
-    start_timestamp: str
-    end_timestamp: str
-    related_segment_caption_id: str
-
-    entities: list[EntityDoc] = Field(default_factory=list)
-    events: list[MicroEventDoc] = Field(default_factory=list)
-    relationships: list[RelationshipDoc] = Field(default_factory=list)
-
-
-    def _build_lineage_parents(self) -> list[str]:
-        return [self.related_segment_caption_id]
-        
-
-
-
-
-
-
-
-
-
-

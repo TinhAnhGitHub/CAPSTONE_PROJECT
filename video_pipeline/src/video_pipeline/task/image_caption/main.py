@@ -6,14 +6,21 @@ from llm_json import json
 import os
 
 from prefect import get_run_logger, task
-from prefect.artifacts import acreate_markdown_artifact, acreate_image_artifact, acreate_table_artifact
+from prefect.artifacts import (
+    acreate_markdown_artifact,
+    acreate_image_artifact,
+    acreate_table_artifact,
+)
 
 from video_pipeline.task.base.base_task import TaskConfig, BaseTask
 from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ImageArtifact, ImageCaptionArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
+from video_pipeline.core.client.storage.pg.runtime import (
+    get_postgres_client,
+    shutdown_postgres_client,
+)
 from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient, OpenRouterConfig
 from video_pipeline.config import get_settings
 
@@ -22,7 +29,6 @@ from video_pipeline.task.image_caption.prompt import PROMPT as DEFAULT_PROMPT
 
 IMAGE_CAPTION_CONFIG = TaskConfig.from_yaml("image_caption")
 _base_kwargs = IMAGE_CAPTION_CONFIG.to_task_kwargs()
-
 
 
 _PreprocessedItem = tuple[ImageArtifact, bytes]
@@ -76,14 +82,18 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
         logger = get_run_logger()
         max_concurrent: int = IMAGE_CAPTION_CONFIG.additional_kwargs.get("batch_size", 10)
 
-        logger.info(f"[ImageCaptionTask] Batch captioning {len(preprocessed)} frame(s) | max_concurrent={max_concurrent}")
+        logger.info(
+            f"[ImageCaptionTask] Batch captioning {len(preprocessed)} frame(s) | max_concurrent={max_concurrent}"
+        )
 
         data_uris = [
             OpenRouterClient.encode_image_bytes(frame_bytes, mime="image/webp")
             for _, frame_bytes in preprocessed
         ]
         results = await client.batch_ainfer_image(
-            data_uris, prompts=DEFAULT_PROMPT, max_concurrent=max_concurrent #type:ignore
+            data_uris,
+            prompts=DEFAULT_PROMPT,
+            max_concurrent=max_concurrent,  # type:ignore
         )
 
         if results is None:
@@ -110,7 +120,6 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
                 total_usage[key] += usage.get(key, 0)
             total_usage["cost"] += usage.get("cost", 0.0)
 
-        
             logger.info(
                 f"[ImageCaptionTask] Caption done | frame={image_artifact.frame_index} "
                 f"caption={dense_caption[:10]} | tokens={usage.get('total_tokens', '?')} "
@@ -126,7 +135,8 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
             }
             artifact = ImageCaptionArtifact(
                 frame_index=image_artifact.frame_index,
-                time_stamp=image_artifact.timestamp,
+                timestamp=image_artifact.timestamp,
+                timestamp_sec=image_artifact.timestamp_sec,
                 related_video_id=image_artifact.related_video_id,
                 related_video_fps=image_artifact.related_video_fps,
                 extension=".json",
@@ -151,7 +161,9 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
         )
         return output
 
-    async def postprocess(self, result: list[tuple[ImageCaptionArtifact, bytes]]) -> list[ImageCaptionArtifact]:  # type: ignore[override]
+    async def postprocess(
+        self, result: list[tuple[ImageCaptionArtifact, bytes]]
+    ) -> list[ImageCaptionArtifact]:  # type: ignore[override]
         """Upload caption JSONs to MinIO and persist artifact metadata to Postgres."""
         artifacts: list[ImageCaptionArtifact] = []
         for artifact, json_bytes in result:
@@ -160,20 +172,6 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
             )
             artifacts.append(artifact)
         return artifacts
-
-    def format_result(self, result: ImageCaptionArtifact) -> str:
-        meta = result.metadata or {}
-        usage = meta.get("usage") or {}
-        caption_preview = {k: v for k, v in meta.items() if k != "usage"}
-        caption_str = json.dumps(caption_preview, ensure_ascii=False)[:300]
-        return (
-            f"### Frame {result.frame_index} — {result.time_stamp}\n\n"
-            f"- **Image URL:** `{result.image_minio_url}`\n"
-            f"- **Tokens:** {usage.get('total_tokens', '?')} "
-            f"(prompt={usage.get('prompt_tokens', '?')} / completion={usage.get('completion_tokens', '?')})\n"
-            f"- **Cost:** ${usage.get('cost', 0.0):.6f}\n"
-            f"- **Data:** {caption_str}\n"
-        )
 
     @staticmethod
     async def summary_artifact(
@@ -212,34 +210,32 @@ class ImageCaptionTask(BaseTask[list[ImageArtifact], list[ImageCaptionArtifact]]
         step = max(len(final_result) // sample_size, 1)
         samples = final_result[::step][:sample_size]
 
-
         gallery_rows = ""
         for artifact in samples:
             meta = artifact.metadata or {}
             caption = meta.get("caption", "")
             display_caption = (caption[:120] + "…") if len(caption) > 120 else caption
             gallery_rows += (
-                f"| {artifact.frame_index} | {artifact.time_stamp} "
-                f"| {display_caption} |\n"
+                f"| {artifact.frame_index} | {artifact.timestamp} | {display_caption} |\n"
             )
 
         model = ImageCaptionTask.config.additional_kwargs["model"]
         markdown = (
-f"# Image Caption Summary\n\n"
-f"| Field | Value |\n"
-f"|-------|-------|\n"
-f"| **Video ID** | `{video_id}` |\n"
-f"| **Model** | `{model}` |\n"
-f"| **Frames Captioned** | `{len(final_result)}` |\n"
-f"| **Prompt Tokens** | `{total_prompt:,}` |\n"
-f"| **Completion Tokens** | `{total_completion:,}` |\n"
-f"| **Total Tokens** | `{total_tokens:,}` |\n"
-f"| **Total Cost** | `${total_cost:.6f}` |\n"
-f"| **Avg Cost / Frame** | `${avg_cost:.6f}` |\n\n"
-f"## Caption Gallery (sample {len(samples)} of {len(final_result)} frames)\n\n"
-f"| Frame | Timestamp | Caption |\n"
-f"|-------|-----------|--------|\n"
-f"{gallery_rows}"
+            f"# Image Caption Summary\n\n"
+            f"| Field | Value |\n"
+            f"|-------|-------|\n"
+            f"| **Video ID** | `{video_id}` |\n"
+            f"| **Model** | `{model}` |\n"
+            f"| **Frames Captioned** | `{len(final_result)}` |\n"
+            f"| **Prompt Tokens** | `{total_prompt:,}` |\n"
+            f"| **Completion Tokens** | `{total_completion:,}` |\n"
+            f"| **Total Tokens** | `{total_tokens:,}` |\n"
+            f"| **Total Cost** | `${total_cost:.6f}` |\n"
+            f"| **Avg Cost / Frame** | `${avg_cost:.6f}` |\n\n"
+            f"## Caption Gallery (sample {len(samples)} of {len(final_result)} frames)\n\n"
+            f"| Frame | Timestamp | Caption |\n"
+            f"|-------|-----------|--------|\n"
+            f"{gallery_rows}"
         )
 
         await acreate_markdown_artifact(
@@ -268,11 +264,13 @@ f"{gallery_rows}"
             meta = artifact.metadata or {}
             caption = meta.get("caption", "")
             display_caption = (caption[:120] + "…") if len(caption) > 120 else caption
-            gallery_table.append({
-                "Frame": artifact.frame_index,
-                "Timestamp": artifact.time_stamp,
-                "Caption": display_caption,
-            })
+            gallery_table.append(
+                {
+                    "Frame": artifact.frame_index,
+                    "Timestamp": artifact.timestamp,
+                    "Caption": display_caption,
+                }
+            )
         await acreate_table_artifact(
             table=gallery_table,
             key=f"{key}-gallery-table",
@@ -312,7 +310,7 @@ async def image_caption_chunk_task(
     openrouter_config = OpenRouterConfig(
         api_key=os.environ.get("OPENROUTER_API_KEY", ""),
         model=IMAGE_CAPTION_CONFIG.additional_kwargs["model"],
-        base_url=IMAGE_CAPTION_CONFIG.additional_kwargs["base_url"]
+        base_url=IMAGE_CAPTION_CONFIG.additional_kwargs["base_url"],
     )
     logger.info(f"[ImageCaptionChunk] OpenRouter config | model={openrouter_config.model}")
 

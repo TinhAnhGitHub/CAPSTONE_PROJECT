@@ -10,7 +10,10 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import SegmentCaptionArtifact, TextCapSegmentEmbedArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
+from video_pipeline.core.client.storage.pg.runtime import (
+    get_postgres_client,
+    shutdown_postgres_client,
+)
 from video_pipeline.core.client.inference.te_client import MMBertClient, MMBertConfig
 from video_pipeline.config import get_settings
 
@@ -23,7 +26,9 @@ _PreprocessedItem = tuple[SegmentCaptionArtifact, str]
 
 
 @StageRegistry.register
-class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[TextCapSegmentEmbedArtifact]]):
+class SegmentCaptionEmbeddingTask(
+    BaseTask[list[SegmentCaptionArtifact], list[TextCapSegmentEmbedArtifact]]
+):
     """Embed segment caption texts using mmBERT in batch.
 
     preprocess() extracts the summary_caption text from each artifact.
@@ -43,7 +48,9 @@ class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[Te
             caption_text: str = artifact.summary_caption
             preprocessed.append((artifact, caption_text))
 
-        logger.info(f"[SegmentCaptionEmbeddingTask] Preprocessing done — {len(preprocessed)} caption(s) ready")
+        logger.info(
+            f"[SegmentCaptionEmbeddingTask] Preprocessing done — {len(preprocessed)} caption(s) ready"
+        )
         return preprocessed
 
     async def execute(
@@ -69,7 +76,9 @@ class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[Te
             list of (TextCapSegmentEmbedArtifact, npy_bytes) ready for postprocess.
         """
         logger = get_run_logger()
-        logger.info(f"[SegmentCaptionEmbeddingTask] Embedding {len(item)} segment caption(s) via mmBERT")
+        logger.info(
+            f"[SegmentCaptionEmbeddingTask] Embedding {len(item)} segment caption(s) via mmBERT"
+        )
 
         texts = [caption_text for _, caption_text in item]
         embeddings: list[list[float]] | None = await client.ainfer(texts)
@@ -89,8 +98,10 @@ class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[Te
                 related_video_id=caption_artifact.related_video_id,
                 start_frame=caption_artifact.start_frame,
                 end_frame=caption_artifact.end_frame,
-                start_time=caption_artifact.start_timestamp,
-                end_time=caption_artifact.end_timestamp,
+                start_timestamp=caption_artifact.start_timestamp,
+                end_timestamp=caption_artifact.end_timestamp,
+                start_sec=caption_artifact.start_sec,
+                end_sec=caption_artifact.end_sec,
                 related_segment_caption_url=caption_artifact.minio_url_path,
                 segment_cap_id=caption_artifact.artifact_id,
                 user_id=caption_artifact.user_id,
@@ -109,10 +120,14 @@ class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[Te
             np.save(npy_buffer, np.array(embedding_vector, dtype=np.float32))
             output.append((artifact, npy_buffer.getvalue()))
 
-        logger.info(f"[SegmentCaptionEmbeddingTask] Batch done — {len(output)} embedding(s) produced")
+        logger.info(
+            f"[SegmentCaptionEmbeddingTask] Batch done — {len(output)} embedding(s) produced"
+        )
         return output
 
-    async def postprocess(self, result: list[tuple[TextCapSegmentEmbedArtifact, bytes]]) -> list[TextCapSegmentEmbedArtifact]:
+    async def postprocess(
+        self, result: list[tuple[TextCapSegmentEmbedArtifact, bytes]]
+    ) -> list[TextCapSegmentEmbedArtifact]:
         """Upload .npy files to MinIO and persist artifact metadata to Postgres."""
         artifacts: list[TextCapSegmentEmbedArtifact] = []
         for artifact, npy_bytes in result:
@@ -121,15 +136,6 @@ class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[Te
             )
             artifacts.append(artifact)
         return artifacts
-
-    def format_result(self, result: TextCapSegmentEmbedArtifact) -> str:
-        meta = result.metadata or {}
-        dim = meta.get("embedding_dim", "?")
-        return (
-            f"### Segment {result.start_frame}-{result.end_frame} — {result.start_time}\n\n"
-            f"- **Caption URL:** `{result.related_segment_caption_url}`\n"
-            f"- **Embedding Dim:** {dim}\n"
-        )
 
     @staticmethod
     async def summary_artifact(final_result: list[TextCapSegmentEmbedArtifact]) -> None:
@@ -144,7 +150,7 @@ class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[Te
             meta = seg.metadata or {}
             dim = meta.get("embedding_dim", "?")
             segment_rows += (
-                f"| {i + 1} | {seg.start_time} | {seg.end_time} | "
+                f"| {i + 1} | {seg.start_timestamp} | {seg.end_timestamp} | "
                 f"{seg.start_frame}-{seg.end_frame} | {dim} |\n"
             )
 
@@ -162,6 +168,7 @@ class SegmentCaptionEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[Te
         )
 
         from prefect.artifacts import acreate_markdown_artifact
+
         await acreate_markdown_artifact(
             key=f"segment-caption-embedding-{first.related_video_id}".lower(),
             markdown=markdown,
@@ -198,7 +205,9 @@ async def segment_caption_embedding_chunk_task(
 
     mmbert_config = MMBertConfig(
         model_name=SEGMENT_CAPTION_EMBEDDING_CONFIG.additional_kwargs.get("model_name", "mmbert"),
-        base_url=SEGMENT_CAPTION_EMBEDDING_CONFIG.additional_kwargs.get("base_url", "http://mmbert:8000"),
+        base_url=SEGMENT_CAPTION_EMBEDDING_CONFIG.additional_kwargs.get(
+            "base_url", "http://mmbert:8000"
+        ),
     )
     logger.info(f"[SegmentCaptionEmbeddingChunk] mmBERT config | base_url={mmbert_config.base_url}")
 

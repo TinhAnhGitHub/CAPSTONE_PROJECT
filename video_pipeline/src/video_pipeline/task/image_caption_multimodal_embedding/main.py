@@ -8,22 +8,35 @@ from prefect import get_run_logger, task
 
 from video_pipeline.task.base.base_task import TaskConfig, BaseTask
 from video_pipeline.core.client.progress import StageRegistry
-from video_pipeline.core.artifact import ImageCaptionArtifact, ImageCaptionMultimodalEmbeddingArtifact
+from video_pipeline.core.artifact import (
+    ImageCaptionArtifact,
+    ImageCaptionMultimodalEmbeddingArtifact,
+)
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
-from video_pipeline.core.client.inference.qwenvl_embed import QwenVLEmbeddingClient, QwenVLEmbeddingConfig
+from video_pipeline.core.client.storage.pg.runtime import (
+    get_postgres_client,
+    shutdown_postgres_client,
+)
+from video_pipeline.core.client.inference.qwenvl_embed import (
+    QwenVLEmbeddingClient,
+    QwenVLEmbeddingConfig,
+)
 from video_pipeline.config import get_settings
 
 
-IMAGE_CAPTION_MULTIMODAL_EMBEDDING_CONFIG = TaskConfig.from_yaml("image_caption_multimodal_embedding")
+IMAGE_CAPTION_MULTIMODAL_EMBEDDING_CONFIG = TaskConfig.from_yaml(
+    "image_caption_multimodal_embedding"
+)
 _base_kwargs = IMAGE_CAPTION_MULTIMODAL_EMBEDDING_CONFIG.to_task_kwargs()
 
 _PreprocessedItem = tuple[ImageCaptionArtifact, bytes]
 
 
 @StageRegistry.register
-class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], list[ImageCaptionMultimodalEmbeddingArtifact]]):
+class ImageCaptionMultimodalEmbeddingTask(
+    BaseTask[list[ImageCaptionArtifact], list[ImageCaptionMultimodalEmbeddingArtifact]]
+):
     async def preprocess(self, input_data: list[ImageCaptionArtifact]) -> list[_PreprocessedItem]:
         """Download original image bytes for every caption artifact."""
         logger = get_run_logger()
@@ -62,11 +75,15 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
             list of (ImageCaptionMultimodalEmbeddingArtifact, npy_bytes).
         """
         logger = get_run_logger()
-        logger.info(f"[ImageCaptionMultimodalEmbeddingTask] Batch embedding {len(preprocessed)} image(s)")
+        logger.info(
+            f"[ImageCaptionMultimodalEmbeddingTask] Batch embedding {len(preprocessed)} image(s)"
+        )
 
-        def _to_jpeg(data: bytes) -> bytes:
+        def _to_jpeg(data: bytes, size: int = 640) -> bytes:
             buf = io.BytesIO()
-            PILImage.open(io.BytesIO(data)).convert("RGB").save(buf, format="JPEG", quality=90)
+            img = PILImage.open(io.BytesIO(data)).convert("RGB")
+            img = img.resize((size, size), PILImage.Resampling.LANCZOS)
+            img.save(buf, format="JPEG", quality=90)
             return buf.getvalue()
 
         jpeg_list = [_to_jpeg(image_bytes) for _, image_bytes in preprocessed]
@@ -80,8 +97,9 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
             )
 
             artifact = ImageCaptionMultimodalEmbeddingArtifact(
-                time_stamp=caption_artifact.time_stamp,
-                related_frame_fps=caption_artifact.related_video_fps,
+                timestamp=caption_artifact.timestamp,
+                timestamp_sec=caption_artifact.timestamp_sec,
+                related_video_fps=caption_artifact.related_video_fps,
                 frame_index=caption_artifact.frame_index,
                 related_video_id=caption_artifact.related_video_id,
                 image_caption_minio_url=caption_artifact.minio_url_path,
@@ -91,7 +109,7 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
                 user_id=caption_artifact.user_id,
                 object_name=(
                     f"embedding/multimodal_caption/{caption_artifact.related_video_id}/"
-                    f"{caption_artifact.frame_index:08d}_{caption_artifact.time_stamp}.npy"
+                    f"{caption_artifact.frame_index:08d}_{caption_artifact.timestamp}.npy"
                 ),
                 metadata={"embedding_dim": len(embedding_vector)},
             )
@@ -105,7 +123,9 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
         )
         return output
 
-    async def postprocess(self, result: list[tuple[ImageCaptionMultimodalEmbeddingArtifact, bytes]]) -> list[ImageCaptionMultimodalEmbeddingArtifact]: 
+    async def postprocess(
+        self, result: list[tuple[ImageCaptionMultimodalEmbeddingArtifact, bytes]]
+    ) -> list[ImageCaptionMultimodalEmbeddingArtifact]:
         artifacts: list[ImageCaptionMultimodalEmbeddingArtifact] = []
         for artifact, npy_bytes in result:
             await self.artifact_visitor.visit_artifact(
@@ -113,16 +133,6 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
             )
             artifacts.append(artifact)
         return artifacts
-
-    def format_result(self, result: ImageCaptionMultimodalEmbeddingArtifact) -> str:
-        meta = result.metadata or {}
-        dim = meta.get("embedding_dim", "?")
-        return (
-            f"### Frame {result.frame_index} — {result.time_stamp}\n\n"
-            f"- **Image URL:** `{result.image_minio_url}`\n"
-            f"- **Caption URL:** `{result.image_caption_minio_url}`\n"
-            f"- **Embedding Dim:** {dim}\n"
-        )
 
     @staticmethod
     async def summary_artifact(final_result: list[ImageCaptionMultimodalEmbeddingArtifact]) -> None:
@@ -137,19 +147,16 @@ class ImageCaptionMultimodalEmbeddingTask(BaseTask[list[ImageCaptionArtifact], l
         raw_key = f"caption-mm-embedding-{first.related_video_id}".lower()
         key = re.sub(r"[^a-z0-9-]", "-", raw_key)
 
-        total_dim = sum(
-            (a.metadata or {}).get("embedding_dim", 0)
-            for a in final_result
-        )
+        total_dim = sum((a.metadata or {}).get("embedding_dim", 0) for a in final_result)
         avg_dim = total_dim / max(len(final_result), 1)
 
         markdown = (
-f"# Caption Multimodal Embedding Summary\n\n"
-f"| Field | Value |\n"
-f"|-------|-------|\n"
-f"| **Video ID** | `{first.related_video_id}` |\n"
-f"| **Total Embeddings** | `{len(final_result)}` |\n"
-f"| **Avg Embedding Dim** | `{avg_dim:.1f}` |\n"
+            f"# Caption Multimodal Embedding Summary\n\n"
+            f"| Field | Value |\n"
+            f"|-------|-------|\n"
+            f"| **Video ID** | `{first.related_video_id}` |\n"
+            f"| **Total Embeddings** | `{len(final_result)}` |\n"
+            f"| **Avg Embedding Dim** | `{avg_dim:.1f}` |\n"
         )
 
         await acreate_markdown_artifact(
@@ -188,9 +195,7 @@ async def image_caption_multimodal_embedding_chunk_task(
     logger = get_run_logger()
     settings = get_settings()
 
-    logger.info(
-        f"[ImageCaptionMultimodalEmbeddingChunk] Starting | {len(items)} item(s) in batch"
-    )
+    logger.info(f"[ImageCaptionMultimodalEmbeddingChunk] Starting | {len(items)} item(s) in batch")
 
     minio_client = MinioStorageClient(
         endpoint=settings.minio.endpoint,

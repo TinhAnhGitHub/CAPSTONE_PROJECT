@@ -11,24 +11,33 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import (
     SegmentCaptionArtifact,
     SegmentCaptionMultimodalEmbedArtifact,
-    AudioSegmentArtifact,
 )
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
-from video_pipeline.core.client.inference.qwenvl_embed import QwenVLEmbeddingClient, QwenVLEmbeddingConfig
+from video_pipeline.core.client.storage.pg.runtime import (
+    get_postgres_client,
+    shutdown_postgres_client,
+)
+from video_pipeline.core.client.inference.qwenvl_embed import (
+    QwenVLEmbeddingClient,
+    QwenVLEmbeddingConfig,
+)
 from video_pipeline.config import get_settings
 from video_pipeline.task.image_extraction.helper import FastFrameReader, get_segment_frame_indices
 
 
-SEGMENT_CAPTION_MULTIMODAL_EMBEDDING_CONFIG = TaskConfig.from_yaml("segment_caption_multimodal_embedding")
+SEGMENT_CAPTION_MULTIMODAL_EMBEDDING_CONFIG = TaskConfig.from_yaml(
+    "segment_caption_multimodal_embedding"
+)
 _base_kwargs = SEGMENT_CAPTION_MULTIMODAL_EMBEDDING_CONFIG.to_task_kwargs()
 
 _PreprocessedItem = tuple[SegmentCaptionArtifact, list[bytes]]  # artifact + frame images
 
 
 @StageRegistry.register
-class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[SegmentCaptionMultimodalEmbedArtifact]]):
+class SegmentCaptionMultimodalEmbeddingTask(
+    BaseTask[list[SegmentCaptionArtifact], list[SegmentCaptionMultimodalEmbedArtifact]]
+):
     """Embed segment captions using QwenVL multimodal model by extracting frames.
 
     preprocess() loads video and extracts frames for each segment.
@@ -43,7 +52,7 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
         artifact_visitor: ArtifactPersistentVisitor,
         minio_client: MinioStorageClient,
         n_frames: int = 6,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(artifact_visitor, minio_client, **kwargs)
         self.n_frames = n_frames
@@ -54,7 +63,9 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
     ) -> list[_PreprocessedItem]:
         """Load video bytes and extract frames for all segments."""
         logger = get_run_logger()
-        logger.info(f"[SegmentCaptionMultimodalEmbeddingTask] Loading video for {len(input_data)} segment(s)")
+        logger.info(
+            f"[SegmentCaptionMultimodalEmbeddingTask] Loading video for {len(input_data)} segment(s)"
+        )
 
         if not input_data:
             return []
@@ -91,7 +102,9 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
                 if image_bytes_list:
                     preprocessed.append((seg, image_bytes_list))
 
-        logger.info(f"[SegmentCaptionMultimodalEmbeddingTask] Video loaded — {len(preprocessed)} segment(s) ready")
+        logger.info(
+            f"[SegmentCaptionMultimodalEmbeddingTask] Video loaded — {len(preprocessed)} segment(s) ready"
+        )
         return preprocessed
 
     async def execute(
@@ -117,14 +130,19 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
             list of (SegmentCaptionMultimodalEmbedArtifact, npy_bytes).
         """
         logger = get_run_logger()
-        logger.info(f"[SegmentCaptionMultimodalEmbeddingTask] Batch embedding {len(item)} segment(s)")
+        logger.info(
+            f"[SegmentCaptionMultimodalEmbeddingTask] Batch embedding {len(item)} segment(s)"
+        )
 
         output: list[tuple[SegmentCaptionMultimodalEmbedArtifact, bytes]] = []
 
         for caption_artifact, image_bytes_list in item:
-            def _to_jpeg(data: bytes) -> bytes:
+
+            def _to_jpeg(data: bytes, size: int = 640) -> bytes:
                 buf = io.BytesIO()
-                PILImage.open(io.BytesIO(data)).convert("RGB").save(buf, format="JPEG", quality=90)
+                img = PILImage.open(io.BytesIO(data)).convert("RGB")
+                img = img.resize((size, size), PILImage.Resampling.LANCZOS)
+                img.save(buf, format="JPEG", quality=90)
                 return buf.getvalue()
 
             jpeg_list = [_to_jpeg(img) for img in image_bytes_list]
@@ -148,6 +166,8 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
                     end_frame=caption_artifact.end_frame,
                     start_timestamp=caption_artifact.start_timestamp,
                     end_timestamp=caption_artifact.end_timestamp,
+                    start_sec=caption_artifact.start_sec,
+                    end_sec=caption_artifact.end_sec,
                     related_segment_caption_url=caption_artifact.minio_url_path,
                     segment_cap_id=caption_artifact.artifact_id,
                     user_id=caption_artifact.user_id,
@@ -171,7 +191,9 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
         )
         return output
 
-    async def postprocess(self, result: list[tuple[SegmentCaptionMultimodalEmbedArtifact, bytes]]) -> list[SegmentCaptionMultimodalEmbedArtifact]:
+    async def postprocess(
+        self, result: list[tuple[SegmentCaptionMultimodalEmbedArtifact, bytes]]
+    ) -> list[SegmentCaptionMultimodalEmbedArtifact]:
         """Upload .npy files to MinIO and persist artifact metadata to Postgres."""
         artifacts: list[SegmentCaptionMultimodalEmbedArtifact] = []
         for artifact, npy_bytes in result:
@@ -180,17 +202,6 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
             )
             artifacts.append(artifact)
         return artifacts
-
-    def format_result(self, result: SegmentCaptionMultimodalEmbedArtifact) -> str:
-        meta = result.metadata or {}
-        dim = meta.get("embedding_dim", "?")
-        n_frames = meta.get("n_frames", "?")
-        return (
-            f"### Segment {result.start_frame}-{result.end_frame} — {result.start_timestamp}\n\n"
-            f"- **Caption URL:** `{result.related_segment_caption_url}`\n"
-            f"- **Frames:** {n_frames}\n"
-            f"- **Embedding Dim:** {dim}\n"
-        )
 
     @staticmethod
     async def summary_artifact(final_result: list[SegmentCaptionMultimodalEmbedArtifact]) -> None:
@@ -224,6 +235,7 @@ class SegmentCaptionMultimodalEmbeddingTask(BaseTask[list[SegmentCaptionArtifact
         )
 
         from prefect.artifacts import acreate_markdown_artifact
+
         await acreate_markdown_artifact(
             key=f"segment-caption-mm-embedding-{first.related_video_id}".lower(),
             markdown=markdown,

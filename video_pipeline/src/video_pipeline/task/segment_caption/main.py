@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import io
 import os
-import re
-from PIL import Image as PILImage
 
 from prefect import get_run_logger, task
-from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
-from llama_index.llms.openrouter import OpenRouter
+from prefect.artifacts import acreate_markdown_artifact
 from llama_index.core.llms import ImageBlock, TextBlock, ChatMessage
 from pydantic import BaseModel, Field
 
@@ -185,6 +181,8 @@ class SegmentCaptionTask(BaseTask[list[AudioSegmentArtifact], list[SegmentCaptio
                     end_frame=end_frame,
                     start_timestamp=seg.start_timestamp,
                     end_timestamp=seg.end_timestamp,
+                    start_sec=seg.start_sec,
+                    end_sec=seg.end_sec,
                     audio_text=seg.audio_text,
                     summary_caption=caption_result.summary_caption if caption_result else "",
                     event_captions=caption_result.event_captions if caption_result else [],

@@ -16,7 +16,10 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ImageArtifact, ImageOCRArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
+from video_pipeline.core.client.storage.pg.runtime import (
+    get_postgres_client,
+    shutdown_postgres_client,
+)
 from video_pipeline.core.client.inference.ocr_client import LightONOCRClient, LightONOCRConfig
 from video_pipeline.config import get_settings
 
@@ -85,7 +88,7 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
             for _, image_bytes in preprocessed:
                 tmp_path = create_image_tmp_file(image_bytes)
                 temp_paths.append(tmp_path)
-            ocr_results: list[str] = await client.ainfer(temp_paths)  #type:ignore
+            ocr_results: list[str] = await client.ainfer(temp_paths)  # type:ignore
         finally:
             for p in temp_paths:
                 p.unlink(missing_ok=True)
@@ -100,7 +103,8 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
 
             artifact = ImageOCRArtifact(
                 frame_index=image_artifact.frame_index,
-                time_stamp=image_artifact.timestamp,
+                timestamp=image_artifact.timestamp,
+                timestamp_sec=image_artifact.timestamp_sec,
                 related_video_id=image_artifact.related_video_id,
                 related_video_fps=image_artifact.related_video_fps,
                 extension=".json",
@@ -114,18 +118,22 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
                 metadata={"ocr_text": text},
             )
 
-            ocr_payload = json.dumps({
-                "ocr_text": text,
-                "frame_index": image_artifact.frame_index,
-                "timestamp": image_artifact.timestamp,
-                "image_minio_url": image_artifact.minio_url_path,
-            })
+            ocr_payload = json.dumps(
+                {
+                    "ocr_text": text,
+                    "frame_index": image_artifact.frame_index,
+                    "timestamp": image_artifact.timestamp,
+                    "image_minio_url": image_artifact.minio_url_path,
+                }
+            )
             output.append((artifact, ocr_payload.encode()))
 
         logger.info(f"[ImageOCRTask] Batch done — {len(output)} OCR result(s) produced")
         return output
 
-    async def postprocess(self, result: list[tuple[ImageOCRArtifact, bytes]]) -> list[ImageOCRArtifact]:  # type: ignore[override]
+    async def postprocess(
+        self, result: list[tuple[ImageOCRArtifact, bytes]]
+    ) -> list[ImageOCRArtifact]:  # type: ignore[override]
         """Upload OCR JSONs to MinIO and persist artifact metadata to Postgres."""
         artifacts: list[ImageOCRArtifact] = []
         for artifact, json_bytes in result:
@@ -134,15 +142,6 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
             )
             artifacts.append(artifact)
         return artifacts
-
-    def format_result(self, result: ImageOCRArtifact) -> str:
-        meta = result.metadata or {}
-        text = meta.get("ocr_text", "")
-        return (
-            f"### Frame {result.frame_index} — {result.time_stamp}\n\n"
-            f"- **Image URL:** `{result.image_minio_url}`\n"
-            f"- **OCR Text ({len(text)} chars):** {text[:300]!r}\n"
-        )
 
     @staticmethod
     async def summary_artifact(final_result: list[ImageOCRArtifact]) -> None:
@@ -155,37 +154,32 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
         key = re.sub(r"[^a-z0-9-]", "-", f"image-ocr-{video_id}".lower())
 
         frames_with_text = sum(
-            1 for a in final_result
-            if (a.metadata or {}).get("ocr_text", "").strip()
+            1 for a in final_result if (a.metadata or {}).get("ocr_text", "").strip()
         )
-        total_chars = sum(
-            len((a.metadata or {}).get("ocr_text", ""))
-            for a in final_result
-        )
+        total_chars = sum(len((a.metadata or {}).get("ocr_text", "")) for a in final_result)
 
         ocr_rows = ""
         for artifact in final_result:
             text = (artifact.metadata or {}).get("ocr_text", "")
             display = (text[:100] + "…") if len(text) > 100 else (text or "_empty_")
             ocr_rows += (
-                f"| {artifact.frame_index} | {artifact.time_stamp} "
-                f"| {len(text)} | {display} |\n"
+                f"| {artifact.frame_index} | {artifact.timestamp} | {len(text)} | {display} |\n"
             )
 
         markdown = (
-f"# Image OCR Summary\n\n"
-f"| Field | Value |\n"
-f"|-------|-------|\n"
-f"| **Video ID** | `{video_id}` |\n"
-f"| **User ID** | `{first.user_id}` |\n"
-f"| **FPS** | `{first.related_video_fps}` |\n"
-f"| **Frames Processed** | `{len(final_result)}` |\n"
-f"| **Frames with Text** | `{frames_with_text}` |\n"
-f"| **Total Characters** | `{total_chars:,}` |\n\n"
-f"## OCR Results\n\n"
-f"| Frame | Timestamp | Chars | OCR Text |\n"
-f"|-------|-----------|-------|----------|\n"
-f"{ocr_rows}"
+            f"# Image OCR Summary\n\n"
+            f"| Field | Value |\n"
+            f"|-------|-------|\n"
+            f"| **Video ID** | `{video_id}` |\n"
+            f"| **User ID** | `{first.user_id}` |\n"
+            f"| **FPS** | `{first.related_video_fps}` |\n"
+            f"| **Frames Processed** | `{len(final_result)}` |\n"
+            f"| **Frames with Text** | `{frames_with_text}` |\n"
+            f"| **Total Characters** | `{total_chars:,}` |\n\n"
+            f"## OCR Results\n\n"
+            f"| Frame | Timestamp | Chars | OCR Text |\n"
+            f"|-------|-----------|-------|----------|\n"
+            f"{ocr_rows}"
         )
 
         await acreate_markdown_artifact(
@@ -211,11 +205,11 @@ f"{ocr_rows}"
             table=[
                 {
                     "Frame": artifact.frame_index,
-                    "Timestamp": artifact.time_stamp,
+                    "Timestamp": artifact.timestamp,
                     "Chars": len((artifact.metadata or {}).get("ocr_text", "")),
-                    "OCR Text": (
-                        lambda t: (t[:100] + "…") if len(t) > 100 else (t or "_empty_")
-                    )((artifact.metadata or {}).get("ocr_text", "")),
+                    "OCR Text": (lambda t: (t[:100] + "…") if len(t) > 100 else (t or "_empty_"))(
+                        (artifact.metadata or {}).get("ocr_text", "")
+                    ),
                 }
                 for artifact in final_result
             ],
@@ -258,7 +252,9 @@ async def image_ocr_chunk_task(
         model_name=IMAGE_OCR_CONFIG.additional_kwargs.get("model_name", "ocr_lighton"),
         base_url=IMAGE_OCR_CONFIG.additional_kwargs.get("base_url", "http://ocr_lighton:8000"),
     )
-    logger.info(f"[ImageOCRChunk] OCR config | model={ocr_config.model_name} url={ocr_config.base_url}")
+    logger.info(
+        f"[ImageOCRChunk] OCR config | model={ocr_config.model_name} url={ocr_config.base_url}"
+    )
 
     task_impl = ImageOCRTask(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
