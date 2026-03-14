@@ -10,7 +10,10 @@ from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import AutoshotArtifact, ASRArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
+from video_pipeline.core.client.storage.pg.runtime import (
+    get_postgres_client,
+    shutdown_postgres_client,
+)
 from video_pipeline.core.client.inference.asr_client import QwenASRClient, QwenASRConfig
 from video_pipeline.config import get_settings
 
@@ -27,11 +30,7 @@ ASRItem = tuple[AutoshotArtifact, int, int, str]
 
 @StageRegistry.register
 class ASRTask(BaseTask[list[ASRItem], list[ASRArtifact]]):
-    """ASR task that processes a batch of audio segments sequentially.
-
-    Receives a list of ASRItems via execute(), which iterates and calls
-    execute_single for each segment.
-    """
+    """Process a batch of audio segments for ASR transcription."""
 
     config = ASR_CONFIG
 
@@ -41,27 +40,17 @@ class ASRTask(BaseTask[list[ASRItem], list[ASRArtifact]]):
         return input_data
 
     async def execute(
-        self,
-        preprocessed: list[ASRItem],
-        client: QwenASRClient,
+        self, preprocessed: list[ASRItem], client: QwenASRClient
     ) -> list[ASRArtifact]:
-        """Run ASR inference on one audio segment then delete the temp file.
-
-        Args:
-            item: (AutoshotArtifact, start_frame, end_frame, audio_path)
-            client: Qwen ASR inference client
-            context: Task execution context
-
-        Returns:
-            ASRArtifact with single-segment metadata.
-        """
+        """Run ASR inference on audio segments then delete temp files."""
         audio_paths = [data[-1] for data in preprocessed]
         try:
             raw_results = await client.ainfer(audio_paths)
             if raw_results is None:
                 raise RuntimeError("ASR client returned None — inference failed")
         finally:
-            map(lambda x: delete_audio_file(x), audio_paths)
+            for audio_path in audio_paths:
+                delete_audio_file(audio_path)
 
         asr_artifact_list = []
 

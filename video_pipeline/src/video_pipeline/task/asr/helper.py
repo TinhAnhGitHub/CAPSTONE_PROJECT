@@ -5,25 +5,17 @@ from urllib.parse import urlparse
 
 import ffmpeg
 
+from video_pipeline.task.video_utils import frames_to_timestamp
+
 
 def split_minio_url(uri: str) -> tuple[str, str]:
     parsed = urlparse(uri)
     if parsed.scheme == "s3":
         return parsed.netloc, parsed.path.lstrip("/")
-    # http(s)://host:port/bucket/object
     path_parts = parsed.path.lstrip("/").split("/", 1)
     bucket = path_parts[0]
     object_name = path_parts[1] if len(path_parts) > 1 else ""
     return bucket, object_name
-
-
-def frames_to_timestamp(frame: int, fps: float) -> str:
-    """Convert a frame number to a timestamp string HH:MM:SS.mmm."""
-    total_seconds = frame / fps
-    hours = int(total_seconds // 3600)
-    minutes = int((total_seconds % 3600) // 60)
-    seconds = total_seconds % 60
-    return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}"
 
 
 def extract_single_audio_segment(
@@ -32,18 +24,9 @@ def extract_single_audio_segment(
     end_frame: int,
     fps: float,
 ) -> str:
-    """Extract one audio segment from a video file as a temp WAV.
+    """Extract audio segment from video as temp WAV file.
 
     The caller is responsible for deleting the returned file after use.
-
-    Args:
-        video_path: Local path to the video file.
-        start_frame: Segment start frame (inclusive).
-        end_frame: Segment end frame (exclusive).
-        fps: Video frames-per-second, used to convert frames → seconds.
-
-    Returns:
-        Path to the temp WAV file (mono, 16 kHz, pcm_s16le).
     """
     start_sec = start_frame / fps
     duration_sec = (end_frame - start_frame) / fps
@@ -52,8 +35,7 @@ def extract_single_audio_segment(
     tmp.close()
 
     (
-        ffmpeg
-        .input(video_path, ss=start_sec, t=max(duration_sec, 0.01))
+        ffmpeg.input(video_path, ss=start_sec, t=max(duration_sec, 0.01))
         .output(
             tmp.name,
             acodec="pcm_s16le",
