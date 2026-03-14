@@ -1,12 +1,11 @@
 from prefect import get_run_logger, task
 
-from video_pipeline.core.artifact import AutoshotArtifact
 from video_pipeline.config import get_settings
-from video_pipeline.task.base.base_task import TaskConfig
+from video_pipeline.core.artifact import AutoshotArtifact
 from video_pipeline.core.client.storage.minio import MinioStorageClient
-
 from video_pipeline.task.asr.helper import extract_single_audio_segment
 from video_pipeline.task.asr.main import ASRItem
+from video_pipeline.task.base.base_task import TaskConfig
 from video_pipeline.task.image_extraction.helper import get_segment_frame_indices
 from video_pipeline.task.image_extraction.main import ImageItem
 
@@ -71,12 +70,12 @@ async def preprocess_video_task(
         suffix=f".{video_extension}",
     ) as video_path:
         for i, (start_frame, end_frame) in enumerate(segments):
-            audio_path = extract_single_audio_segment(
-                str(video_path), start_frame, end_frame, fps
-            )
+            audio_path = extract_single_audio_segment(str(video_path), start_frame, end_frame, fps)
             asr_items.append((autoshot_artifact, start_frame, end_frame, audio_path))
 
-            for frame_index in get_segment_frame_indices(start_frame, end_frame, frames_per_segment):
+            for frame_index in get_segment_frame_indices(
+                start_frame, end_frame, frames_per_segment
+            ):
                 image_items.append((autoshot_artifact, frame_index))
 
             logger.debug(
@@ -84,8 +83,12 @@ async def preprocess_video_task(
                 f"frames=[{start_frame}, {end_frame}] audio={audio_path}"
             )
 
-    asr_batches = [asr_items[i:i + asr_batch_size] for i in range(0, len(asr_items), asr_batch_size)]
-    image_batches = [image_items[i:i + image_batch_size] for i in range(0, len(image_items), image_batch_size)]
+    asr_batches = [
+        asr_items[i : i + asr_batch_size] for i in range(0, len(asr_items), asr_batch_size)
+    ]
+    image_batches = [
+        image_items[i : i + image_batch_size] for i in range(0, len(image_items), image_batch_size)
+    ]
 
     logger.info(
         f"[VideoPreprocess] Done | "
