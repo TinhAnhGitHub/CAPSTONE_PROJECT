@@ -118,6 +118,7 @@ class SegmentEmbeddingTask(BaseTask[list[AudioSegmentArtifact], list[SegmentEmbe
                     frame_indices=frame_indices,
                     embedding_dim=len(embedding),
                     user_id=seg.user_id,
+                    caption_text=seg.audio_text,
                     object_name=(
                         f"embedding/segment/{seg.related_video_id}/"
                         f"{start_frame}_{end_frame}_{seg.start_timestamp}_{seg.end_timestamp}.npy"
