@@ -21,7 +21,6 @@ from video_pipeline.config import get_settings
 IMAGE_CAPTION_EMBEDDING_CONFIG = TaskConfig.from_yaml("image_caption_embedding")
 _base_kwargs = IMAGE_CAPTION_EMBEDDING_CONFIG.to_task_kwargs()
 
-# After preprocess: caption text extracted from artifact metadata
 _PreprocessedItem = tuple[ImageCaptionArtifact, str]
 
 
@@ -29,12 +28,6 @@ _PreprocessedItem = tuple[ImageCaptionArtifact, str]
 class ImageCaptionEmbeddingTask(
     BaseTask[list[ImageCaptionArtifact], list[TextCaptionEmbeddingArtifact]]
 ):
-    """Embed caption texts using mmBERT in batch.
-
-    preprocess() extracts the caption text from each artifact's metadata.
-    execute_single() sends the whole batch to mmBERT in a single request.
-    postprocess() uploads .npy embedding files to MinIO and persists to Postgres.
-    """
 
     config = IMAGE_CAPTION_EMBEDDING_CONFIG
 
@@ -100,7 +93,10 @@ class ImageCaptionEmbeddingTask(
                     f"embedding/image_caption/{caption_artifact.related_video_id}/"
                     f"{caption_artifact.frame_index:08d}_{caption_artifact.timestamp}.npy"
                 ),
-                metadata={"embedding_dim": len(embedding_vector)},
+                metadata={
+                    "embedding_dim": len(embedding_vector),
+                    "caption": caption_text,
+                },
             )
 
             npy_buffer = io.BytesIO()
