@@ -3,10 +3,8 @@ from __future__ import annotations
 import io
 import json
 import os
-import tempfile
-from pathlib import Path
-
 import re
+from pathlib import Path
 
 from prefect import get_run_logger, task
 from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
@@ -20,10 +18,10 @@ from video_pipeline.core.client.storage.pg.runtime import (
     get_postgres_client,
     shutdown_postgres_client,
 )
-from video_pipeline.core.client.inference.ocr_client import LightONOCRClient, LightONOCRConfig
+from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient, OpenRouterConfig
 from video_pipeline.config import get_settings
 
-from .helper import create_image_tmp_file
+from .prompt import OCR_PROMPT
 
 IMAGE_OCR_CONFIG = TaskConfig.from_yaml("image_ocr")
 _base_kwargs = IMAGE_OCR_CONFIG.to_task_kwargs()
@@ -31,13 +29,17 @@ _base_kwargs = IMAGE_OCR_CONFIG.to_task_kwargs()
 _PreprocessedItem = tuple[ImageArtifact, bytes]
 
 
+def normalize_ocr_text(text: str) -> str:
+    t = text.strip()
+    return t
+
+
 @StageRegistry.register
 class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
-    """Run OCR on extracted video frames using LightON OCR in batch.
+    """Run OCR on extracted video frames using OpenRouter VLM in batch.
 
-    preprocess() downloads WEBP image bytes from MinIO for the whole batch.
-    execute_single() writes frames to temp files, calls client.ainfer() concurrently,
-    and builds ImageOCRArtifacts.
+    preprocess() downloads image bytes from MinIO for the whole batch.
+    execute() sends images to OpenRouter concurrently for OCR.
     postprocess() uploads OCR JSON to MinIO and persists to Postgres.
     """
 
@@ -65,40 +67,71 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
     async def execute(
         self,
         preprocessed: list[_PreprocessedItem],
-        client: LightONOCRClient,
+        client: OpenRouterClient,
     ) -> list[tuple[ImageOCRArtifact, bytes]]:
-        """OCR a batch of image frames concurrently via LightON.
-
-        Writes each WEBP frame to a NamedTemporaryFile so the OCR client can
-        read and encode it. Temp files are cleaned up in a finally block.
+        """OCR a batch of image frames concurrently via OpenRouter VLM.
 
         Args:
-            item: list of (ImageArtifact, frame_bytes) — the full batch.
-            client: LightON OCR client.
-            context: Task execution context.
+            preprocessed: list of (ImageArtifact, frame_bytes) — the full batch.
+            client: OpenRouter inference client.
 
         Returns:
             list of (ImageOCRArtifact, json_bytes) ready for postprocess.
         """
         logger = get_run_logger()
-        logger.info(f"[ImageOCRTask] Batch OCR on {len(preprocessed)} frame(s)")
+        max_concurrent: int = IMAGE_OCR_CONFIG.additional_kwargs.get("max_concurrent", 10)
 
-        temp_paths: list[Path] = []
-        try:
-            for _, image_bytes in preprocessed:
-                tmp_path = create_image_tmp_file(image_bytes)
-                temp_paths.append(tmp_path)
-            ocr_results: list[str] = await client.ainfer(temp_paths)  # type:ignore
-        finally:
-            for p in temp_paths:
-                p.unlink(missing_ok=True)
+        logger.info(
+            f"[ImageOCRTask] Batch OCR on {len(preprocessed)} frame(s) | max_concurrent={max_concurrent}"
+        )
+
+        # Prepare image data URIs
+        data_uris = []
+        mime_map = {
+            ".webp": "image/webp",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+        }
+        for artifact, frame_bytes in preprocessed:
+            ext = Path(artifact.object_name or "").suffix.lower() if artifact.object_name else ".webp"
+            mime = mime_map.get(ext, "image/webp")
+            data_uris.append(OpenRouterClient.encode_image_bytes(frame_bytes, mime=mime))
+
+        results = await client.batch_ainfer_image(
+            data_uris,
+            prompts=OCR_PROMPT,
+            max_concurrent=max_concurrent,
+        )
+
+        if results is None:
+            raise RuntimeError("OpenRouter batch_ainfer_image returned None — API call failed")
 
         output: list[tuple[ImageOCRArtifact, bytes]] = []
-        for (image_artifact, _), ocr_text in zip(preprocessed, ocr_results):
-            text = ocr_text or ""
+        total_usage: dict[str, float] = {
+            "prompt_tokens": 0.0,
+            "completion_tokens": 0.0,
+            "total_tokens": 0.0,
+            "cost": 0.0,
+        }
+
+        for (image_artifact, _), result in zip(preprocessed, results):
+            if result is None:
+                raise RuntimeError(
+                    f"OpenRouter returned None for frame {image_artifact.frame_index} — API call failed"
+                )
+
+            raw_text = normalize_ocr_text(result.content or "")
+            usage: dict = result.usage or {} if result else {}
+
+            for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                total_usage[key] += usage.get(key, 0)
+            total_usage["cost"] += usage.get("cost", 0.0)
+
             logger.info(
                 f"[ImageOCRTask] OCR done | frame={image_artifact.frame_index} "
-                f"chars={len(text)} preview={text[:60]!r}"
+                f"chars={len(raw_text)} preview={raw_text[:60]!r} | "
+                f"tokens={usage.get('total_tokens', '?')} cost=${usage.get('cost', 0.0):.6f}"
             )
 
             artifact = ImageOCRArtifact(
@@ -115,20 +148,27 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
                     f"ocr/image/{image_artifact.related_video_id}/"
                     f"{image_artifact.frame_index:08d}_{image_artifact.timestamp}.json"
                 ),
-                metadata={"ocr_text": text},
+                metadata={"ocr_text": raw_text, "usage": usage},
             )
 
             ocr_payload = json.dumps(
                 {
-                    "ocr_text": text,
+                    "ocr_text": raw_text,
                     "frame_index": image_artifact.frame_index,
                     "timestamp": image_artifact.timestamp,
                     "image_minio_url": image_artifact.minio_url_path,
+                    "usage": usage,
                 }
             )
             output.append((artifact, ocr_payload.encode()))
 
-        logger.info(f"[ImageOCRTask] Batch done — {len(output)} OCR result(s) produced")
+        logger.info(
+            f"[ImageOCRTask] Batch done — {len(output)} OCR result(s) | "
+            f"total_prompt={int(total_usage['prompt_tokens'])} "
+            f"total_completion={int(total_usage['completion_tokens'])} "
+            f"total_tokens={int(total_usage['total_tokens'])} "
+            f"total_cost=${total_usage['cost']:.6f}"
+        )
         return output
 
     async def postprocess(
@@ -158,6 +198,15 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
         )
         total_chars = sum(len((a.metadata or {}).get("ocr_text", "")) for a in final_result)
 
+        total_prompt = total_completion = total_tokens = 0
+        total_cost = 0.0
+        for a in final_result:
+            u = (a.metadata or {}).get("usage") or {}
+            total_prompt += u.get("prompt_tokens", 0)
+            total_completion += u.get("completion_tokens", 0)
+            total_tokens += u.get("total_tokens", 0)
+            total_cost += u.get("cost", 0.0)
+
         ocr_rows = ""
         for artifact in final_result:
             text = (artifact.metadata or {}).get("ocr_text", "")
@@ -175,7 +224,11 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
             f"| **FPS** | `{first.related_video_fps}` |\n"
             f"| **Frames Processed** | `{len(final_result)}` |\n"
             f"| **Frames with Text** | `{frames_with_text}` |\n"
-            f"| **Total Characters** | `{total_chars:,}` |\n\n"
+            f"| **Total Characters** | `{total_chars:,}` |\n"
+            f"| **Total Prompt Tokens** | `{total_prompt:,}` |\n"
+            f"| **Total Completion Tokens** | `{total_completion:,}` |\n"
+            f"| **Total Tokens** | `{total_tokens:,}` |\n"
+            f"| **Total Cost** | `${total_cost:.6f}` |\n\n"
             f"## OCR Results\n\n"
             f"| Frame | Timestamp | Chars | OCR Text |\n"
             f"|-------|-----------|-------|----------|\n"
@@ -196,25 +249,10 @@ class ImageOCRTask(BaseTask[list[ImageArtifact], list[ImageOCRArtifact]]):
                 {"Field": "Frames Processed", "Value": str(len(final_result))},
                 {"Field": "Frames with Text", "Value": str(frames_with_text)},
                 {"Field": "Total Characters", "Value": f"{total_chars:,}"},
+                {"Field": "Total Cost", "Value": f"${total_cost:.6f}"},
             ],
             key=f"{key}-summary-table",
             description=f"OCR stats table for video {video_id}",
-        )
-
-        await acreate_table_artifact(
-            table=[
-                {
-                    "Frame": artifact.frame_index,
-                    "Timestamp": artifact.timestamp,
-                    "Chars": len((artifact.metadata or {}).get("ocr_text", "")),
-                    "OCR Text": (lambda t: (t[:100] + "…") if len(t) > 100 else (t or "_empty_"))(
-                        (artifact.metadata or {}).get("ocr_text", "")
-                    ),
-                }
-                for artifact in final_result
-            ],
-            key=f"{key}-results-table",
-            description=f"OCR results for video {video_id}",
         )
 
 
@@ -224,12 +262,10 @@ async def image_ocr_chunk_task(
 ) -> list[ImageOCRArtifact]:
     """OCR a batch of image frames using ImageOCRTask.execute().
 
-    Downloads image bytes in preprocess(), writes to temp files, then calls
-    execute_single() once with the whole batch via LightON OCR concurrently.
+    Downloads image bytes in preprocess(), sends to OpenRouter concurrently for OCR.
 
     Args:
         items: Batch of ImageArtifacts to OCR.
-        context: Task execution context.
 
     Returns:
         List of ImageOCRArtifacts, one per frame in the batch.
@@ -248,19 +284,18 @@ async def image_ocr_chunk_task(
     postgres_client = await get_postgres_client()
     logger.info(f"[ImageOCRChunk] Clients initialized | minio={settings.minio.endpoint}")
 
-    ocr_config = LightONOCRConfig(
-        model_name=IMAGE_OCR_CONFIG.additional_kwargs.get("model_name", "ocr_lighton"),
-        base_url=IMAGE_OCR_CONFIG.additional_kwargs.get("base_url", "http://ocr_lighton:8000"),
+    openrouter_config = OpenRouterConfig(
+        api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        model=IMAGE_OCR_CONFIG.additional_kwargs["model"],
+        base_url=IMAGE_OCR_CONFIG.additional_kwargs["base_url"],
     )
-    logger.info(
-        f"[ImageOCRChunk] OCR config | model={ocr_config.model_name} url={ocr_config.base_url}"
-    )
+    logger.info(f"[ImageOCRChunk] OpenRouter config | model={openrouter_config.model}")
 
     task_impl = ImageOCRTask(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
         minio_client=minio_client,
     )
-    client = LightONOCRClient(config=ocr_config)
+    client = OpenRouterClient(config=openrouter_config)
 
     try:
         all_artifacts = await task_impl.execute_template(items, client)
