@@ -6,11 +6,11 @@ import io
 import re
 
 import numpy as np
-from fastembed import SparseTextEmbedding
 from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
 from qdrant_client.models import SparseVector
 
 from video_pipeline.config import get_settings
+from video_pipeline.core.client.inference import SpladeClient, SpladeConfig
 from video_pipeline.core.client.storage.minio import MinioStorageClient
 from video_pipeline.core.client.storage.qdrant.client import QdrantStorageClient
 from video_pipeline.core.client.storage.qdrant.config import QdrantConfig
@@ -41,18 +41,39 @@ def make_qdrant_client(collection_name: str) -> QdrantStorageClient:
     return QdrantStorageClient(config=config)
 
 
-def encode_sparse_vectors(texts: list[str]) -> list[SparseVector]:
-    """Encode texts to sparse vectors using SPLADE."""
-    sparse_model = SparseTextEmbedding(model_name="prithivida/Splade_PP_en_v1")
-    sparse_embeddings = list(sparse_model.embed(texts))
+# Global SPLADE client (lazy-initialized)
+_splade_client: SpladeClient | None = None
 
-    return [
-        SparseVector(
-            indices=emb.indices.tolist(),
-            values=emb.values.tolist(),
+
+def _get_splade_client() -> SpladeClient:
+    """Get or create the global SPLADE client."""
+    global _splade_client
+    if _splade_client is None:
+        settings = get_settings()
+        config = SpladeConfig(
+            url=settings.triton.url,
+            timeout=settings.triton.timeout,
         )
-        for emb in sparse_embeddings
-    ]
+        _splade_client = SpladeClient(config)
+    return _splade_client
+
+
+def encode_sparse_vectors(texts: list[str]) -> list[SparseVector]:
+    """Encode texts to sparse vectors using SPLADE via Triton.
+
+    Uses a global client instance for efficiency.
+
+    Args:
+        texts: List of text strings to encode.
+
+    Returns:
+        List of SparseVector objects with indices and values.
+    """
+    if not texts:
+        return []
+
+    client = _get_splade_client()
+    return client.encode(texts)
 
 
 async def create_summary_artifact(

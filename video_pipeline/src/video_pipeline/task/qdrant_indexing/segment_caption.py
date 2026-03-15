@@ -35,6 +35,7 @@ SegmentCaptionPreprocessed = tuple[
     list[float],  # text dense vector
     list[float],  # multimodal dense vector
     SparseVector,  # SPLADE sparse vector
+    str,  # caption_text
 ]
 
 
@@ -72,8 +73,8 @@ class SegmentCaptionQdrantIndexingTask(BaseTask[list[SegmentCaptionPair], list[s
         sparse_vectors = encode_sparse_vectors(texts_for_sparse)
 
         preprocessed = [
-            (text_art, mm_art, text_vec, mm_vec, sparse_vec)
-            for (text_art, mm_art, text_vec, mm_vec, _), sparse_vec in zip(pairs_with_vectors, sparse_vectors)
+            (text_art, mm_art, text_vec, mm_vec, sparse_vec, caption_text)
+            for (text_art, mm_art, text_vec, mm_vec, caption_text), sparse_vec in zip(pairs_with_vectors, sparse_vectors)
         ]
 
         logger.info(f"[SegmentCaptionQdrantIndexingTask] Preprocessing done — {len(preprocessed)} item(s) ready")
@@ -105,8 +106,9 @@ class SegmentCaptionQdrantIndexingTask(BaseTask[list[SegmentCaptionPair], list[s
                 "segment_cap_id": text_artifact.segment_cap_id,
                 "user_id": text_artifact.user_id,
                 "mm_embedding_minio_url": mm_artifact.minio_url_path,
+                "caption_text": caption_text,
             }
-            for text_artifact, mm_artifact, text_vec, mm_vec, sparse_vec in preprocessed
+            for text_artifact, mm_artifact, text_vec, mm_vec, sparse_vec, caption_text in preprocessed
         ]
 
         inserted_ids = await client.insert_vectors(data)

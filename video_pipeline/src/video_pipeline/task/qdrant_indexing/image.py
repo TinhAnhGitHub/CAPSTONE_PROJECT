@@ -62,6 +62,7 @@ class ImageQdrantIndexingTask(BaseTask[list[ImageEmbeddingArtifact], list[str]])
                 "image_minio_url": artifact.image_minio_url,
                 "user_id": artifact.user_id,
                 "minio_url": artifact.minio_url_path,
+                "caption_text": artifact.caption_text,
             }
             for artifact, vector in preprocessed
         ]
@@ -82,7 +83,7 @@ class ImageQdrantIndexingTask(BaseTask[list[ImageEmbeddingArtifact], list[str]])
         )
 
 
-@task(**{**IMAGE_QDRANT_INDEXING_CONFIG.to_task_kwargs(), "name": "Image Qdrant Indexing Chunk"})
+@task(**{**IMAGE_QDRANT_INDEXING_CONFIG.to_task_kwargs(), "name": "Image Qdrant Indexing Chunk"}) #type:ignore
 async def image_qdrant_indexing_chunk_task(items: list[ImageEmbeddingArtifact]) -> list[str]:
     """Index a batch of image embeddings into Qdrant as dense vectors."""
     from video_pipeline.config import get_settings

@@ -32,9 +32,10 @@ CaptionPair = tuple[TextCaptionEmbeddingArtifact, ImageCaptionMultimodalEmbeddin
 CaptionPreprocessed = tuple[
     TextCaptionEmbeddingArtifact,
     ImageCaptionMultimodalEmbeddingArtifact,
-    list[float],  # text dense vector
-    list[float],  # multimodal dense vector
-    SparseVector,  # SPLADE sparse vector
+    list[float],  
+    list[float], 
+    SparseVector,  
+    str,  
 ]
 
 
@@ -68,13 +69,12 @@ class CaptionQdrantIndexingTask(BaseTask[list[CaptionPair], list[str]]):
             pairs_with_vectors.append((text_artifact, mm_artifact, text_vec, mm_vec, caption_text))
             texts_for_sparse.append(caption_text)
 
-        # Batch-encode sparse vectors with SPLADE
         logger.info(f"[CaptionQdrantIndexingTask] Encoding {len(texts_for_sparse)} sparse vector(s) via SPLADE")
         sparse_vectors = encode_sparse_vectors(texts_for_sparse)
 
         preprocessed = [
-            (text_art, mm_art, text_vec, mm_vec, sparse_vec)
-            for (text_art, mm_art, text_vec, mm_vec, _), sparse_vec in zip(pairs_with_vectors, sparse_vectors)
+            (text_art, mm_art, text_vec, mm_vec, sparse_vec, caption_text)
+            for (text_art, mm_art, text_vec, mm_vec, caption_text), sparse_vec in zip(pairs_with_vectors, sparse_vectors)
         ]
 
         logger.info(f"[CaptionQdrantIndexingTask] Preprocessing done — {len(preprocessed)} item(s) ready")
@@ -105,8 +105,9 @@ class CaptionQdrantIndexingTask(BaseTask[list[CaptionPair], list[str]]):
                 "caption_id": text_artifact.caption_id,
                 "image_id": text_artifact.image_id,
                 "mm_embedding_minio_url": mm_artifact.minio_url_path,
+                "caption_text": caption_text,
             }
-            for text_artifact, mm_artifact, text_vec, mm_vec, sparse_vec in preprocessed
+            for text_artifact, mm_artifact, text_vec, mm_vec, sparse_vec, caption_text in preprocessed
         ]
 
         inserted_ids = await client.insert_vectors(data)

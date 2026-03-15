@@ -69,6 +69,7 @@ class SegmentQdrantIndexingTask(BaseTask[list[SegmentEmbeddingArtifact], list[st
                 "embedding_dim": artifact.embedding_dim,
                 "user_id": artifact.user_id,
                 "minio_url": artifact.minio_url_path,
+                "caption_text": artifact.caption_text,
             }
             for artifact, vector in preprocessed
         ]
