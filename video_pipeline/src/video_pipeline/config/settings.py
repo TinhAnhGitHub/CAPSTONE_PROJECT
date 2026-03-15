@@ -60,6 +60,39 @@ class QdrantSettings(BaseSettings):
     )
 
 
+class ElasticsearchSettings(BaseSettings):
+    """Elasticsearch configuration for OCR text indexing."""
+
+    host: str = Field(default="localhost")
+    port: int = Field(default=9200)
+    user: str | None = Field(default=None)
+    password: str | None = Field(default=None)
+    use_ssl: bool = Field(default=False)
+    verify_certs: bool = Field(default=True)
+    index_name: str = Field(default="video_ocr_docs")
+    embedding_dim: int = Field(default=384)
+    timeout: int = Field(default=30)
+
+    model_config = SettingsConfigDict(
+        env_prefix="ELASTICSEARCH_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
+    )
+
+
+class ArangoSettings(BaseSettings):
+    """ArangoDB graph database configuration."""
+
+    host: str = Field(default="http://localhost:8529")
+    database: str = Field(default="video_kg")
+    graph_name: str = Field(default="video_knowledge_graph")
+    username: str = Field(default="root")
+    password: str = Field(default="")
+    timeout: int = Field(default=30)
+
+    model_config = SettingsConfigDict(
+        env_prefix="ARANGO_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
+    )
+
+
 class DaskSettings(BaseSettings):
     """Dask cluster configuration."""
 
@@ -115,6 +148,8 @@ class AppSettings(BaseSettings):
     minio: MinioSettings = Field(default_factory=MinioSettings)
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
     qdrant: QdrantSettings = Field(default_factory=QdrantSettings)
+    elasticsearch: ElasticsearchSettings = Field(default_factory=ElasticsearchSettings)
+    arango: ArangoSettings = Field(default_factory=ArangoSettings)
     dask: DaskSettings = Field(default_factory=DaskSettings)
     tasks: TaskConfigSettings = Field(default_factory=TaskConfigSettings)
     triton: TritonSettings = Field(default_factory=TritonSettings)

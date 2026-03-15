@@ -15,6 +15,8 @@ from .artifact import (
     AudioSegmentArtifact,
     SegmentEmbeddingArtifact,
     SegmentCaptionArtifact,
+    # KG Artifact
+    KGGraphArtifact,
 )
 
 __all__ = [
@@ -34,4 +36,6 @@ __all__ = [
     "AudioSegmentArtifact",
     "SegmentEmbeddingArtifact",
     "SegmentCaptionArtifact",
+    # KG Artifact
+    "KGGraphArtifact",
 ]

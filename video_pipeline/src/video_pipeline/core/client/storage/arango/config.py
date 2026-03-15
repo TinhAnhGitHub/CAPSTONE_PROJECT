@@ -8,6 +8,7 @@ class ArangoConfig(BaseModel):
 
     host: str = Field(default="http://localhost:8529")
     database: str = Field(default="video_kg")
+    graph_name: str = Field(default="video_knowledge_graph")
     username: str = Field(default="root")
     password: str = Field(default="")
     timeout: int = Field(default=30)

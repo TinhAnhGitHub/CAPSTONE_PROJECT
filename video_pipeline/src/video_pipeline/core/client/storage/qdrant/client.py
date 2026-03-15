@@ -29,11 +29,6 @@ class QdrantStorageClient:
 
     async def connect(self) -> None:
         try:
-            try:
-                import fastembed  # noqa: F401
-            except ImportError:
-                pass  
-
             self._client = AsyncQdrantClient(
                 host=self.host,
                 port=self.port,
@@ -42,7 +37,6 @@ class QdrantStorageClient:
                 prefer_grpc=self.prefer_grpc,
             )
 
-            self._client.set_sparse_model(embedding_model_name="prithivida/Splade_PP_en_v1")
             logger.info("qdrant_client_connected", host=self.host, port=self.port)
         except Exception as e:
             logger.exception("qdrant_connection_failed", error=str(e))
@@ -139,8 +133,8 @@ class QdrantStorageClient:
         if "already_exists" in error_str or "already exists" in error_str:
             return True
         # Check gRPC status code
-        if hasattr(error, "_state") and hasattr(error._state, "code"):
-            return error._state.code == StatusCode.ALREADY_EXISTS
+        if hasattr(error, "_state") and hasattr(error._state, "code"): #type:ignore
+            return error._state.code == StatusCode.ALREADY_EXISTS #type:ignore
         return False
 
     async def insert_vectors(self, data: list[dict[str, Any]]) -> list[str]:
@@ -148,15 +142,15 @@ class QdrantStorageClient:
         Data example Structure
         [
             {
-                "id": "1", 
-                "text_dense": [0.1, 0.2, 0.3, ...], 
-                "text_sparse": Document("This is my raw text document. Qdrant will encode it."), 
+                "id": "1",
+                "text_dense": [0.1, 0.2, 0.3, ...],
+                "text_sparse": SparseVector(indices=[1, 2, 3], values=[0.5, 0.3, 0.2]),
                 "meta_title": "Hello World"
             },
             {
-                "id": "2", 
+                "id": "2",
                 "text_dense":[0.1, 0.2, 0.3, ...],
-                "text_sparse": Document("Another document about AI and databases."), 
+                "text_sparse": SparseVector(indices=[4, 5, 6], values=[0.4, 0.4, 0.2]),
                 "meta_title": "Another Document"
             }
         ]

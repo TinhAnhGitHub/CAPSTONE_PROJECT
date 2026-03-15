@@ -29,6 +29,8 @@ from video_pipeline.task.image_caption_multimodal_embedding.main import (
 )
 from video_pipeline.task.image_embedding.main import ImageEmbeddingTask, image_embedding_chunk_task
 from video_pipeline.task.image_extraction.main import ImageExtractionTask, image_chunk_task
+from video_pipeline.task.image_ocr.main import ImageOCRTask, image_ocr_chunk_task
+from video_pipeline.task.ocr_indexing.main import OCRIndexingTask, ocr_indexing_chunk_task
 from video_pipeline.task.qdrant_indexing import (
     CaptionQdrantIndexingTask,
     ImageQdrantIndexingTask,
@@ -58,6 +60,7 @@ from video_pipeline.task.video.main import (
     VideoRegistryTask,
     video_reg_task,
 )
+from video_pipeline.task.kg_graph import KGPipelineTask, kg_pipeline_task
 
 from video_pipeline.task.autoshot.main import AutoshotArtifact
 
@@ -415,6 +418,52 @@ async def run_image_qdrant_indexing(
     return image_index_ids, image_index_futures
 
 
+async def run_image_ocr(
+    analysis_batches: list,
+    image_batch_futures: Any,
+    tracker: HTTPProgressTracker | None,
+    video_id: str,
+    timing: TimingRegistry,
+) -> tuple[list, Any]:
+    """Stage 9c: Run OCR on extracted images."""
+    with timing.record("Image OCR") as t:
+        t.start()
+        ocr_batch_futures = image_ocr_chunk_task.map(  # type: ignore
+            analysis_batches,
+            wait_for=[image_batch_futures],
+        )
+        ocr_results = [a for batch in ocr_batch_futures.result() for a in batch]
+        await ImageOCRTask.summary_artifact(ocr_results)
+        if tracker:
+            await tracker.complete_stage(video_id, ImageOCRTask.__name__)
+        t.stop()
+    return ocr_results, ocr_batch_futures
+
+
+async def run_ocr_indexing(
+    ocr_results: list,
+    ocr_batch_futures: Any,
+    ocr_batch_size: int,
+    tracker: HTTPProgressTracker | None,
+    video_id: str,
+    timing: TimingRegistry,
+) -> tuple[list, Any]:
+    """Stage 10: Index OCR text into Elasticsearch."""
+    with timing.record("OCR Indexing") as t:
+        t.start()
+        ocr_index_batches = make_batches(ocr_results, ocr_batch_size)
+        ocr_index_futures = ocr_indexing_chunk_task.map(  # type: ignore
+            ocr_index_batches,
+            wait_for=ocr_batch_futures,
+        )
+        ocr_index_ids = [uid for batch in ocr_index_futures.result() for uid in batch]
+        await OCRIndexingTask.summary_artifact(ocr_index_ids)
+        if tracker:
+            await tracker.complete_stage(video_id, OCRIndexingTask.__name__)
+        t.stop()
+    return ocr_index_ids, ocr_index_futures
+
+
 async def run_image_caption_embedding(
     caption_embedding_batches: list,
     caption_batch_futures: Any,
@@ -532,9 +581,26 @@ async def run_caption_qdrant_indexing(
     return caption_index_ids
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Composite task functions (orchestrate multiple atomic tasks)
-# ─────────────────────────────────────────────────────────────────────────────
+async def run_kg_pipeline(
+    segment_caption_results: list,
+    segment_caption_futures: Any,
+    tracker: HTTPProgressTracker | None,
+    video_id: str,
+    timing: TimingRegistry,
+) -> tuple[list, Any]:
+    """Stage 12: Run Knowledge Graph pipeline on segment captions."""
+    with timing.record("Knowledge Graph Pipeline") as t:
+        t.start()
+        kg_futures = kg_pipeline_task.submit(  # type: ignore
+            segment_caption_results,
+            wait_for=segment_caption_futures,
+        )
+        kg_results = kg_futures.result()
+        await KGPipelineTask.summary_artifact(kg_results)
+        if tracker:
+            await tracker.complete_stage(video_id, KGPipelineTask.__name__)
+        t.stop()
+    return kg_results, kg_futures
 
 
 async def run_audio_branch(
@@ -548,19 +614,15 @@ async def run_audio_branch(
     Run the complete audio/segment branch:
     ASR → AudioSegment → SegmentEmbedding/Caption → Embeddings → Qdrant indexing
     """
-    # ASR
     asr_results, asr_batch_futures = await run_asr(
         asr_batches, preprocess_fut, tracker, video_id, timing
     )
 
-    # Audio Segmentation
     audio_segment_results = await run_audio_segment(asr_results, tracker, video_id, timing)
 
-    # Segment batches for downstream tasks
     segment_batch_size: int = 5
     segment_batches = make_batches(audio_segment_results, segment_batch_size)
 
-    # Segment Embedding and Caption (can run in parallel conceptually, but we run sequentially here)
     segment_embedding_results, segment_embedding_futures = await run_segment_embedding(
         segment_batches, audio_segment_results, tracker, video_id, timing
     )
@@ -568,7 +630,6 @@ async def run_audio_branch(
         segment_batches, audio_segment_results, tracker, video_id, timing
     )
 
-    # Segment Qdrant Indexing
     segment_index_ids, segment_index_futures = await run_segment_qdrant_indexing(
         segment_embedding_results,
         segment_embedding_futures,
@@ -578,10 +639,8 @@ async def run_audio_branch(
         timing,
     )
 
-    # Segment Caption batches for embedding
     segment_caption_batches = make_batches(segment_caption_results, segment_batch_size)
 
-    # Segment Caption Embeddings
     (
         segment_caption_embedding_results,
         segment_caption_embedding_futures,
@@ -595,6 +654,14 @@ async def run_audio_branch(
         segment_caption_batches, segment_caption_futures, tracker, video_id, timing
     )
 
+    kg_results, kg_futures = await run_kg_pipeline(
+        segment_caption_results,
+        segment_caption_futures,
+        tracker,
+        video_id,
+        timing,
+    )
+
     return {
         "asr_results": asr_results,
         "audio_segment_results": audio_segment_results,
@@ -606,6 +673,7 @@ async def run_audio_branch(
         "segment_caption_embedding_futures": segment_caption_embedding_futures,
         "segment_caption_multimodal_embedding_futures": segment_caption_multimodal_embedding_futures,
         "segment_batch_size": segment_batch_size,
+        "kg_results": kg_results,
     }
 
 
@@ -618,7 +686,7 @@ async def run_image_branch(
 ) -> dict[str, Any]:
     """
     Run the complete image branch:
-    ImageExtraction → ImageCaption/ImageEmbedding → CaptionEmbeddings → Qdrant indexing
+    ImageExtraction → ImageCaption/ImageEmbedding/ImageOCR → CaptionEmbeddings → Qdrant/Elasticsearch indexing
     """
     # Image Extraction
     image_results, image_batch_futures = await run_image_extraction(
@@ -629,17 +697,26 @@ async def run_image_branch(
     analysis_batch_size: int = 10
     analysis_batches = make_batches(image_results, analysis_batch_size)
 
-    # Image Caption and Embedding (parallel)
+    # Image Caption, Embedding, and OCR (parallel)
     caption_results, caption_batch_futures = await run_image_caption(
         analysis_batches, image_batch_futures, tracker, video_id, timing
     )
     embedding_results, embedding_batch_futures = await run_image_embedding(
         analysis_batches, image_batch_futures, tracker, video_id, timing
     )
+    ocr_results, ocr_batch_futures = await run_image_ocr(
+        analysis_batches, image_batch_futures, tracker, video_id, timing
+    )
 
     # Image Qdrant Indexing
     image_index_ids, image_index_futures = await run_image_qdrant_indexing(
         embedding_results, embedding_batch_futures, analysis_batch_size, tracker, video_id, timing
+    )
+
+    # OCR Indexing into Elasticsearch
+    ocr_batch_size: int = 20
+    ocr_index_ids, ocr_index_futures = await run_ocr_indexing(
+        ocr_results, ocr_batch_futures, ocr_batch_size, tracker, video_id, timing
     )
 
     # Caption batches for embedding
@@ -663,9 +740,11 @@ async def run_image_branch(
         "image_results": image_results,
         "caption_results": caption_results,
         "embedding_results": embedding_results,
+        "ocr_results": ocr_results,
         "caption_embedding_results": caption_embedding_results,
         "caption_multimodal_embedding_results": caption_multimodal_embedding_results,
         "image_index_ids": image_index_ids,
+        "ocr_index_ids": ocr_index_ids,
         "caption_embedding_futures": caption_embedding_futures,
         "caption_multimodal_embedding_futures": caption_multimodal_embedding_futures,
         "analysis_batch_size": analysis_batch_size,
@@ -727,6 +806,69 @@ async def create_summary_artifact(
 
     timing_table = timing.to_markdown_table()
 
+    # KG stats
+    kg_artifact = audio_branch.get('kg_results')
+    kg_entities = kg_artifact.total_canonical_entities if kg_artifact else 0
+    kg_raw_entities = kg_artifact.total_raw_entities if kg_artifact else 0
+    kg_events = kg_artifact.total_events if kg_artifact else 0
+    kg_micro_events = kg_artifact.total_micro_events if kg_artifact else 0
+    kg_communities = kg_artifact.total_communities if kg_artifact else 0
+    kg_relationships = kg_artifact.total_relationships if kg_artifact else 0
+    kg_event_edges = kg_artifact.total_event_edges if kg_artifact else 0
+    kg_micro_edges = kg_artifact.total_micro_event_edges if kg_artifact else 0
+    kg_nodes_embed = kg_artifact.total_nodes_with_embeddings if kg_artifact else 0
+    kg_modularity = kg_artifact.graph_modularity if kg_artifact else 0.0
+
+    # Cost tracking
+    kg_prompt_tokens = kg_artifact.total_prompt_tokens if kg_artifact else 0
+    kg_completion_tokens = kg_artifact.total_completion_tokens if kg_artifact else 0
+    kg_cost = kg_artifact.total_llm_cost if kg_artifact else 0.0
+    kg_llm_calls = kg_artifact.llm_calls if kg_artifact else 0
+    kg_model = kg_artifact.llm_model if kg_artifact else ""
+
+    # Format cost display
+    cost_display = f"${kg_cost:.4f}" if kg_cost > 0 else "N/A"
+    tokens_display = f"{kg_prompt_tokens:,}" if kg_prompt_tokens > 0 else "N/A"
+
+    kg_section = ""
+    if kg_artifact:
+        kg_section = f"""
+## Knowledge Graph Pipeline
+
+### Entity Statistics
+| Field | Count |
+|-------|-------|
+| Raw Entities (extracted) | `{kg_raw_entities}` |
+| Canonical Entities (resolved) | `{kg_entities}` |
+| Entity Resolution Ratio | `{kg_raw_entities / kg_entities:.2f}x` if kg_entities > 0 else 'N/A' |
+| Global Relationships | `{kg_relationships}` |
+
+### Event Layer
+| Field | Count |
+|-------|-------|
+| Big Events | `{kg_events}` |
+| Micro-Events | `{kg_micro_events}` |
+| Event-to-Event Edges | `{kg_event_edges}` |
+| Micro-Event Edges | `{kg_micro_edges}` |
+
+### Community Structure
+| Field | Value |
+|-------|-------|
+| Communities Detected | `{kg_communities}` |
+| Graph Modularity | `{kg_modularity:.4f}` |
+| Nodes with Node2Vec Embeddings | `{kg_nodes_embed}` |
+
+### LLM Cost & Usage
+| Field | Value |
+|-------|-------|
+| LLM Model | `{kg_model or 'N/A'}` |
+| LLM Calls | `{kg_llm_calls}` |
+| Prompt Tokens | `{tokens_display}` |
+| Completion Tokens | `{kg_completion_tokens:,}` if kg_completion_tokens > 0 else 'N/A' |
+| Estimated Cost | `{cost_display}` |
+
+"""
+
     await acreate_markdown_artifact(
         description=f"Processing summary for video {video_id}",
         markdown=(
@@ -747,12 +889,15 @@ async def create_summary_artifact(
             f"| Image Artifacts | {len(image_branch['image_results'])} |\n"
             f"| Caption Artifacts | {len(image_branch['caption_results'])} |\n"
             f"| Image Embeddings | {len(image_branch['embedding_results'])} |\n"
+            f"| OCR Artifacts | {len(image_branch['ocr_results'])} |\n"
+            f"| OCR Elasticsearch Documents | {len(image_branch['ocr_index_ids'])} |\n"
             f"| Caption Text Embeddings | {len(image_branch['caption_embedding_results'])} |\n"
             f"| Caption Multimodal Embeddings | {len(image_branch['caption_multimodal_embedding_results'])} |\n"
             f"| Image Qdrant Points | {len(image_branch['image_index_ids'])} |\n"
             f"| Caption Qdrant Points | {len(final_indexing['caption_index_ids'])} |\n"
             f"| Segment Qdrant Points | {len(audio_branch['segment_index_ids'])} |\n"
             f"| Segment Caption Qdrant Points | {len(final_indexing['segment_caption_index_ids'])} |\n\n"
+            f"{kg_section}"
             f"## Timing Breakdown\n\n"
             f"{timing_table}\n"
         ),
@@ -860,6 +1005,7 @@ async def single_video_processing_flow(
             f"seg_cap_mm_embed={len(audio_branch['segment_caption_multimodal_embedding_results'])} | "
             f"images={len(image_branch['image_results'])} | captions={len(image_branch['caption_results'])} | "
             f"img_embed={len(image_branch['embedding_results'])} | "
+            f"ocr={len(image_branch['ocr_results'])} | ocr_index={len(image_branch['ocr_index_ids'])} | "
             f"cap_text_embed={len(image_branch['caption_embedding_results'])} | "
             f"cap_mm_embed={len(image_branch['caption_multimodal_embedding_results'])} | "
             f"seg_qdrant={len(audio_branch['segment_index_ids'])} | seg_cap_qdrant={len(final_indexing['segment_caption_index_ids'])} | "

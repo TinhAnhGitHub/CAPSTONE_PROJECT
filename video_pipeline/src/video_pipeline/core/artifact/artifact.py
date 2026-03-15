@@ -129,6 +129,7 @@ class SegmentEmbeddingArtifact(BaseArtifact):
     end_sec: float
     frame_indices: list[int]
     embedding_dim: int = 1536
+    caption_text: str = ""
 
     def _build_lineage_parents(self) -> list[str]:
         return [self.related_audio_segment_artifact_id]
@@ -207,6 +208,7 @@ class ImageEmbeddingArtifact(BaseArtifact):
     image_minio_url: str
     extension: str
     image_id: str
+    caption_text: str = ""
 
     def _build_lineage_parents(self) -> list[str]:
         return [self.image_id]
@@ -274,3 +276,96 @@ class SegmentCaptionMultimodalEmbedArtifact(BaseArtifact):
 
     def _build_lineage_parents(self) -> list[str]:
         return [self.segment_cap_id]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Knowledge Graph Artifact
+# ─────────────────────────────────────────────────────────────────────────────
+
+class KGGraphArtifact(BaseArtifact):
+    """Complete Knowledge Graph artifact containing all KG pipeline outputs.
+
+    This artifact captures the entire KG pipeline results:
+    - Canonical entities with global IDs
+    - Global relationships (collapsed)
+    - Events and micro-events with embeddings
+    - Community structure
+    - Node2Vec structural embeddings
+    """
+
+    related_video_id: str
+    related_segment_caption_artifact_ids: list[str] = Field(default_factory=list)
+
+    # === Canonical Entities ===
+    # List of canonical entities with global IDs, merged descriptions, and embeddings
+    entities: list[dict] = Field(default_factory=list)
+
+    # === Global Relationships ===
+    # Collapsed relationships between canonical entities
+    relationships: list[dict] = Field(default_factory=list)
+
+    # === Segment Views ===
+    # Per-segment view for RAG retrieval
+    segment_views: list[dict] = Field(default_factory=list)
+
+    # === Events ===
+    # Event nodes (one per segment) with embeddings
+    events: list[dict] = Field(default_factory=list)
+
+    # Event-entity links
+    event_entity_links: list[dict] = Field(default_factory=list)
+
+    # Event edges (NEXT_EVENT, SEMANTICALLY_SIMILAR, SHARES_CONTEXT, CAUSAL)
+    event_edges: list[dict] = Field(default_factory=list)
+
+    # === Micro-Events ===
+    # Micro-event nodes with embeddings
+    micro_event_nodes: list[dict] = Field(default_factory=list)
+
+    # Micro-event edges
+    micro_event_edges: list[dict] = Field(default_factory=list)
+
+    # === Communities ===
+    # Community nodes with summaries and embeddings
+    communities: list[dict] = Field(default_factory=list)
+
+    # Entity -> Community membership edges
+    membership_edges: list[dict] = Field(default_factory=list)
+
+    # Event -> Community edges
+    event_community_edges: list[dict] = Field(default_factory=list)
+
+    # === Node2Vec Embeddings ===
+    # Node2Vec hyperparameters
+    node2vec_meta: dict = Field(default_factory=dict)
+
+    # Node embeddings keyed by node ID (entity_id, event_key, micro_key, comm_key)
+    node_embeddings: dict[str, dict] = Field(default_factory=dict)
+
+    # === Stats ===
+    total_raw_entities: int = 0
+    total_canonical_entities: int = 0
+    total_relationships: int = 0
+    total_events: int = 0
+    total_micro_events: int = 0
+    total_communities: int = 0
+    total_event_edges: int = 0
+    total_micro_event_edges: int = 0
+    total_membership_edges: int = 0
+    total_nodes_with_embeddings: int = 0
+    graph_modularity: float = 0.0
+
+    # === Cost Tracking ===
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_llm_cost: float = 0.0
+    llm_model: str = ""
+    llm_calls: int = 0
+
+    def _build_lineage_parents(self) -> list[str]:
+        return self.related_segment_caption_artifact_ids
+
+    @property
+    def minio_url_path(self) -> str:
+        """KG artifact does not store anything in MinIO."""
+        return ""

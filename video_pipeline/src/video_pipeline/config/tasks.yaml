@@ -9,7 +9,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 120
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "video_registration_cache_key"
 
   autoshot_detection:
@@ -22,7 +22,7 @@ tasks:
     retry_delay_seconds: 10
     timeout_seconds: 600
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "video_artifact_cache_key"
 
     additional_kwargs:
@@ -39,7 +39,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "asr_batch_cache_key"
 
     additional_kwargs:
@@ -56,7 +56,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "audio_segment_cache_key"
 
     additional_kwargs:
@@ -74,7 +74,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "segment_embedding_cache_key"
 
     additional_kwargs:
@@ -91,7 +91,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "segment_caption_cache_key"
 
     additional_kwargs:
@@ -110,7 +110,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 120
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "segment_caption_embedding_cache_key"
 
     additional_kwargs:
@@ -127,7 +127,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "segment_caption_multimodal_embedding_cache_key"
 
     additional_kwargs:
@@ -185,7 +185,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 120
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "caption_embedding_batch_cache_key"
 
     additional_kwargs:
@@ -202,7 +202,7 @@ tasks:
     retry_delay_seconds: 5
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "caption_multimodal_embedding_batch_cache_key"
 
     additional_kwargs:
@@ -210,10 +210,11 @@ tasks:
 
   image_ocr:
     name: "Image OCR"
-    description: "Run OCR on extracted video frames using LightON and persist as ImageOCRArtifacts"
+    description: "Run OCR on extracted video frames using OpenRouter VLM and persist as ImageOCRArtifacts"
     stage: "Analysis"
     tags:
       - "ocr-task"
+      - "llm-task"
     retries: 2
     retry_delay_seconds: 5
     timeout_seconds: 300
@@ -222,8 +223,27 @@ tasks:
     cache_key_fn: "image_batch_cache_key_ocr"
 
     additional_kwargs:
-      model_name: "ocr_lighton"
-      base_url: "http://ocr_lighton:8000"
+      model: "qwen/qwen3-vl-8b-instruct"
+      base_url: "https://openrouter.ai/api/v1"
+      max_concurrent: 10
+
+  ocr_indexing:
+    name: "OCR Indexing"
+    description: "Index OCR text documents into Elasticsearch for text search retrieval"
+    stage: "Indexing"
+    tags:
+      - "elasticsearch-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "ocr_indexing_cache_key"
+
+    additional_kwargs:
+      embedding_base_url: "http://mmbert:8000"
+      batch_size: 20
 
   image_embedding:
     name: "Image Embedding"
@@ -252,10 +272,10 @@ tasks:
 
     additional_kwargs:
       collection_base: "video_embedding2"
-      image_dim: 2048      # QwenVL visual embedding dim
+      image_dim: 2048      
       image_dense_field: "image_dense"
 
-      caption_dim: 768     # mmBERT text embedding dim
+      caption_dim: 768    
       caption_text_dense_field: "caption_text_dense"
       caption_sparse_field: "caption_sparse"
       
@@ -277,7 +297,7 @@ tasks:
     retry_delay_seconds: 10
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "image_qdrant_indexing_cache_key"
 
   caption_qdrant_indexing:
@@ -291,7 +311,7 @@ tasks:
     retry_delay_seconds: 10
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "caption_qdrant_indexing_cache_key"
 
   segment_qdrant_indexing:
@@ -305,7 +325,7 @@ tasks:
     retry_delay_seconds: 10
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "segment_qdrant_indexing_cache_key"
 
   segment_caption_qdrant_indexing:
@@ -319,24 +339,59 @@ tasks:
     retry_delay_seconds: 10
     timeout_seconds: 300
     cache_enabled: true
-    cache_expiration_seconds: 2592000  # 30 days
+    cache_expiration_seconds: 2592000  
     cache_key_fn: "segment_caption_qdrant_indexing_cache_key"
 
-  kg_extraction:
-    name: "Knowledge Graph Extraction"
-    description: "Extract entities, micro-events, and relationships from segment captions using LLM"
+  kg_pipeline:
+    name: "Knowledge Graph Pipeline"
+    description: "Complete KG pipeline: extraction, entity resolution, event linking, community detection, and Node2Vec embeddings"
     stage: "Analysis"
     tags:
       - "kg-task"
       - "llm-service"
+      - "embedding-task"
     retries: 2
     retry_delay_seconds: 10
-    timeout_seconds: 600
+    timeout_seconds: 1800
     cache_enabled: false
 
     additional_kwargs:
       model: "qwen/qwen3-coder-next"
       base_url: "https://openrouter.ai/api/v1"
       max_tokens: 10000
+
+      dense_embedding_base_url: "http://mmbert:8000"
+
+      sparse_embedding_url: "triton:8001"
+
+      # Stage 1: KG Extraction
       max_concurrent: 5
+
+      # Stage 2: Entity Resolution
+      hybrid_dense_weight: 0.9
+      hybrid_sparse_weight: 0.1
+      similarity_threshold: 0.75
+      max_concurrent_llm: 5
+
+      # Stage 3: Event Linking
+      semantic_threshold: 0.80
+      llm_confirm_threshold: 0.60
+      jaccard_threshold: 0.30
+      micro_window_size: 2
+      micro_semantic_threshold: 0.85
+      micro_llm_confirm_threshold: 0.65
+      micro_jaccard_threshold: 0.40
+
+      # Stage 4: Community Detection
+      n_iterations: 10
+      seed: 42
+
+      # Stage 5: Node2Vec
+      dim: 128
+      walk_length: 80
+      num_walks: 10
+      p: 1.0
+      q: 1.0
+      window: 10
+      workers: 4
 
