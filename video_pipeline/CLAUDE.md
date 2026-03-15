@@ -14,8 +14,10 @@ This is a **Prefect-based video processing pipeline** that extracts, analyzes, a
 - **PostgreSQL** for artifact metadata and lineage tracking
 - **MinIO** (S3-compatible) for object storage (videos, images, artifacts)
 - **Qdrant** for vector search and embedding storage
+- **Elasticsearch** for OCR text indexing and search (BM25 + kNN hybrid)
+- **Triton Inference Server** for SPLADE sparse embeddings
 - **Redis** for Prefect messaging
-- **External ML Services**: QwenVL (embeddings), mmBERT (text embeddings), ASR, OCR, LLM providers
+- **External ML Services**: QwenVL (embeddings), mmBERT (text embeddings), ASR, LLM providers
 
 ## Commands
 
@@ -92,10 +94,12 @@ src/video_pipeline/
     ├── image_extraction/  # Frame extraction
     ├── image_caption/     # Frame captioning
     ├── image_embedding/   # Frame embeddings
-    ├── image_ocr/         # OCR on frames
+    ├── image_ocr/         # OCR on frames (via OpenRouter VLM)
+    ├── ocr_indexing/      # OCR text indexing into Elasticsearch
     ├── segment_caption/   # Segment caption generation
     ├── segment_embedding/ # Segment embeddings
-    └── qdrant_indexing/   # Vector database indexing
+    ├── kg_graph/          # Knowledge Graph pipeline (5 stages)
+    └── qdrant_indexing/   # Vector database indexing (dense + sparse)
 ```
 
 ### Core Components
@@ -142,6 +146,7 @@ Pydantic models representing pipeline outputs with lineage tracking:
 - `ImageArtifact` - Extracted video frames
 - `ImageCaptionArtifact` / `ImageEmbeddingArtifact` / `ImageOCRArtifact` - Frame analysis
 - `SegmentCaptionArtifact` / `SegmentEmbeddingArtifact` - Segment analysis
+- `KGGraphArtifact` - Knowledge Graph with entities, relationships, events, communities, and Node2Vec embeddings
 - Various embedding artifacts for vector search
 
 Each artifact has:
@@ -179,17 +184,21 @@ flowchart TB
             direction TB
             L[Image Extraction] --> M[Image Caption]
             L --> N[Image Embedding]
-            N --> O[Image Qdrant Indexing]
-            M --> P[Caption Embedding]
-            M --> Q[Caption MM Embedding]
+            L --> O[Image OCR]
+            N --> P[Image Qdrant Indexing]
+            O --> Q[OCR Elasticsearch Indexing]
+            M --> R[Caption Embedding]
+            M --> S[Caption MM Embedding]
         end
 
-        I --> R[Final Qdrant Indexing<br/>Captions]
-        J --> R
-        K --> R
-        O --> R
-        P --> R
-        Q --> R
+        I --> T[Final Qdrant Indexing<br/>Captions]
+        J --> T
+        K --> T
+        P --> T
+        R --> T
+        S --> T
+
+        H --> U[KG Pipeline<br/>5 Stages]
     end
 ```
 
@@ -216,7 +225,14 @@ Environment-specific YAML configs in `config/environments/{env}.yaml`:
 
 - **MinIO** (`core/client/storage/minio/client.py`): S3-compatible object storage for videos, images, artifacts
 - **PostgreSQL** (`core/client/storage/pg/`): Artifact metadata and lineage
-- **Qdrant** (`core/client/storage/qdrant/`): Vector database for embeddings
+- **Qdrant** (`core/client/storage/qdrant/`): Vector database for embeddings (dense + sparse)
+- **Elasticsearch** (`core/client/storage/elasticsearch/`): OCR text indexing with BM25 + kNN hybrid search
+- **ArangoDB** (`core/client/storage/arango/`): Graph database for Knowledge Graph storage
+
+#### 6. Inference Clients
+
+- **MMBertClient** (`core/client/inference/`): Dense text embeddings (768-dim)
+- **SpladeClient** (`core/client/inference/`): Sparse embeddings via Triton Inference Server
 
 ### Key Infrastructure (docker-compose)
 
@@ -226,9 +242,11 @@ Environment-specific YAML configs in `config/environments/{env}.yaml`:
 | Prefect Worker | 8787 | Dask dashboard |
 | MinIO | 9000/9001 | Object storage (API/Console) |
 | Qdrant | 6333/6334 | Vector database |
+| Elasticsearch | 9200 | OCR text search (BM25 + kNN) |
+| Triton Server | 8001/8000 | SPLADE sparse embeddings (gRPC/HTTP) |
 | PostgreSQL | 5432 | Artifact metadata |
+| ArangoDB | 8529 | Graph database for Knowledge Graph |
 | Redis | 6379 | Prefect messaging |
-| ArangoDB | 8529 | Graph database (optional) |
 | Video Pipeline API | 8050 | REST API |
 
 ### API Endpoints
@@ -263,7 +281,77 @@ The pipeline depends on these external services (configured in tasks.yaml):
 - **QwenVL Embedding**: Visual embeddings (`http://qwen_vl_embedding:8080/embedding`)
 - **mmBERT**: Text embeddings (`http://mmbert:8000`)
 - **OCR (LightON)**: Text extraction from images (`http://ocr_lighton:8000`)
-- **OpenRouter**: LLM API for captions (various models)
+- **OpenRouter**: LLM API for captions and KG pipeline (various models)
+- **ArangoDB**: Graph database for Knowledge Graph storage and querying
+
+## Knowledge Graph Pipeline
+
+The KG pipeline (`task/kg_graph/`) is a 5-stage pipeline that transforms segment captions into a rich knowledge graph:
+
+### Pipeline Stages
+
+1. **KG Extraction** (`extract_kg.py`) - Extract entities, events, and relationships from segment captions using LLM
+2. **Entity Resolution** (`entity_resolution.py`) - Resolve entities globally using hybrid embeddings (dense + sparse) and LLM confirmation
+3. **Event Linking** (`event_linking.py`) - Build event/micro-event nodes and temporal edges with semantic similarity
+4. **Community Detection** (`community_detection.py`) - Detect communities using Leiden algorithm with LLM summaries
+5. **Node2Vec Embeddings** (`node2vec_embeddings.py`) - Train structural embeddings on graph variants
+
+### Cost Tracking
+
+All LLM usage across the pipeline is tracked via `CostTracker`:
+
+```python
+from video_pipeline.task.kg_graph import CostTracker
+
+cost_tracker = CostTracker()
+cost_tracker.model = "qwen/qwen3-coder-next"
+
+# Usage is automatically tracked from LLM responses
+# Extract from response.raw.usage (OpenRouter format)
+if hasattr(response, 'raw') and hasattr(response.raw, 'usage'):
+    usage = response.raw.usage
+    cost_tracker.add_usage(
+        prompt_tokens=usage.prompt_tokens,
+        completion_tokens=usage.completion_tokens,
+        cost=usage.cost,
+    )
+```
+
+### Configuration
+
+Single unified config in `tasks.yaml`:
+
+```yaml
+kg_pipeline:
+  name: "Knowledge Graph Pipeline"
+  stage: "Analysis"
+  additional_kwargs:
+    model: "qwen/qwen3-coder-next"
+    dense_embedding_base_url: "http://mmbert:8000"
+    sparse_embedding_url: "triton:8001"
+    # Entity resolution
+    hybrid_dense_weight: 0.9
+    hybrid_sparse_weight: 0.1
+    similarity_threshold: 0.75
+    # Event linking
+    semantic_threshold: 0.80
+    llm_confirm_threshold: 0.60
+    # Community detection
+    n_iterations: 10
+    # Node2Vec
+    dim: 128
+    walk_length: 80
+    num_walks: 10
+```
+
+### Key Models
+
+- `CaptionSegment` - Input from segment captioning
+- `KGSegment` - Extracted KG for one segment
+- `CanonicalEntity` - Globally resolved entity
+- `EnhancedKG` - KG with event layer
+- `CommunitiesOutput` - Community detection results
+- `Node2VecOutput` - Structural embeddings
 
 ## Development Guidelines
 
