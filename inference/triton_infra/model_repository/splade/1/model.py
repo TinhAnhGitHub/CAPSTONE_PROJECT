@@ -1,6 +1,7 @@
 import numpy as np
 import triton_python_backend_utils as pb_utils
 from fastembed import SparseTextEmbedding
+import pickle
 
 MODEL_NAME = "prithivida/Splade_PP_en_v1"
 
@@ -22,8 +23,8 @@ class TritonPythonModel:
             values_batch = []
 
             for emb in embeddings:
-                indices_batch.append(np.array(emb.indices, dtype=np.int32))
-                values_batch.append(np.array(emb.values, dtype=np.float32))
+                indices_batch.append(pickle.dumps(np.array(emb.indices, dtype=np.int32)))
+                values_batch.append(pickle.dumps(np.array(emb.values, dtype=np.float32)))
 
             out_indices = pb_utils.Tensor(
                 "INDICES", np.array(indices_batch, dtype=object)
