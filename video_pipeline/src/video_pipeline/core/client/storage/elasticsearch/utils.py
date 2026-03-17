@@ -84,8 +84,7 @@ def get_ocr_index_mapping(embedding_dim: int = 384) -> dict[str, Any]:
                 },
                 "cleaned_text": {
                     "type": "text",
-                    "analyzer": "ocr_analyzer",
-                    "boost": 1.5
+                    "analyzer": "ocr_analyzer"
                 },
                 # Semantic vector field
                 "content_vector": {

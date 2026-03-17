@@ -18,7 +18,7 @@ class ElasticsearchSettings(BaseModel):
     verify_certs: bool = Field(default=True)
     index_name: str = Field(default="video_ocr_docs")
     embedding_dim: int = Field(default=768)  # MMBertClient produces 768-dim embeddings
-    timeout: int = Field(default=30)
+    request_timeout: int = Field(default=30)
 
     @property
     def url(self) -> str:
@@ -30,7 +30,7 @@ class ElasticsearchSettings(BaseModel):
         """Get kwargs for AsyncElasticsearch."""
         kwargs: dict[str, Any] = {
             "hosts": [self.url],
-            "timeout": self.timeout,
+            "request_timeout": self.request_timeout,
         }
         if self.user and self.password:
             kwargs["basic_auth"] = (self.user, self.password)

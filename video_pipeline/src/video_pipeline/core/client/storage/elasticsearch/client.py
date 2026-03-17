@@ -44,7 +44,6 @@ class ElasticsearchOCRClient:
             logger.info("[ElasticsearchOCRClient] Connection closed")
 
     async def create_index_if_not_exists(self) -> None:
-        """Create the OCR index if it doesn't exist."""
         if not self._client:
             raise RuntimeError("Elasticsearch client not connected")
 
