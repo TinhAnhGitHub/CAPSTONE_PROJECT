@@ -1,5 +1,5 @@
 import numpy as np
-import triton_python_backend_utils as pb_utils
+import triton_python_backend_utils as pb_utils #type:ignore
 from fastembed import SparseTextEmbedding
 import pickle
 
@@ -15,7 +15,9 @@ class TritonPythonModel:
 
         for request in requests:
             input_tensor = pb_utils.get_input_tensor_by_name(request, "TEXT")
-            texts = input_tensor.as_numpy().astype(str).flatten().tolist()
+            raw_texts = input_tensor.as_numpy().flatten()
+
+            texts = [t.decode('utf-8') if isinstance(t, bytes) else str(t) for t in raw_texts]
 
             embeddings = list(self.model.embed(texts))
 
