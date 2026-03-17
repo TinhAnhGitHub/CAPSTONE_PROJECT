@@ -6,12 +6,11 @@ from typing import cast
 
 from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage
-from prefect import get_run_logger
 
 from .models import CaptionSegment, KGSegment, EntityDoc, MicroEventDoc, RelationshipDoc, CostTracker
 from .prompt import GRAPH_PROMPT
 
-logger = get_run_logger()
+
 
 class Entity(BaseModel):
     entity_id: str = Field(..., description="Unique Entity ID (e.g., entity_01)")
@@ -116,19 +115,15 @@ async def extract_kg_from_segment(
         ChatMessage(role="user", content=user_prompt),
     ]
 
-
-
     async with semaphore:
         try:
             response = await as_llm.achat(messages)
             kg = cast(VideoGraphExtraction, response.raw)
 
-            if hasattr(response, 'raw') and hasattr(response.raw, 'usage'):
-                usage = response.raw.usage
-                prompt_tokens = getattr(usage, 'prompt_tokens', 0) or 0
-                completion_tokens = getattr(usage, 'completion_tokens', 0) or 0
-                cost = getattr(usage, 'cost', 0.0) or 0.0
-                cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
+            prompt_tokens = response.additional_kwargs.get('prompt_tokens', 0) or 0
+            completion_tokens = response.additional_kwargs.get('completion_tokens', 0) or 0
+            cost = response.additional_kwargs.get('cost', 0.0) or 0.0
+            cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
             return KGSegment(
                 video_id=segment.video_id,

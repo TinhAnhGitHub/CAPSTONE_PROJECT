@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import warnings
 
-import numpy as np
 import networkx as nx
-from node2vec import Node2Vec
 
 warnings.filterwarnings("ignore")
 
@@ -20,9 +18,7 @@ from .models import (
     NodeEmbedding,
     Node2VecOutput,
 )
-
-
-# Graph builders
+from .node2vec import Node2Vec
 
 def build_entity_only_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
     """Graph A — entity nodes + entity↔entity relationship edges."""
@@ -55,7 +51,6 @@ def build_entity_micro_event_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
     for mn in enhanced_kg.micro_event_nodes:
         G.add_node(mn.key, node_type="micro_event", label=mn.text[:60])
 
-    # entity↔entity
     for rel in enhanced_kg.relationships:
         subj = rel.subject_global
         obj = rel.object_global
@@ -66,13 +61,11 @@ def build_entity_micro_event_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
             else:
                 G.add_edge(subj, obj, weight=w)
 
-    # entity↔micro-event
     for mn in enhanced_kg.micro_event_nodes:
         for gid in mn.entities_global:
             if G.has_node(gid) and G.has_node(mn.key):
                 G.add_edge(gid, mn.key, weight=1.0)
 
-    # micro-event↔micro-event
     MICRO_WEIGHTS = {
         "NEXT_MICRO_EVENT": 2.0,
         "SEMANTICALLY_SIMILAR_MICRO": 1.5,
@@ -90,7 +83,6 @@ def build_entity_micro_event_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
             else:
                 G.add_edge(from_key, to_key, weight=w)
 
-    # micro-event↔big-event parent link
     big_event_keys = {ev.key for ev in enhanced_kg.events}
     for mn in enhanced_kg.micro_event_nodes:
         parent = mn.parent_event_key.split("/")[-1]
@@ -107,15 +99,12 @@ def build_full_heterogeneous_graph(
     enhanced_kg: EnhancedKG,
     communities: CommunitiesOutput,
 ) -> nx.Graph:
-    """Graph C — all nodes (entity + micro-event + big-event + community) + all edge types."""
     G = build_entity_micro_event_graph(enhanced_kg)
 
-    # Add big-event nodes (may already be partially added by parent links in Graph B)
     for event in enhanced_kg.events:
         if not G.has_node(event.key):
             G.add_node(event.key, node_type="event", label=event.caption[:60])
 
-    # big-event↔entity links
     for link in enhanced_kg.event_entity_links:
         ev_key = link.from_key.split("/")[-1]
         entity_key = link.to_key.split("/")[-1]
@@ -123,7 +112,6 @@ def build_full_heterogeneous_graph(
             if not G.has_edge(ev_key, entity_key):
                 G.add_edge(ev_key, entity_key, weight=1.0)
 
-    # big-event↔big-event edges
     BIG_EVENT_WEIGHTS = {
         "NEXT_EVENT": 2.0,
         "SEMANTICALLY_SIMILAR": 1.5,
@@ -141,7 +129,6 @@ def build_full_heterogeneous_graph(
             else:
                 G.add_edge(from_key, to_key, weight=w)
 
-    # community nodes + membership edges
     for comm in communities.communities:
         G.add_node(comm.comm_key, node_type="community", label=comm.title)
 
@@ -165,6 +152,27 @@ def build_full_heterogeneous_graph(
     return G
 
 
+def relabel_graph_to_integers(G: nx.Graph) -> tuple[nx.Graph, dict[int, str]]:
+    """Relabel graph nodes to consecutive integers for Node2Vec.
+
+    Returns:
+        relabeled_graph: Graph with integer node labels (0 to n-1)
+        id_map: Mapping from integer index to original node ID
+    """
+    nodes = list(G.nodes())
+    id_map = {i: node for i, node in enumerate(nodes)}
+    reverse_map = {node: i for i, node in enumerate(nodes)}
+
+    H = nx.Graph()
+    for i, node in enumerate(nodes):
+        H.add_node(i, **G.nodes[node])
+
+    for u, v, data in G.edges(data=True):
+        H.add_edge(reverse_map[u], reverse_map[v], **data)
+
+    return H, id_map
+
+
 def train_node2vec(
     G: nx.Graph,
     graph_name: str,
@@ -178,35 +186,35 @@ def train_node2vec(
     workers: int,
     seed: int,
 ) -> dict[str, list[float]]:
-    isolates = list(nx.isolates(G))
-    if isolates:
-        print(f"    {len(isolates)} isolated nodes — adding self-loops so they participate in walks.")
-        for node in isolates:
-            G.add_edge(node, node, weight=1e-6)
+    """Train Node2Vec on a graph and return embeddings keyed by original node IDs."""
+    print(f"    Training Node2Vec ({graph_name})...")
 
-    print(f"    Generating walks for {graph_name}...")
-    n2v = Node2Vec(
-        G,
-        dimensions=dim,
+    if G.number_of_nodes() == 0:
+        return {}
+
+    G_int, id_map = relabel_graph_to_integers(G)
+
+    model = Node2Vec(
+        walk_number=num_walks,
         walk_length=walk_length,
-        num_walks=num_walks,
         p=p,
         q=q,
-        weight_key="weight",
+        dimensions=dim,
         workers=workers,
+        window_size=window,
         seed=seed,
-        quiet=True,
     )
 
-    print(f"    Fitting Word2Vec for {graph_name}...")
-    model = n2v.fit(window=window, min_count=1, batch_words=4, seed=seed)
+    model.fit(G_int)
+    embeddings = model.get_embedding()
 
-    embeddings: dict[str, list[float]] = {}
-    for node in G.nodes():
-        key = str(node)
-        embeddings[key] = model.wv[key].tolist() if key in model.wv else [0.0] * dim
+    output = {}
+    for i in range(len(id_map)):
+        original_id = id_map[i]
+        output[str(original_id)] = embeddings[i].tolist()
 
-    return embeddings
+    print(f"      trained on {G.number_of_nodes()} nodes, embedding dim={dim}")
+    return output
 
 
 def assemble_output(
@@ -326,13 +334,13 @@ def run_node2vec(
 
     # Train on each graph
     print(f"  Training node2vec on Graph A (entity_only)...")
-    emb_A = train_node2vec(G_A, "entity_only", **n2v_kwargs)
+    emb_A = train_node2vec(G_A, "entity_only", **n2v_kwargs) #type:ignore
 
     print(f"  Training node2vec on Graph B (entity_micro_event)...")
-    emb_B = train_node2vec(G_B, "entity_micro_event", **n2v_kwargs)
+    emb_B = train_node2vec(G_B, "entity_micro_event", **n2v_kwargs) #type:ignore
 
     print(f"  Training node2vec on Graph C (full_heterogeneous)...")
-    emb_C = train_node2vec(G_C, "full_heterogeneous", **n2v_kwargs)
+    emb_C = train_node2vec(G_C, "full_heterogeneous", **n2v_kwargs) #type:ignore
 
     # Assemble output
     print(f"  Assembling output...")

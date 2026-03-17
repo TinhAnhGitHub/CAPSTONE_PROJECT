@@ -30,7 +30,6 @@ from .models import (
     CostTracker,
 )
 
-
 class ResolvedSubGroup(BaseModel):
     local_ids: list[str] = Field(
         ...,
@@ -81,7 +80,6 @@ async def build_hybrid_clusters(
     texts = [e["text_rep"] for e in entities]
     print(f"  Embedding {len(texts)} entities...")
 
-    # Dense embeddings from MMBertClient
     dense_vecs = await dense_client.ainfer(texts)
     if dense_vecs is None:
         raise RuntimeError("Failed to get dense embeddings from MMBertClient")
@@ -91,14 +89,11 @@ async def build_hybrid_clusters(
     dense_vecs = dense_vecs / norms
     dense_sim = cosine_similarity(dense_vecs)
 
-    # Attach normalized dense vector for later use
     for idx, e in enumerate(entities):
         e["_dense_vec"] = dense_vecs[idx].tolist()
 
-    # Sparse embeddings from SpladeClient
     sparse_vectors = await sparse_client.aencode(texts)
 
-    # Build sparse similarity matrix
     max_dim = max(
         (max(sv.indices) if sv.indices else 0 for sv in sparse_vectors),
         default=1,
@@ -114,11 +109,9 @@ async def build_hybrid_clusters(
     sparse_mat = csr_matrix((vals, (rows, cols)), shape=(len(texts), max_dim))
     sparse_sim = cosine_similarity(sparse_mat)
 
-    # Hybrid similarity
     hybrid_sim = dense_weight * dense_sim + sparse_weight * sparse_sim
     hybrid_dist = np.clip(1.0 - hybrid_sim, 0.0, 2.0)
 
-    # Agglomerative clustering
     model = AgglomerativeClustering(
         n_clusters=None,
         distance_threshold=1.0 - sim_threshold,
@@ -185,14 +178,10 @@ Input entities:
         try:
             response = await structured_llm.achat([msg])
             parsed = cast(EntityOutput, response.raw)
-
-            # Extract usage from response
-            if hasattr(response, 'raw') and hasattr(response.raw, 'usage'):
-                usage = response.raw.usage
-                prompt_tokens = getattr(usage, 'prompt_tokens', 0) or 0
-                completion_tokens = getattr(usage, 'completion_tokens', 0) or 0
-                cost = getattr(usage, 'cost', 0.0) or 0.0
-                cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
+            prompt_tokens = response.additional_kwargs.get('prompt_tokens', 0) or 0
+            completion_tokens = response.additional_kwargs.get('completion_tokens', 0) or 0
+            cost = response.additional_kwargs.get('cost', 0.0) or 0.0
+            cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
             all_local_ids = {e["local_id"] for e in entities_in_cluster}
             seen = set()
@@ -215,7 +204,6 @@ Input entities:
                             resolved.append(e)
                             break
 
-            # Handle any missed entities
             for e in entities_in_cluster:
                 if "global_entity_id" not in e:
                     e["global_entity_id"] = f"GLOBAL_{uuid.uuid4().hex[:8]}"
@@ -279,7 +267,6 @@ async def build_canonical_entities(
             )
         canonical[gid].merged_from.append(e.get("entity_id", ""))
 
-    # Embed each canonical entity's merged description
     gids = list(canonical.keys())
     descs = [canonical[gid].desc for gid in gids]
     vecs = await dense_client.ainfer(descs)

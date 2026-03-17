@@ -152,13 +152,10 @@ Return JSON with: should_link (bool), link_type (str), reason (str).
         try:
             response = await structured_llm.achat([msg])
 
-            # Extract usage from response
-            if hasattr(response, 'raw') and hasattr(response.raw, 'usage'):
-                usage = response.raw.usage
-                prompt_tokens = getattr(usage, 'prompt_tokens', 0) or 0
-                completion_tokens = getattr(usage, 'completion_tokens', 0) or 0
-                cost = getattr(usage, 'cost', 0.0) or 0.0
-                cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
+            prompt_tokens = response.additional_kwargs.get('prompt_tokens', 0) or 0
+            completion_tokens = response.additional_kwargs.get('completion_tokens', 0) or 0
+            cost = response.additional_kwargs.get('cost', 0.0) or 0.0
+            cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
             return cast(EventLinkOutput, response.raw)
         except Exception as ex:
@@ -181,7 +178,6 @@ async def build_event_edges(
     edges: list[EventEdge] = []
     linked_pairs: set[tuple[str, str]] = set()
 
-    # Pass 1: NEXT_EVENT (sequential)
     for i in range(N - 1):
         a, b = event_nodes[i], event_nodes[i + 1]
         edges.append(EventEdge(
@@ -196,7 +192,6 @@ async def build_event_edges(
 
     print(f"  Pass 1 NEXT_EVENT edges             : {len(edges)}")
 
-    # Pass 2: SEMANTICALLY_SIMILAR
     llm_candidates: list[tuple[int, int, float]] = []
     for i in range(N):
         for j in range(i + 1, N):
@@ -224,7 +219,6 @@ async def build_event_edges(
     print(f"  Pass 2 SEMANTICALLY_SIMILAR edges   : {sem_sim_count}")
     print(f"         LLM borderline candidates     : {len(llm_candidates)}")
 
-    # Pass 3: SHARES_CONTEXT (Jaccard)
     shares_count = 0
     for i in range(N):
         for j in range(i + 1, N):
@@ -253,7 +247,6 @@ async def build_event_edges(
 
     print(f"  Pass 3 SHARES_CONTEXT edges         : {shares_count}")
 
-    # Pass 4: LLM-confirmed
     if llm_candidates:
         structured_link_llm = llm_client.as_structured_llm(EventLinkOutput)
         semaphore = asyncio.Semaphore(max_concurrent_llm)
@@ -303,7 +296,6 @@ async def build_event_edges(
     return edges
 
 
-# Stage 3 — Micro-event layer
 
 async def build_micro_event_nodes(
     event_nodes: list[EventNode],
@@ -385,13 +377,21 @@ Return JSON with: should_link (bool), link_type (str), reason (str).
         try:
             response = await structured_llm.achat([msg])
 
-            # Extract usage from response
-            if hasattr(response, 'raw') and hasattr(response.raw, 'usage'):
-                usage = response.raw.usage
-                prompt_tokens = getattr(usage, 'prompt_tokens', 0) or 0
-                completion_tokens = getattr(usage, 'completion_tokens', 0) or 0
-                cost = getattr(usage, 'cost', 0.0) or 0.0
-                cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
+            # Extract usage from raw_response (the original ChatResponse)
+            if hasattr(response, 'raw_response') and response.raw_response is not None:
+                raw_resp = response.raw_response
+                if hasattr(raw_resp, 'raw') and raw_resp.raw and hasattr(raw_resp.raw, 'usage'):
+                    usage = raw_resp.raw.usage
+                    prompt_tokens = getattr(usage, 'prompt_tokens', 0) or 0
+                    completion_tokens = getattr(usage, 'completion_tokens', 0) or 0
+                    cost = getattr(usage, 'cost', 0.0) or 0.0
+                    cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
+                elif hasattr(raw_resp, 'additional_kwargs'):
+                    # Fallback to additional_kwargs if raw.usage not available
+                    prompt_tokens = raw_resp.additional_kwargs.get('prompt_tokens', 0) or 0
+                    completion_tokens = raw_resp.additional_kwargs.get('completion_tokens', 0) or 0
+                    cost = raw_resp.additional_kwargs.get('cost', 0.0) or 0.0
+                    cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
             return cast(MicroLinkOutput, response.raw)
         except Exception as ex:

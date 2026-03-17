@@ -72,6 +72,7 @@ class KGPipelineTask(BaseTask[list[SegmentCaptionArtifact], KGGraphArtifact]):
         cost_tracker.model = kwargs.get("model", "qwen/qwen3-coder-next")
 
         logger.info(f"[KGPipeline] Stage 1: KG Extraction")
+        logger.info(f"{len(preprocessed) } segment(s) to process for KG extraction")
         kg_segments = await extract_kg_graph(
             preprocessed,
             llm_client,
@@ -252,7 +253,7 @@ class KGPipelineTask(BaseTask[list[SegmentCaptionArtifact], KGGraphArtifact]):
             description=f"KG pipeline summary for video {final_result.related_video_id}",
         )
 
-@task(**{**KG_PIPELINE_CONFIG.to_task_kwargs(), "name": "KG Pipeline"})
+@task(**{**KG_PIPELINE_CONFIG.to_task_kwargs(), "name": "KG Pipeline"}) #type:ignore
 async def kg_pipeline_task(
     segments: list[SegmentCaptionArtifact],
 ) -> KGGraphArtifact:
