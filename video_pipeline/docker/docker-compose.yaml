@@ -194,16 +194,35 @@ services:
     ports:
       - "8529:8529"
     environment:
-      ARANGO_ROOT_PASSWORD: admin
+      ARANGO_NO_AUTH: 1
     command: >
       arangod --experimental-vector-index
-    
+
     volumes:
       - ${DOCKER_LOCAL_VOLUME}/arangodb_data:/var/lib/arangodb3
-    
+
     networks: [shared]
 
-  
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.1
+    container_name: elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [shared]
+
 networks:
   shared:
     external: true
