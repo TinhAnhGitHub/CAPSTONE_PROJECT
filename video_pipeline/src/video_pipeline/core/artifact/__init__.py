@@ -13,10 +13,13 @@ from .artifact import (
     SegmentCaptionMultimodalEmbedArtifact,
     ASRArtifact,
     AudioSegmentArtifact,
+    AudioTranscriptEmbedArtifact,
     SegmentEmbeddingArtifact,
     SegmentCaptionArtifact,
     # KG Artifact
     KGGraphArtifact,
+    # ArangoDB Indexing
+    ArangoIndexingArtifact,
 )
 
 __all__ = [
@@ -34,8 +37,11 @@ __all__ = [
     "SegmentCaptionMultimodalEmbedArtifact",
     "ASRArtifact",
     "AudioSegmentArtifact",
+    "AudioTranscriptEmbedArtifact",
     "SegmentEmbeddingArtifact",
     "SegmentCaptionArtifact",
     # KG Artifact
     "KGGraphArtifact",
+    # ArangoDB Indexing
+    "ArangoIndexingArtifact",
 ]

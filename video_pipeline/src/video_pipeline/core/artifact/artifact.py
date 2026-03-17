@@ -115,6 +115,39 @@ class AudioSegmentArtifact(BaseArtifact):
         return ""
 
 
+class AudioTranscriptEmbedArtifact(BaseArtifact):
+    """Embedding artifact for audio transcript text (ASR output).
+
+    Stores dense embeddings generated from the audio_text field of AudioSegmentArtifact.
+    Enables semantic search over spoken content via text-based embeddings.
+    """
+
+    related_audio_segment_artifact_id: str
+    related_video_id: str
+    related_video_minio_url: str = ""
+    related_video_extension: str = ""
+    related_video_fps: float = 0.0
+    segment_index: int
+    start_frame: int
+    end_frame: int
+    start_timestamp: str
+    end_timestamp: str
+    start_sec: float
+    end_sec: float
+    audio_text: str = ""
+    embedding_dim: int = 768
+
+    def _build_lineage_parents(self) -> list[str]:
+        return [self.related_audio_segment_artifact_id]
+
+    @property
+    def minio_url_path(self) -> str:
+        """Returns the MinIO path for the embedding file."""
+        if self.object_name:
+            return f"s3://{self.user_id}/{self.object_name}"
+        return ""
+
+
 class SegmentEmbeddingArtifact(BaseArtifact):
     related_audio_segment_artifact_id: str
     related_video_id: str
@@ -368,4 +401,43 @@ class KGGraphArtifact(BaseArtifact):
     @property
     def minio_url_path(self) -> str:
         """KG artifact does not store anything in MinIO."""
+        return ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ArangoDB Indexing Artifact
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ArangoIndexingArtifact(BaseArtifact):
+    """Artifact representing KG data indexed into ArangoDB.
+
+    Tracks the insertion statistics for graph-based retrieval.
+    """
+
+    related_video_id: str
+    related_kg_artifact_id: str
+
+    # === Vertex Collection Counts ===
+    entities: int = 0
+    events: int = 0
+    micro_events: int = 0
+    communities: int = 0
+
+    # === Edge Collection Counts ===
+    entity_relations: int = 0
+    event_sequences: int = 0
+    event_entities: int = 0
+    micro_event_sequences: int = 0
+    micro_event_parents: int = 0
+    micro_event_entities: int = 0
+    community_members: int = 0
+    event_communities: int = 0
+
+    def _build_lineage_parents(self) -> list[str]:
+        return [self.related_kg_artifact_id]
+
+    @property
+    def minio_url_path(self) -> str:
+        """ArangoDB indexing artifact does not store anything in MinIO."""
         return ""

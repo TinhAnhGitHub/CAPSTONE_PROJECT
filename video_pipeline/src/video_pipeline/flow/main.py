@@ -1,9 +1,7 @@
-import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from functools import wraps
-from typing import Any, Callable, ParamSpec, TypeVar, cast
+from typing import Any, cast
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import acreate_markdown_artifact
@@ -12,13 +10,15 @@ from prefect_dask import DaskTaskRunner  # type: ignore
 
 from video_pipeline.config import get_settings
 from video_pipeline.core.client.progress import HTTPProgressTracker, RunStatus, StageRegistry
-from video_pipeline.core.storage.prefect_block import create_minio_result_storage
 from video_pipeline.flow.batch_helper import make_batches
 from video_pipeline.flow.subtask import preprocess_video_task
 from video_pipeline.task.audio_segment.main import audio_segment_task, AudioSegmentTask
 from video_pipeline.task.asr.main import ASRTask, asr_chunk_task
 from video_pipeline.task.autoshot.main import AutoshotTask, autoshot_task
-from video_pipeline.task.image_caption.main import ImageCaptionTask, image_caption_chunk_task
+from video_pipeline.task.image_caption_ocr.main import (
+    ImageCaptionOCRTask,
+    image_caption_ocr_chunk_task,
+)
 from video_pipeline.task.image_caption_embedding.main import (
     ImageCaptionEmbeddingTask,
     image_caption_embedding_chunk_task,
@@ -29,17 +29,18 @@ from video_pipeline.task.image_caption_multimodal_embedding.main import (
 )
 from video_pipeline.task.image_embedding.main import ImageEmbeddingTask, image_embedding_chunk_task
 from video_pipeline.task.image_extraction.main import ImageExtractionTask, image_chunk_task
-from video_pipeline.task.image_ocr.main import ImageOCRTask, image_ocr_chunk_task
 from video_pipeline.task.ocr_indexing.main import OCRIndexingTask, ocr_indexing_chunk_task
 from video_pipeline.task.qdrant_indexing import (
     CaptionQdrantIndexingTask,
     ImageQdrantIndexingTask,
     SegmentCaptionQdrantIndexingTask,
     SegmentQdrantIndexingTask,
+    AudioTranscriptQdrantIndexingTask,
     caption_qdrant_indexing_chunk_task,
     image_qdrant_indexing_chunk_task,
     segment_caption_qdrant_indexing_chunk_task,
     segment_qdrant_indexing_chunk_task,
+    audio_transcript_qdrant_indexing_chunk_task,
 )
 from video_pipeline.task.segment_caption.main import SegmentCaptionTask, segment_caption_chunk_task
 from video_pipeline.task.segment_caption_embedding.main import (
@@ -54,6 +55,10 @@ from video_pipeline.task.segment_embedding.main import (
     SegmentEmbeddingTask,
     segment_embedding_chunk_task,
 )
+from video_pipeline.task.audio_transcript_embedding.main import (
+    AudioTranscriptEmbeddingTask,
+    audio_transcript_embedding_chunk_task,
+)
 from video_pipeline.task.video.main import (
     VideoArtifact,
     VideoInput,
@@ -61,13 +66,9 @@ from video_pipeline.task.video.main import (
     video_reg_task,
 )
 from video_pipeline.task.kg_graph import KGPipelineTask, kg_pipeline_task
+from video_pipeline.task.arango_indexing import ArangoIndexingTask, arango_indexing_task
 
 from video_pipeline.task.autoshot.main import AutoshotArtifact
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Timing utilities
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 @dataclass
 class TimingRecord:
@@ -275,6 +276,62 @@ async def run_segment_qdrant_indexing(
     return segment_index_ids, segment_index_futures
 
 
+async def run_audio_transcript_embedding(
+    segment_batches: list,
+    audio_segment_results: list,
+    tracker: HTTPProgressTracker | None,
+    video_id: str,
+    timing: TimingRegistry,
+) -> tuple[list, Any]:
+    """Stage 7b: Generate audio transcript embeddings from ASR text.
+
+    Embeds the raw audio_text from AudioSegmentArtifact using mmBERT,
+    enabling semantic search over spoken content.
+    """
+    with timing.record("Audio Transcript Embedding") as t:
+        t.start()
+        audio_transcript_embedding_futures = audio_transcript_embedding_chunk_task.map(  # type: ignore
+            segment_batches,
+            wait_for=[audio_segment_task],
+        )
+        audio_transcript_embedding_results = [
+            a for batch in audio_transcript_embedding_futures.result() for a in batch
+        ]
+        await AudioTranscriptEmbeddingTask.summary_artifact(audio_transcript_embedding_results)
+        if tracker:
+            await tracker.complete_stage(video_id, AudioTranscriptEmbeddingTask.__name__)
+        t.stop()
+    return audio_transcript_embedding_results, audio_transcript_embedding_futures
+
+
+async def run_audio_transcript_qdrant_indexing(
+    audio_transcript_embedding_results: list,
+    audio_transcript_embedding_futures: Any,
+    segment_batch_size: int,
+    tracker: HTTPProgressTracker | None,
+    video_id: str,
+    timing: TimingRegistry,
+) -> tuple[list, Any]:
+    """Stage 8: Index audio transcript embeddings in Qdrant."""
+    with timing.record("Audio Transcript Qdrant Indexing") as t:
+        t.start()
+        audio_transcript_index_batches = make_batches(
+            audio_transcript_embedding_results, segment_batch_size
+        )
+        audio_transcript_index_futures = audio_transcript_qdrant_indexing_chunk_task.map(  # type: ignore
+            audio_transcript_index_batches,
+            wait_for=audio_transcript_embedding_futures,
+        )
+        audio_transcript_index_ids = [
+            uid for batch in audio_transcript_index_futures.result() for uid in batch
+        ]
+        await AudioTranscriptQdrantIndexingTask.summary_artifact(audio_transcript_index_ids)
+        if tracker:
+            await tracker.complete_stage(video_id, AudioTranscriptQdrantIndexingTask.__name__)
+        t.stop()
+    return audio_transcript_index_ids, audio_transcript_index_futures
+
+
 async def run_segment_caption_embedding(
     segment_caption_batches: list,
     segment_caption_futures: Any,
@@ -350,26 +407,28 @@ async def run_image_extraction(
     return image_results, image_batch_futures
 
 
-async def run_image_caption(
+async def run_image_caption_ocr(
     analysis_batches: list,
     image_batch_futures: Any,
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
-) -> tuple[list, Any]:
-    """Stage 8b: Generate image captions."""
-    with timing.record("Image Caption") as t:
+) -> tuple[tuple[list, list], Any]:
+    """Stage 8b: Generate image captions and OCR in a single call."""
+    with timing.record("Image Caption + OCR") as t:
         t.start()
-        caption_batch_futures = image_caption_chunk_task.map(  # type: ignore
+        caption_ocr_batch_futures = image_caption_ocr_chunk_task.map(  # type: ignore
             analysis_batches,
             wait_for=[image_batch_futures],
         )
-        caption_results = [a for batch in caption_batch_futures.result() for a in batch]
-        await ImageCaptionTask.summary_artifact(caption_results)
+        batch_results = caption_ocr_batch_futures.result()
+        caption_results = [a for batch in batch_results for a in batch[0]]
+        ocr_results = [a for batch in batch_results for a in batch[1]]
+        await ImageCaptionOCRTask.summary_artifact((caption_results, ocr_results))
         if tracker:
-            await tracker.complete_stage(video_id, ImageCaptionTask.__name__)
+            await tracker.complete_stage(video_id, ImageCaptionOCRTask.__name__)
         t.stop()
-    return caption_results, caption_batch_futures
+    return (caption_results, ocr_results), caption_ocr_batch_futures
 
 
 async def run_image_embedding(
@@ -416,28 +475,6 @@ async def run_image_qdrant_indexing(
             await tracker.complete_stage(video_id, ImageQdrantIndexingTask.__name__)
         t.stop()
     return image_index_ids, image_index_futures
-
-
-async def run_image_ocr(
-    analysis_batches: list,
-    image_batch_futures: Any,
-    tracker: HTTPProgressTracker | None,
-    video_id: str,
-    timing: TimingRegistry,
-) -> tuple[list, Any]:
-    """Stage 9c: Run OCR on extracted images."""
-    with timing.record("Image OCR") as t:
-        t.start()
-        ocr_batch_futures = image_ocr_chunk_task.map(  # type: ignore
-            analysis_batches,
-            wait_for=[image_batch_futures],
-        )
-        ocr_results = [a for batch in ocr_batch_futures.result() for a in batch]
-        await ImageOCRTask.summary_artifact(ocr_results)
-        if tracker:
-            await tracker.complete_stage(video_id, ImageOCRTask.__name__)
-        t.stop()
-    return ocr_results, ocr_batch_futures
 
 
 async def run_ocr_indexing(
@@ -603,6 +640,28 @@ async def run_kg_pipeline(
     return kg_results, kg_futures
 
 
+async def run_arango_indexing(
+    kg_artifact: Any,
+    kg_futures: Any,
+    tracker: HTTPProgressTracker | None,
+    video_id: str,
+    timing: TimingRegistry,
+) -> Any:
+    """Stage 13: Index Knowledge Graph into ArangoDB."""
+    with timing.record("ArangoDB Indexing") as t:
+        t.start()
+        arango_futures = arango_indexing_task.submit(  # type: ignore
+            kg_artifact,
+            wait_for=kg_futures,
+        )
+        arango_results = arango_futures.result()
+        await ArangoIndexingTask.summary_artifact(arango_results)
+        if tracker:
+            await tracker.complete_stage(video_id, ArangoIndexingTask.__name__)
+        t.stop()
+    return arango_results
+
+
 async def run_audio_branch(
     asr_batches: list,
     preprocess_fut: Any,
@@ -612,7 +671,7 @@ async def run_audio_branch(
 ) -> dict[str, Any]:
     """
     Run the complete audio/segment branch:
-    ASR → AudioSegment → SegmentEmbedding/Caption → Embeddings → Qdrant indexing
+    ASR → AudioSegment → SegmentEmbedding/Caption/AudioTranscriptEmbedding → Embeddings → Qdrant indexing
     """
     asr_results, asr_batch_futures = await run_asr(
         asr_batches, preprocess_fut, tracker, video_id, timing
@@ -623,16 +682,29 @@ async def run_audio_branch(
     segment_batch_size: int = 5
     segment_batches = make_batches(audio_segment_results, segment_batch_size)
 
+    # Parallel: SegmentEmbedding (visual), SegmentCaption (LLM), AudioTranscriptEmbedding (text)
     segment_embedding_results, segment_embedding_futures = await run_segment_embedding(
         segment_batches, audio_segment_results, tracker, video_id, timing
     )
     segment_caption_results, segment_caption_futures = await run_segment_caption(
         segment_batches, audio_segment_results, tracker, video_id, timing
     )
+    audio_transcript_embedding_results, audio_transcript_embedding_futures = await run_audio_transcript_embedding(
+        segment_batches, audio_segment_results, tracker, video_id, timing
+    )
 
+    # Indexing
     segment_index_ids, segment_index_futures = await run_segment_qdrant_indexing(
         segment_embedding_results,
         segment_embedding_futures,
+        segment_batch_size,
+        tracker,
+        video_id,
+        timing,
+    )
+    audio_transcript_index_ids, audio_transcript_index_futures = await run_audio_transcript_qdrant_indexing(
+        audio_transcript_embedding_results,
+        audio_transcript_embedding_futures,
         segment_batch_size,
         tracker,
         video_id,
@@ -662,11 +734,21 @@ async def run_audio_branch(
         timing,
     )
 
+    arango_results = await run_arango_indexing(
+        kg_results,
+        kg_futures,
+        tracker,
+        video_id,
+        timing,
+    )
+
     return {
         "asr_results": asr_results,
         "audio_segment_results": audio_segment_results,
         "segment_embedding_results": segment_embedding_results,
         "segment_caption_results": segment_caption_results,
+        "audio_transcript_embedding_results": audio_transcript_embedding_results,
+        "audio_transcript_index_ids": audio_transcript_index_ids,
         "segment_caption_embedding_results": segment_caption_embedding_results,
         "segment_caption_multimodal_embedding_results": segment_caption_multimodal_embedding_results,
         "segment_index_ids": segment_index_ids,
@@ -674,6 +756,7 @@ async def run_audio_branch(
         "segment_caption_multimodal_embedding_futures": segment_caption_multimodal_embedding_futures,
         "segment_batch_size": segment_batch_size,
         "kg_results": kg_results,
+        "arango_results": arango_results,
     }
 
 
@@ -686,54 +769,45 @@ async def run_image_branch(
 ) -> dict[str, Any]:
     """
     Run the complete image branch:
-    ImageExtraction → ImageCaption/ImageEmbedding/ImageOCR → CaptionEmbeddings → Qdrant/Elasticsearch indexing
+    ImageExtraction → ImageCaption+OCR/ImageEmbedding → CaptionEmbeddings → Qdrant/Elasticsearch indexing
     """
-    # Image Extraction
     image_results, image_batch_futures = await run_image_extraction(
         image_batches, preprocess_fut, tracker, video_id, timing
     )
 
-    # Analysis batches for downstream tasks
     analysis_batch_size: int = 10
     analysis_batches = make_batches(image_results, analysis_batch_size)
 
-    # Image Caption, Embedding, and OCR (parallel)
-    caption_results, caption_batch_futures = await run_image_caption(
+    # Combined caption + OCR task
+    (caption_results, ocr_results), caption_ocr_batch_futures = await run_image_caption_ocr(
         analysis_batches, image_batch_futures, tracker, video_id, timing
     )
     embedding_results, embedding_batch_futures = await run_image_embedding(
         analysis_batches, image_batch_futures, tracker, video_id, timing
     )
-    ocr_results, ocr_batch_futures = await run_image_ocr(
-        analysis_batches, image_batch_futures, tracker, video_id, timing
-    )
 
-    # Image Qdrant Indexing
     image_index_ids, image_index_futures = await run_image_qdrant_indexing(
         embedding_results, embedding_batch_futures, analysis_batch_size, tracker, video_id, timing
     )
 
-    # OCR Indexing into Elasticsearch
     ocr_batch_size: int = 20
     ocr_index_ids, ocr_index_futures = await run_ocr_indexing(
-        ocr_results, ocr_batch_futures, ocr_batch_size, tracker, video_id, timing
+        ocr_results, caption_ocr_batch_futures, ocr_batch_size, tracker, video_id, timing
     )
 
-    # Caption batches for embedding
     caption_embedding_batch_size: int = 5
     caption_mm_batch_size: int = 2
     caption_embedding_batches = make_batches(caption_results, caption_embedding_batch_size)
     caption_mm_batches = make_batches(caption_results, caption_mm_batch_size)
 
-    # Caption Embeddings
     caption_embedding_results, caption_embedding_futures = await run_image_caption_embedding(
-        caption_embedding_batches, caption_batch_futures, tracker, video_id, timing
+        caption_embedding_batches, caption_ocr_batch_futures, tracker, video_id, timing
     )
     (
         caption_multimodal_embedding_results,
         caption_multimodal_embedding_futures,
     ) = await run_image_caption_multimodal_embedding(
-        caption_mm_batches, caption_batch_futures, tracker, video_id, timing
+        caption_mm_batches, caption_ocr_batch_futures, tracker, video_id, timing
     )
 
     return {
@@ -884,6 +958,7 @@ async def create_summary_artifact(
             f"| Audio Segments | {len(audio_branch['audio_segment_results'])} |\n"
             f"| Segment Embeddings | {len(audio_branch['segment_embedding_results'])} |\n"
             f"| Segment Captions | {len(audio_branch['segment_caption_results'])} |\n"
+            f"| Audio Transcript Embeddings | {len(audio_branch['audio_transcript_embedding_results'])} |\n"
             f"| Segment Caption Text Embeddings | {len(audio_branch['segment_caption_embedding_results'])} |\n"
             f"| Segment Caption MM Embeddings | {len(audio_branch['segment_caption_multimodal_embedding_results'])} |\n"
             f"| Image Artifacts | {len(image_branch['image_results'])} |\n"
@@ -896,6 +971,7 @@ async def create_summary_artifact(
             f"| Image Qdrant Points | {len(image_branch['image_index_ids'])} |\n"
             f"| Caption Qdrant Points | {len(final_indexing['caption_index_ids'])} |\n"
             f"| Segment Qdrant Points | {len(audio_branch['segment_index_ids'])} |\n"
+            f"| Audio Transcript Qdrant Points | {len(audio_branch['audio_transcript_index_ids'])} |\n"
             f"| Segment Caption Qdrant Points | {len(final_indexing['segment_caption_index_ids'])} |\n\n"
             f"{kg_section}"
             f"## Timing Breakdown\n\n"
@@ -924,7 +1000,6 @@ async def single_video_processing_flow(
     video_id: str,
     user_id: str,
     video_file_path: str,
-    additional_flow_description: str = "",
     tracker_url: str = "",
 ) -> dict[str, Any]:
     logger = get_run_logger()
@@ -951,15 +1026,12 @@ async def single_video_processing_flow(
     )
 
     try:
-        # ── Stage 1: Video registration ───────────────────────────────────────
         video_artifact = await run_video_registration(video_input, tracker, video_id, timing)
 
-        # ── Stage 2: Shot detection ───────────────────────────────────────────
         shot_result, shots_fut = await run_autoshot(video_artifact, tracker, video_id, timing)
         n_shots = len(shot_result.metadata.get("segments", []))  # type: ignore
         logger.info(f"[Flow:{flow_run_name}] Shot detection done | {n_shots} shot(s) detected")
 
-        # ── Stage 3: Preprocessing ────────────────────────────────────────────
         asr_batches, image_batches = await run_preprocess(shot_result, shots_fut, timing)
         n_asr = sum(len(b) for b in asr_batches)
         n_img = sum(len(b) for b in image_batches)
@@ -969,16 +1041,13 @@ async def single_video_processing_flow(
             f"{n_img} frame(s) in {len(image_batches)} image batch(es)"
         )
 
-        # ── Stage 4: Fan out both branches ────────────────────────────────────
         logger.info(
             f"[Flow:{flow_run_name}] Fanning out ASR ({len(asr_batches)} batch(es)) "
             f"and image extraction ({len(image_batches)} batch(es)) in parallel"
         )
 
-        # Submit both branches for parallel execution
         preprocess_fut = preprocess_video_task.submit(shot_result, wait_for=[shots_fut])  # type: ignore
 
-        # Run audio and image branches
         audio_branch = await run_audio_branch(
             asr_batches, preprocess_fut, tracker, video_id, timing
         )
@@ -986,12 +1055,10 @@ async def single_video_processing_flow(
             image_batches, preprocess_fut, tracker, video_id, timing
         )
 
-        # ── Stage 11: Final Qdrant indexing ───────────────────────────────────
         final_indexing = await run_final_qdrant_indexing(
             audio_branch, image_branch, tracker, video_id, timing
         )
 
-        # ── Create summary artifact ───────────────────────────────────────────
         await create_summary_artifact(
             video_id, flow_run_id, n_shots, audio_branch, image_branch, final_indexing, timing
         )
