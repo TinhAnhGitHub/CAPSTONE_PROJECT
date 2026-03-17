@@ -24,8 +24,8 @@ IMAGE_DENSE_FIELD = ADDITIONAL_KWARGS["image_dense_field"]
 CAPTION_TEXT_DENSE_FIELD = ADDITIONAL_KWARGS["caption_text_dense_field"]
 CAPTION_MM_DENSE_FIELD = ADDITIONAL_KWARGS["caption_mm_dense_field"]
 CAPTION_SPARSE_FIELD = ADDITIONAL_KWARGS["caption_sparse_field"]
-SEGMENT_DENSE_FIELD = "segment_dense"
-AUDIO_TRANSCRIPT_DENSE_FIELD = "audio_transcript_dense"
+SEGMENT_DENSE_FIELD = ADDITIONAL_KWARGS["segment_dense_field"]
+AUDIO_TRANSCRIPT_DENSE_FIELD = ADDITIONAL_KWARGS["audio_transcript_dense_field"]
 
 
 def get_collection_base() -> str:

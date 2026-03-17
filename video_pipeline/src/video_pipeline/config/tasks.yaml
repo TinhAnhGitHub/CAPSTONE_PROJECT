@@ -334,6 +334,9 @@ tasks:
       mm_dim: 2048         
       caption_mm_dense_field: "caption_mm_dense"
 
+      segment_dense_field: "segment_dense"
+      audio_transcript_dense_field: "audio_transcript_dense"
+
       on_disk: true
       
       qdrant_timeout: 30
