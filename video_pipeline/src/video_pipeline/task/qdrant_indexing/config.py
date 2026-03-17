@@ -21,6 +21,7 @@ IMAGE_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("image_qdrant_indexing")
 CAPTION_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("caption_qdrant_indexing")
 SEGMENT_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("segment_qdrant_indexing")
 SEGMENT_CAPTION_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("segment_caption_qdrant_indexing")
+AUDIO_TRANSCRIPT_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("audio_transcript_qdrant_indexing")
 
 # Field names from config
 IMAGE_DENSE_FIELD = ADDITIONAL_KWARGS["image_dense_field"]
@@ -28,6 +29,7 @@ CAPTION_TEXT_DENSE_FIELD = ADDITIONAL_KWARGS["caption_text_dense_field"]
 CAPTION_MM_DENSE_FIELD = ADDITIONAL_KWARGS["caption_mm_dense_field"]
 CAPTION_SPARSE_FIELD = ADDITIONAL_KWARGS["caption_sparse_field"]
 SEGMENT_DENSE_FIELD = "segment_dense"
+AUDIO_TRANSCRIPT_DENSE_FIELD = "audio_transcript_dense"
 
 
 def get_collection_base() -> str:
@@ -48,6 +50,11 @@ def build_caption_collection_name() -> str:
 def build_segment_collection_name() -> str:
     """Build the segment collection name."""
     return f"{get_collection_base()}_segment"
+
+
+def build_audio_transcript_collection_name() -> str:
+    """Build the audio transcript collection name."""
+    return f"{get_collection_base()}_audio_transcript"
 
 
 def get_image_index_configs():
@@ -102,3 +109,20 @@ def get_segment_index_configs():
         on_disk=on_disk,
     )
     return [cfg], [SEGMENT_DENSE_FIELD]
+
+
+def get_audio_transcript_index_configs():
+    """Get index configuration for audio transcript embeddings (dense only).
+
+    Uses mmBERT 768-dim embeddings for semantic search over spoken content.
+    """
+    on_disk = ADDITIONAL_KWARGS.get("on_disk", False)
+    # mmBERT produces 768-dimensional embeddings
+    audio_transcript_dim = ADDITIONAL_KWARGS.get("caption_dim", 768)
+
+    cfg = QdrantIndexConfig(
+        vector_size=audio_transcript_dim,
+        distance=Distance.COSINE,
+        on_disk=on_disk,
+    )
+    return [cfg], [AUDIO_TRANSCRIPT_DENSE_FIELD]

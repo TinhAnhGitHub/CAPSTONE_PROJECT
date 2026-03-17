@@ -6,6 +6,7 @@ This module provides tasks for indexing various embedding artifacts into Qdrant:
 - Caption embeddings (hybrid: dense + sparse)
 - Segment embeddings (dense only)
 - Segment caption embeddings (hybrid: dense + sparse)
+- Audio transcript embeddings (dense only)
 
 Usage:
     from video_pipeline.task.qdrant_indexing import (
@@ -13,6 +14,7 @@ Usage:
         caption_qdrant_indexing_chunk_task,
         segment_qdrant_indexing_chunk_task,
         segment_caption_qdrant_indexing_chunk_task,
+        audio_transcript_qdrant_indexing_chunk_task,
     )
 """
 
@@ -25,9 +27,11 @@ from video_pipeline.task.qdrant_indexing.config import (
     CAPTION_MM_DENSE_FIELD,
     CAPTION_SPARSE_FIELD,
     SEGMENT_DENSE_FIELD,
+    AUDIO_TRANSCRIPT_DENSE_FIELD,
     build_image_collection_name,
     build_caption_collection_name,
     build_segment_collection_name,
+    build_audio_transcript_collection_name,
 )
 
 from video_pipeline.task.qdrant_indexing.image import (
@@ -50,6 +54,11 @@ from video_pipeline.task.qdrant_indexing.segment_caption import (
     segment_caption_qdrant_indexing_chunk_task,
 )
 
+from video_pipeline.task.qdrant_indexing.audio_transcript import (
+    AudioTranscriptQdrantIndexingTask,
+    audio_transcript_qdrant_indexing_chunk_task,
+)
+
 
 __all__ = [
     # Config
@@ -61,10 +70,12 @@ __all__ = [
     "CAPTION_MM_DENSE_FIELD",
     "CAPTION_SPARSE_FIELD",
     "SEGMENT_DENSE_FIELD",
+    "AUDIO_TRANSCRIPT_DENSE_FIELD",
     # Collection builders
     "build_image_collection_name",
     "build_caption_collection_name",
     "build_segment_collection_name",
+    "build_audio_transcript_collection_name",
     # Tasks
     "ImageQdrantIndexingTask",
     "image_qdrant_indexing_chunk_task",
@@ -74,4 +85,6 @@ __all__ = [
     "segment_qdrant_indexing_chunk_task",
     "SegmentCaptionQdrantIndexingTask",
     "segment_caption_qdrant_indexing_chunk_task",
+    "AudioTranscriptQdrantIndexingTask",
+    "audio_transcript_qdrant_indexing_chunk_task",
 ]
