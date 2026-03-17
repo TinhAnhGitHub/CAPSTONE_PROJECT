@@ -10,20 +10,16 @@ from video_pipeline.task.base.base_task import TaskConfig
 from video_pipeline.core.client.storage.qdrant.config import QdrantIndexConfig
 from video_pipeline.config import get_settings
 
-
-# Load task configuration from YAML
 QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("qdrant_indexing")
 BASE_KWARGS = QDRANT_INDEXING_CONFIG.to_task_kwargs()
 ADDITIONAL_KWARGS: dict[str, Any] = QDRANT_INDEXING_CONFIG.additional_kwargs
 
-# Separate configs for each indexing task (with proper caching)
 IMAGE_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("image_qdrant_indexing")
 CAPTION_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("caption_qdrant_indexing")
 SEGMENT_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("segment_qdrant_indexing")
 SEGMENT_CAPTION_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("segment_caption_qdrant_indexing")
 AUDIO_TRANSCRIPT_QDRANT_INDEXING_CONFIG = TaskConfig.from_yaml("audio_transcript_qdrant_indexing")
 
-# Field names from config
 IMAGE_DENSE_FIELD = ADDITIONAL_KWARGS["image_dense_field"]
 CAPTION_TEXT_DENSE_FIELD = ADDITIONAL_KWARGS["caption_text_dense_field"]
 CAPTION_MM_DENSE_FIELD = ADDITIONAL_KWARGS["caption_mm_dense_field"]

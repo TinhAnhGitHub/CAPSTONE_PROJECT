@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Prefect-based video processing pipeline** that extracts, analyzes, and indexes video content for semantic search. The system processes uploaded videos through multiple stages: scene detection, audio transcription, frame extraction, captioning, embedding generation, and vector indexing.
+This is a **Prefect-based video processing pipeline** that extracts, analyzes, and indexes video content for semantic search. The system processes uploaded videos through multiple stages: scene detection, audio transcription, frame extraction, captioning, embedding generation, knowledge graph construction, and vector indexing.
 
 ### Tech Stack
 
@@ -15,6 +15,7 @@ This is a **Prefect-based video processing pipeline** that extracts, analyzes, a
 - **MinIO** (S3-compatible) for object storage (videos, images, artifacts)
 - **Qdrant** for vector search and embedding storage
 - **Elasticsearch** for OCR text indexing and search (BM25 + kNN hybrid)
+- **ArangoDB** for Knowledge Graph storage and graph queries
 - **Triton Inference Server** for SPLADE sparse embeddings
 - **Redis** for Prefect messaging
 - **External ML Services**: QwenVL (embeddings), mmBERT (text embeddings), ASR, LLM providers
@@ -34,7 +35,7 @@ pip install -e ".[worker]"
 ### Running Services
 
 ```bash
-# Start all infrastructure (Prefect, Postgres, Redis, MinIO, Qdrant)
+# Start all infrastructure (Prefect, Postgres, Redis, MinIO, Qdrant, ArangoDB)
 cd docker && docker-compose up -d
 
 # Run the API server
@@ -78,7 +79,7 @@ src/video_pipeline/
 │   │   ├── inference/     # ML service clients (ASR, OCR, Autoshot, Embeddings)
 │   │   ├── llm_provider/  # LLM clients (Gemini, OpenRouter, Moondream)
 │   │   ├── progress/      # HTTP progress tracking
-│   │   └── storage/       # Storage clients (MinIO, Qdrant, PostgreSQL)
+│   │   └── storage/       # Storage clients (MinIO, Qdrant, PostgreSQL, ArangoDB)
 │   └── storage/           # Persistence layer (pg_tracker, prefect_block)
 ├── flow/                   # Prefect flow orchestration
 │   ├── main.py            # Main single_video_processing_flow
@@ -86,20 +87,26 @@ src/video_pipeline/
 │   ├── subtask.py         # Preprocessing tasks
 │   └── batch_helper.py    # Batching utilities
 └── task/                   # Individual processing tasks
-    ├── base/              # BaseTask abstract class and utilities
+    ├── base/              # BaseTask abstract class, cache_keys
     ├── video/             # Video registration
     ├── autoshot/          # Scene/shot detection
     ├── asr/               # Audio speech recognition
     ├── audio_segment/     # Audio segmentation
     ├── image_extraction/  # Frame extraction
-    ├── image_caption/     # Frame captioning
+    ├── image_caption_ocr/ # Combined frame captioning + OCR (single LLM call)
     ├── image_embedding/   # Frame embeddings
-    ├── image_ocr/         # OCR on frames (via OpenRouter VLM)
     ├── ocr_indexing/      # OCR text indexing into Elasticsearch
     ├── segment_caption/   # Segment caption generation
     ├── segment_embedding/ # Segment embeddings
+    ├── audio_transcript_embedding/  # Audio transcript text embeddings
     ├── kg_graph/          # Knowledge Graph pipeline (5 stages)
+    ├── arango_indexing/   # Knowledge Graph indexing into ArangoDB
     └── qdrant_indexing/   # Vector database indexing (dense + sparse)
+        ├── image.py       # Image embedding indexing
+        ├── caption.py     # Image caption embedding indexing
+        ├── segment.py     # Audio segment embedding indexing
+        ├── segment_caption.py  # Segment caption embedding indexing
+        └── audio_transcript.py  # Audio transcript embedding indexing
 ```
 
 ### Core Components
@@ -144,10 +151,14 @@ Pydantic models representing pipeline outputs with lineage tracking:
 - `ASRArtifact` - Audio transcription results
 - `AudioSegmentArtifact` - Semantically segmented audio chunks
 - `ImageArtifact` - Extracted video frames
-- `ImageCaptionArtifact` / `ImageEmbeddingArtifact` / `ImageOCRArtifact` - Frame analysis
-- `SegmentCaptionArtifact` / `SegmentEmbeddingArtifact` - Segment analysis
-- `KGGraphArtifact` - Knowledge Graph with entities, relationships, events, communities, and Node2Vec embeddings
-- Various embedding artifacts for vector search
+- `ImageCaptionArtifact` - Frame captions (from combined caption+OCR task)
+- `ImageEmbeddingArtifact` - Frame visual embeddings
+- `ImageOCRArtifact` - OCR text from frames
+- `AudioTranscriptEmbedArtifact` - Embeddings of ASR text
+- `SegmentCaptionArtifact` - Segment-level captions
+- `SegmentEmbeddingArtifact` - Segment visual embeddings
+- `KGGraphArtifact` - Knowledge Graph with entities, relationships, events, communities, Node2Vec
+- `ArangoIndexingArtifact` - ArangoDB insertion statistics
 
 Each artifact has:
 - `artifact_id` - Unique identifier (UUID)
@@ -175,30 +186,32 @@ flowchart TB
             E[ASR] --> F[Audio Segment]
             F --> G[Segment Embedding]
             F --> H[Segment Caption]
+            F --> GA[Audio Transcript Embedding]
             G --> I[Segment Qdrant Indexing]
+            GA --> GB[Audio Transcript Qdrant Indexing]
             H --> J[Segment Caption Embedding]
             H --> K[Segment Caption MM Embedding]
+            H --> U[KG Pipeline]
         end
 
         subgraph ImageBranch["Image Branch"]
             direction TB
-            L[Image Extraction] --> M[Image Caption]
+            L[Image Extraction] --> M[Image Caption + OCR<br/>Combined Task]
             L --> N[Image Embedding]
-            L --> O[Image OCR]
             N --> P[Image Qdrant Indexing]
-            O --> Q[OCR Elasticsearch Indexing]
+            M --> Q[OCR Elasticsearch Indexing]
             M --> R[Caption Embedding]
             M --> S[Caption MM Embedding]
         end
 
-        I --> T[Final Qdrant Indexing<br/>Captions]
+        I --> T[Final Qdrant Indexing]
         J --> T
         K --> T
         P --> T
         R --> T
         S --> T
 
-        H --> U[KG Pipeline<br/>5 Stages]
+        U --> V[ArangoDB Indexing]
     end
 ```
 
@@ -214,6 +227,7 @@ settings = get_settings()
 settings.minio.endpoint  # MinIO endpoint
 settings.postgres.connection_string  # PostgreSQL connection URL
 settings.qdrant.host  # Qdrant host
+settings.arango.host  # ArangoDB host
 settings.dask.to_cluster_kwargs()  # Dask cluster config
 ```
 
@@ -307,7 +321,6 @@ cost_tracker = CostTracker()
 cost_tracker.model = "qwen/qwen3-coder-next"
 
 # Usage is automatically tracked from LLM responses
-# Extract from response.raw.usage (OpenRouter format)
 if hasattr(response, 'raw') and hasattr(response.raw, 'usage'):
     usage = response.raw.usage
     cost_tracker.add_usage(
@@ -353,6 +366,34 @@ kg_pipeline:
 - `CommunitiesOutput` - Community detection results
 - `Node2VecOutput` - Structural embeddings
 
+## ArangoDB Indexing
+
+The `arango_indexing` task loads the Knowledge Graph into ArangoDB for graph-based retrieval:
+
+### Vertex Collections
+
+- `videos` - One document per ingested video
+- `entities` - CanonicalEntity nodes
+- `events` - Segment-level event nodes
+- `micro_events` - Fine-grained event nodes
+- `communities` - Community nodes from Leiden detection
+
+### Edge Collections
+
+- `entity_relations` - Entity-to-entity relationships
+- `event_sequences` - Event-to-event temporal edges
+- `event_entities` - Event-to-entity links
+- `micro_event_sequences` - Micro-event temporal edges
+- `micro_event_parents` - Micro-event to parent event
+- `micro_event_entities` - Micro-event to entity links
+- `community_members` - Entity to community membership
+- `event_communities` - Event to community assignment
+
+### Important Notes
+
+- **Edge Serialization**: Edge models use `_from`/`_to` keys (ArangoDB format) when serialized via `to_arango_doc()`. Code reading serialized edges must use these keys, not `from_key`/`to_key`.
+- **Exception Handling**: ArangoDB exceptions (`ArangoServerError`, etc.) have non-standard constructors that break pickle serialization. Always wrap them in `RuntimeError` for Dask compatibility.
+
 ## Development Guidelines
 
 ### Adding a New Task
@@ -360,8 +401,9 @@ kg_pipeline:
 1. Create a new directory under `task/` with `main.py` and `helper.py` (if needed)
 2. Extend `BaseTask[InputT, OutputT]` and implement the four required methods
 3. Add configuration to `config/tasks.yaml`
-4. Register the task in the flow (`flow/main.py`)
-5. Create corresponding artifact type if needed in `core/artifact/artifact.py`
+4. Add cache key function to `task/base/cache_keys.py` if caching is needed
+5. Register the task in the flow (`flow/main.py`)
+6. Create corresponding artifact type if needed in `core/artifact/artifact.py`
 
 ### Adding a New Artifact
 
