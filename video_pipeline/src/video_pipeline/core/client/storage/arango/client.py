@@ -16,7 +16,6 @@ from arango.database import StandardDatabase
 from loguru import logger
 
 from .config import ArangoConfig
-from .exception import ArangoConnectionError
 
 
 VERTEX_COLLECTIONS = [
@@ -55,27 +54,26 @@ class ArangoStorageClient:
 
         Returns:
             StandardDatabase instance for the configured database
+
+        Raises:
+            RuntimeError: If connection fails
         """
-        self._client = ArangoClient(hosts=self._config.host)
+        try:
+            self._client = ArangoClient(hosts=self._config.host)
 
-        sys_db = self._client.db(
-            "_system",
-            username=self._config.username,
-            password=self._config.password,
-        )
+            sys_db = self._client.db("_system")
 
-        if not sys_db.has_database(self._config.database):
-            sys_db.create_database(self._config.database)
-            logger.info(f"Created ArangoDB database: {self._config.database}")
+            if not sys_db.has_database(self._config.database):
+                sys_db.create_database(self._config.database)
+                logger.info(f"Created ArangoDB database: {self._config.database}")
 
-        self._db = self._client.db(
-            self._config.database,
-            username=self._config.username,
-            password=self._config.password,
-        )
+            self._db = self._client.db(self._config.database)
 
-        logger.info(f"Connected to ArangoDB database: {self._config.database}")
-        return self._db
+            logger.info(f"Connected to ArangoDB database: {self._config.database}")
+            return self._db
+        except Exception as e:
+            raise RuntimeError(f"ArangoDB connection error: {e}") from e
+       
 
     def disconnect(self) -> None:
         """Close the ArangoDB connection."""
@@ -104,75 +102,81 @@ class ArangoStorageClient:
 
         Returns:
             StandardDatabase instance for the configured database
+
+        Raises:
+            RuntimeError: If any ArangoDB operation fails
         """
-        db = self.get_db()
-        graph_name = self._config.graph_name
+        try:
+            db = self.get_db()
+            graph_name = self._config.graph_name
 
-        for name in VERTEX_COLLECTIONS:
-            if not db.has_collection(name):
-                db.create_collection(name)
-                logger.info(f"Created vertex collection: {name}")
+            for name in VERTEX_COLLECTIONS:
+                if not db.has_collection(name):
+                    db.create_collection(name)
+                    logger.info(f"Created vertex collection: {name}")
 
-        for name in EDGE_COLLECTIONS:
-            if not db.has_collection(name):
-                db.create_collection(name, edge=True)
-                logger.info(f"Created edge collection: {name}")
+            for name in EDGE_COLLECTIONS:
+                if not db.has_collection(name):
+                    db.create_collection(name, edge=True)
+                    logger.info(f"Created edge collection: {name}")
 
-        if not db.has_graph(graph_name):
-            graph = db.create_graph(graph_name)
+            if not db.has_graph(graph_name):
+                graph = db.create_graph(graph_name)
 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="entity_relations",
-                from_vertex_collections=["entities"],
-                to_vertex_collections=["entities"],
-            )
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="entity_relations",
+                    from_vertex_collections=["entities"],
+                    to_vertex_collections=["entities"],
+                )
 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="event_sequences",
-                from_vertex_collections=["events"],
-                to_vertex_collections=["events"],
-            )
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="event_sequences",
+                    from_vertex_collections=["events"],
+                    to_vertex_collections=["events"],
+                )
 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="event_entities",
-                from_vertex_collections=["events"],
-                to_vertex_collections=["entities"],
-            )
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="event_entities",
+                    from_vertex_collections=["events"],
+                    to_vertex_collections=["entities"],
+                )
 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="micro_event_sequences",
-                from_vertex_collections=["micro_events"],
-                to_vertex_collections=["micro_events"],
-            )
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="micro_event_sequences",
+                    from_vertex_collections=["micro_events"],
+                    to_vertex_collections=["micro_events"],
+                )
 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="micro_event_parents",
-                from_vertex_collections=["micro_events"],
-                to_vertex_collections=["events"],
-            )
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="micro_event_parents",
+                    from_vertex_collections=["micro_events"],
+                    to_vertex_collections=["events"],
+                )
 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="micro_event_entities",
-                from_vertex_collections=["micro_events"],
-                to_vertex_collections=["entities"],
-            )
- 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="community_members",
-                from_vertex_collections=["entities"],
-                to_vertex_collections=["communities"],
-            )
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="micro_event_entities",
+                    from_vertex_collections=["micro_events"],
+                    to_vertex_collections=["entities"],
+                )
 
-            graph.create_edge_definition( #type:ignore
-                edge_collection="event_communities",
-                from_vertex_collections=["events"],
-                to_vertex_collections=["communities"],
-            )
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="community_members",
+                    from_vertex_collections=["entities"],
+                    to_vertex_collections=["communities"],
+                )
 
-            logger.info(f"Created named graph: {graph_name}")
+                graph.create_edge_definition( #type:ignore
+                    edge_collection="event_communities",
+                    from_vertex_collections=["events"],
+                    to_vertex_collections=["communities"],
+                )
 
-        logger.info("ArangoDB setup complete (no vector indexes)")
-        return db
+                logger.info(f"Created named graph: {graph_name}")
+
+            logger.info("ArangoDB setup complete (no vector indexes)")
+            return db
+        except Exception as e:
+            raise RuntimeError(f"ArangoDB setup error: {e}") from e
 
     def insert_document(
         self,
@@ -189,13 +193,19 @@ class ArangoStorageClient:
 
         Returns:
             Inserted document metadata
-        """
-        db = self.get_db()
-        coll = db.collection(collection)
 
-        if overwrite:
-            return coll.insert(document, overwrite_mode="replace") #type:ignore
-        return coll.insert(document) #type:ignore
+        Raises:
+            RuntimeError: If insertion fails
+        """
+        try:
+            db = self.get_db()
+            coll = db.collection(collection)
+
+            if overwrite:
+                return coll.insert(document, overwrite_mode="replace") #type:ignore
+            return coll.insert(document) #type:ignore
+        except Exception as e:
+            raise RuntimeError(f"ArangoDB insert error: {e}") from e
 
     def insert_documents(
         self,
@@ -212,43 +222,22 @@ class ArangoStorageClient:
 
         Returns:
             List of inserted document metadata
+
+        Raises:
+            RuntimeError: If insertion fails
         """
         if not documents:
             return []
 
-        db = self.get_db()
-        coll = db.collection(collection)
+        try:
+            db = self.get_db()
+            coll = db.collection(collection)
 
-        if overwrite:
-            return coll.insert_many(documents, overwrite_mode="replace") #type:ignore
-        return coll.insert_many(documents) #type:ignore
-
-    def query(
-        self, query: str, bind_vars: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
-        """Execute an AQL query.
-
-        Args:
-            query: AQL query string
-            bind_vars: Bind variables
-
-        Returns:
-            Query results
-        """
-        db = self.get_db()
-        cursor = db.aql.execute(query, bind_vars=bind_vars or {})
-        return list(cursor) #type:ignore
-
-    def truncate_collection(self, collection: str) -> None:
-        """Truncate a collection.
-
-        Args:
-            collection: Collection name
-        """
-        db = self.get_db()
-        if db.has_collection(collection):
-            db.collection(collection).truncate()
-            logger.info(f"Truncated collection: {collection}")
+            if overwrite:
+                return coll.insert_many(documents, overwrite_mode="replace") #type:ignore
+            return coll.insert_many(documents) #type:ignore
+        except Exception as e:
+            raise RuntimeError(f"ArangoDB batch insert error: {e}") from e
 
     def __enter__(self) -> "ArangoStorageClient":
         """Context manager entry."""
