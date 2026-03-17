@@ -71,7 +71,7 @@ class ElasticsearchSettings(BaseSettings):
     verify_certs: bool = Field(default=True)
     index_name: str = Field(default="video_ocr_docs")
     embedding_dim: int = Field(default=384)
-    timeout: int = Field(default=30)
+    request_timeout: int = Field(default=30)
 
     model_config = SettingsConfigDict(
         env_prefix="ELASTICSEARCH_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False

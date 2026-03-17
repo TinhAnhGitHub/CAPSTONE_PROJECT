@@ -33,7 +33,7 @@ elasticsearch:
   verify_certs: true
   index_name: "video_ocr_docs_dev"
   embedding_dim: 768  # MMBertClient produces 768-dim embeddings
-  timeout: 30
+  request_timeout: 30
 
 dask:
   n_workers: 4
