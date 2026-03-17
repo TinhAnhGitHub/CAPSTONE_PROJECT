@@ -127,11 +127,9 @@ async def ocr_indexing_chunk_task(items: list[ImageOCRArtifact]) -> list[str]:
     )
     postgres_client = await get_postgres_client()
 
-    # Elasticsearch client
     es_settings = ElasticsearchSettings(**settings.elasticsearch.model_dump())
     logger.info(f"[OCRIndexingChunk] Elasticsearch config | host={es_settings.host}:{es_settings.port}")
 
-    # MMBert client for embeddings
     embedding_base_url = OCR_INDEXING_CONFIG.additional_kwargs.get(
         "embedding_base_url", "http://mmbert:8000"
     )
