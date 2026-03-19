@@ -1,23 +1,23 @@
 from __future__ import annotations
 
 import os
-from typing import cast
+from pydantic import SecretStr
 
 from prefect import get_run_logger, task
-from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
-from llama_index.llms.openrouter import OpenRouter
-from llama_index.core.llms import ChatMessage
+from prefect.artifacts import acreate_markdown_artifact
+from langchain_core.messages import ChatMessage
 
-from pydantic import BaseModel, Field
 from video_pipeline.task.base.base_task import TaskConfig, BaseTask
 from video_pipeline.core.client.progress import StageRegistry
 from video_pipeline.core.artifact import ASRArtifact, AudioSegmentArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
 from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
+from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient, OpenRouterConfig
+from video_pipeline.task.kg_graph.models import CostTracker
 from video_pipeline.config import get_settings
 
-from .util import AudioSegment, AudioSegments, build_audio_batches, format_audio_time, format_batch_for_llm
+from .util import AudioSegments, build_audio_batches, format_batch_for_llm
 
 AUDIO_SEGMENT_CONFIG = TaskConfig.from_yaml("audio_segmentation")
 
@@ -100,7 +100,7 @@ def rule_based_segment(
 
 
 @StageRegistry.register
-class AudioSegmentTask(BaseTask[list[ASRArtifact], list[AudioSegmentArtifact]]):
+class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifact], CostTracker]]):
     """Audio segmentation task that converts ASR artifacts into audio segments.
 
     Uses LLM for semantic segmentation, with rule-based fallback if:
@@ -118,14 +118,20 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], list[AudioSegmentArtifact]]):
     async def execute(
         self,
         preprocessed: list[ASRArtifact],
-        client: OpenRouter,
-    ) -> list[AudioSegmentArtifact]:
-        """Segment ASR artifacts using LLM or rule-based fallback."""
+        client: OpenRouterClient,
+    ) -> tuple[list[AudioSegmentArtifact], CostTracker]:
+        """Segment ASR artifacts using LLM or rule-based fallback.
+
+        Returns:
+            Tuple of (segments, cost_tracker) for cost monitoring.
+        """
         logger = get_run_logger()
+        model = self.config.additional_kwargs.get("model", "google/gemini-2.5-flash-lite")
+        cost_tracker = CostTracker(model=model)
 
         if not preprocessed:
             logger.info("[AudioSegmentTask] No ASR artifacts to segment")
-            return []
+            return [], cost_tracker
 
         batch_size = self.config.additional_kwargs.get("batch_size", 10)
         min_duration_sec = self.config.additional_kwargs.get("min_duration_sec", 30)
@@ -138,7 +144,7 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], list[AudioSegmentArtifact]]):
             logger.info(
                 "[AudioSegmentTask] ASR has no meaningful content, using rule-based segmentation"
             )
-            return rule_based_segment(preprocessed, video_id, min_duration_sec)
+            return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
 
         batches = build_audio_batches(preprocessed, batch_size)
         all_batches_text = "\n\n\n\n\n\n\n\n".join(
@@ -191,15 +197,25 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], list[AudioSegmentArtifact]]):
 
         try:
             structured_llm = client.as_structured_llm(AudioSegments)
-            response = await structured_llm.achat(messages)
-            llm_result = cast(AudioSegments, response.raw)
+            llm_result, usage = await structured_llm(messages)
+            cost_tracker.add_usage(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                cost=usage.get("cost", 0.0),
+            )
+            logger.info(
+                f"[AudioSegmentTask] LLM call completed | "
+                f"prompt_tokens={usage.get('prompt_tokens', 0)} | "
+                f"completion_tokens={usage.get('completion_tokens', 0)} | "
+                f"cost=${usage.get('cost', 0.0):.6f}"
+            )
         except Exception as e:
             logger.warning(f"[AudioSegmentTask] LLM call failed: {e}, using rule-based fallback")
-            return rule_based_segment(preprocessed, video_id, min_duration_sec)
+            return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
 
         if not llm_result.new_au_seg:
             logger.info("[AudioSegmentTask] LLM returned empty segments, using rule-based fallback")
-            return rule_based_segment(preprocessed, video_id, min_duration_sec)
+            return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
 
         segments = []
         for seg_info in llm_result.new_au_seg:
@@ -219,25 +235,37 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], list[AudioSegmentArtifact]]):
             segment = _create_segment_from_group(group, len(segments), video_id)
             segments.append(segment)
 
-        logger.info(f"[AudioSegmentTask] Created {len(segments)} segment(s) from LLM")
-        return segments
+        logger.info(
+            f"[AudioSegmentTask] Created {len(segments)} segment(s) from LLM | "
+            f"total_cost=${cost_tracker.total_cost:.6f}"
+        )
+        return segments, cost_tracker
 
-    async def postprocess(self, result: list[AudioSegmentArtifact]) -> list[AudioSegmentArtifact]:
+    async def postprocess(
+        self, result: tuple[list[AudioSegmentArtifact], CostTracker]
+    ) -> tuple[list[AudioSegmentArtifact], CostTracker]:
         """Persist audio segment artifacts to database."""
-        for res in result:
+        segments, cost_tracker = result
+        for res in segments:
             await self.artifact_visitor.visit_artifact(res)
-        return result
+        return segments, cost_tracker
 
     @staticmethod
-    async def summary_artifact(final_result: list[AudioSegmentArtifact]) -> None:
-        """Create a Prefect artifact summarizing audio segments."""
+    async def summary_artifact(
+        final_result: tuple[list[AudioSegmentArtifact], CostTracker]
+    ) -> None:
+        """Create a Prefect artifact summarizing audio segments with cost."""
         if not final_result:
             return
 
-        first = final_result[0]
+        segments, cost_tracker = final_result
+        if not segments:
+            return
+
+        first = segments[0]
 
         segment_rows = ""
-        for i, seg in enumerate(final_result):
+        for i, seg in enumerate(segments):
             audio_preview = (
                 (seg.audio_text[:80] + "...") if len(seg.audio_text) > 80 else seg.audio_text
             )
@@ -246,7 +274,7 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], list[AudioSegmentArtifact]]):
                 f"{seg.end_sec - seg.start_sec:.1f}s | {audio_preview} |\n"
             )
 
-        total_duration = sum(s.end_sec - s.start_sec for s in final_result)
+        total_duration = sum(s.end_sec - s.start_sec for s in segments)
 
         markdown = (
             f"# Audio Segmentation Summary\n\n"
@@ -254,8 +282,12 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], list[AudioSegmentArtifact]]):
             f"|-------|-------|\n"
             f"| **Video ID** | `{first.related_video_id}` |\n"
             f"| **User ID** | `{first.user_id}` |\n"
-            f"| **Segments Created** | `{len(final_result)}` |\n"
-            f"| **Total Duration** | `{total_duration:.2f}s` |\n\n"
+            f"| **Segments Created** | `{len(segments)}` |\n"
+            f"| **Total Duration** | `{total_duration:.2f}s` |\n"
+            f"| **Model** | `{cost_tracker.model}` |\n"
+            f"| **Prompt Tokens** | `{cost_tracker.total_prompt_tokens:,}` |\n"
+            f"| **Completion Tokens** | `{cost_tracker.total_completion_tokens:,}` |\n"
+            f"| **Total Cost** | `${cost_tracker.total_cost:.6f}` |\n\n"
             f"## Audio Segments\n\n"
             f"| # | Start | End | Duration | Audio Text |\n"
             f"|---|-------|-----|----------|------------|\n"
@@ -297,22 +329,32 @@ async def audio_segment_task(
     postgres_client = await get_postgres_client()
 
     model = AUDIO_SEGMENT_CONFIG.additional_kwargs.get("model", "google/gemini-2.5-flash-lite")
-    llm = OpenRouter(
-        api_key=os.environ["OPENROUTER_API_KEY"],
+    base_url = AUDIO_SEGMENT_CONFIG.additional_kwargs.get(
+        "base_url", "https://openrouter.ai/api/v1"
+    )
+
+    openrouter_config = OpenRouterConfig(
+        api_key=SecretStr(os.environ.get("OPENROUTER_API_KEY", "")),
         model=model,
-        max_tokens=4096,
-        context_window=8000,
+        base_url=base_url,
     )
 
     task_impl = AudioSegmentTask(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
         minio_client=minio_client,
     )
+    client = OpenRouterClient(config=openrouter_config)
 
     try:
-        artifacts = await task_impl.execute_template(asr_artifacts, llm)
+        artifacts, cost_tracker = await task_impl.execute_template(asr_artifacts, client)
     finally:
+        await client.close()
         await shutdown_postgres_client(postgres_client)
 
-    logger.info(f"[AudioSegment] Done | {len(artifacts)} segment(s) produced")
+    logger.info(
+        f"[AudioSegment] Done | {len(artifacts)} segment(s) produced | "
+        f"total_cost=${cost_tracker.total_cost:.6f} | "
+        f"prompt_tokens={cost_tracker.total_prompt_tokens} | "
+        f"completion_tokens={cost_tracker.total_completion_tokens}"
+    )
     return artifacts

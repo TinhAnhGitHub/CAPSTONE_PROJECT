@@ -21,7 +21,6 @@ from video_pipeline.config import get_settings
 SEGMENT_CAPTION_EMBEDDING_CONFIG = TaskConfig.from_yaml("segment_caption_embedding")
 _base_kwargs = SEGMENT_CAPTION_EMBEDDING_CONFIG.to_task_kwargs()
 
-# After preprocess: caption text extracted from artifact metadata
 _PreprocessedItem = tuple[SegmentCaptionArtifact, str]
 
 

@@ -4,8 +4,8 @@ import os
 
 from prefect import get_run_logger, task
 from prefect.artifacts import acreate_markdown_artifact
-from llama_index.core.llms import ImageBlock, TextBlock, ChatMessage
-from pydantic import BaseModel, Field
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field, SecretStr
 
 from video_pipeline.task.base.base_task import TaskConfig, BaseTask
 from video_pipeline.core.client.progress import StageRegistry
@@ -14,6 +14,7 @@ from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
 from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
 from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient, OpenRouterConfig
+from video_pipeline.task.kg_graph.models import CostTracker
 from video_pipeline.config import get_settings
 from video_pipeline.task.image_extraction.helper import FastFrameReader, get_segment_frame_indices
 
@@ -112,115 +113,138 @@ class SegmentCaptionTask(BaseTask[list[AudioSegmentArtifact], list[SegmentCaptio
     async def preprocess(
         self,
         input_data: list[AudioSegmentArtifact],
-    ) -> list[tuple[AudioSegmentArtifact, bytes]]:
-        """Load video bytes once for all segments."""
+    ) -> list[AudioSegmentArtifact]:
+        """Return segments unchanged - video will be loaded in execute().
+
+        Note: We don't load video bytes here to avoid memory bloat.
+        Video is streamed to disk in execute() and processed within
+        the context manager to ensure proper cleanup.
+        """
         logger = get_run_logger()
-        logger.info(f"[SegmentCaptionTask] Loading video for {len(input_data)} segment(s)")
-
-        if not input_data:
-            return []
-
-        video_s3_url = input_data[0].related_video_minio_url
-
-        async with self.minio_client.fetch_object_from_s3(
-            s3_url=video_s3_url, suffix=".mp4"
-        ) as video_path:
-            with open(video_path, "rb") as f:
-                video_bytes = f.read()
-            preprocessed: list[tuple[AudioSegmentArtifact, bytes]] = [
-                (seg, video_bytes) for seg in input_data
-            ]
-
-        logger.info(f"[SegmentCaptionTask] Video loaded)")
-        return preprocessed
+        logger.info(f"[SegmentCaptionTask] Preparing {len(input_data)} segment(s)")
+        return input_data
 
     async def execute(
         self,
-        preprocessed: list[tuple[AudioSegmentArtifact, bytes]],
+        preprocessed: list[AudioSegmentArtifact],
         client: OpenRouterClient,
-    ) -> list[SegmentCaptionArtifact]:
-        """Generate captions for each segment using VLM."""
+    ) -> tuple[list[SegmentCaptionArtifact], CostTracker]:
+        """Generate captions for each segment using VLM.
+
+        Downloads video via streaming (no memory bloat) and processes
+        all segments within the context manager.
+
+        Returns:
+            Tuple of (artifacts, cost_tracker) for cost monitoring.
+        """
         logger = get_run_logger()
         n_frames = self.config.additional_kwargs.get("n_frames", 6)
         max_concurrent = self.config.additional_kwargs.get("max_concurrent", 5)
+        model = self.config.additional_kwargs.get("model", "qwen/qwen3-vl-32b-instruct")
+
+        if not preprocessed:
+            return [], CostTracker(model=model)
 
         logger.info(
             f"[SegmentCaptionTask] Captioning {len(preprocessed)} segment(s) | max_concurrent={max_concurrent}"
         )
 
-        import asyncio
+        video_s3_url = preprocessed[0].related_video_minio_url
+        artifacts: list[SegmentCaptionArtifact] = []
+        cost_tracker = CostTracker(model=model)
 
-        semaphore = asyncio.Semaphore(max_concurrent)
+        async with self.minio_client.fetch_object_streaming(
+            s3_url=video_s3_url, suffix=".mp4"
+        ) as video_path:
+            import asyncio
 
-        async def caption_segment(
-            seg: AudioSegmentArtifact, video_bytes: bytes
-        ) -> SegmentCaptionArtifact | None:
-            async with semaphore:
-                reader = FastFrameReader(video_bytes)
-                fps = reader.fps
+            semaphore = asyncio.Semaphore(max_concurrent)
 
-                start_frame = int(seg.start_sec * fps)
-                end_frame = int(seg.end_sec * fps)
+            async def caption_segment(
+                seg: AudioSegmentArtifact
+            ) -> tuple[SegmentCaptionArtifact | None, dict]:
+                async with semaphore:
+                    reader = FastFrameReader(video_path)
+                    fps = reader.fps
 
-                frame_indices = get_segment_frame_indices(start_frame, end_frame, n_frames)
+                    start_frame = int(seg.start_sec * fps)
+                    end_frame = int(seg.end_sec * fps)
 
-                image_blocks = []
-                for fi in frame_indices:
+                    frame_indices = get_segment_frame_indices(start_frame, end_frame, n_frames)
+
+                    image_blocks = []
+                    for fi in frame_indices:
+                        try:
+                            frame_bytes = reader.get_frame(fi)
+                            data_url = client.encode_image_bytes(frame_bytes, mime="image/webp")
+                            image_blocks.append(
+                                {"type": "image_url", "image_url": {"url": data_url}}
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to extract frame {fi}: {e}")
+
+                    if not image_blocks:
+                        logger.warning(f"No frames extracted for segment {seg.segment_index}, skipping")
+                        return None, {}
+
+                    user_text = f"Audio Transcript:\n{seg.audio_text}"
+
+                    messages = [
+                        SystemMessage(content=CAPTION_SYSTEM_PROMPT),
+                        HumanMessage(
+                            content=[
+                                *image_blocks,
+                                {"type": "text", "text": user_text},
+                            ]
+                        ),
+                    ]
+
                     try:
-                        frame_bytes = reader.get_frame(fi)
-                        image_blocks.append(
-                            ImageBlock(image=frame_bytes, image_mimetype="image/webp")
-                        )
+                        allm = client.as_structured_llm(OutputCaptionSegment)
+                        caption_result, usage = await allm(messages) #type:ignore
                     except Exception as e:
-                        logger.warning(f"Failed to extract frame {fi}: {e}")
+                        logger.warning(f"Failed to caption segment {seg.segment_index}: {e}")
+                        return None, {}
 
-                if not image_blocks:
-                    logger.warning(f"No frames extracted for segment {seg.segment_index}, skipping")
-                    return None
+                    artifact = SegmentCaptionArtifact(
+                        related_audio_segment_artifact_id=seg.artifact_id,
+                        related_video_id=seg.related_video_id,
+                        related_video_minio_url=seg.related_video_minio_url,
+                        related_video_extension=seg.related_video_extension,
+                        related_video_fps=seg.related_video_fps,
+                        start_frame=start_frame,
+                        end_frame=end_frame,
+                        start_timestamp=seg.start_timestamp,
+                        end_timestamp=seg.end_timestamp,
+                        start_sec=seg.start_sec,
+                        end_sec=seg.end_sec,
+                        audio_text=seg.audio_text,
+                        summary_caption=caption_result.summary_caption if caption_result else "",
+                        event_captions=caption_result.event_captions if caption_result else [],
+                        user_id=seg.user_id,
+                    )
+                    return artifact, usage
 
-                user_text = f"Audio Transcript:\n{seg.audio_text}"
+            tasks = [caption_segment(seg) for seg in preprocessed]
+            results = await asyncio.gather(*tasks)
 
-                messages = [
-                    ChatMessage(role="system", content=CAPTION_SYSTEM_PROMPT),
-                    ChatMessage(
-                        role="user",
-                        blocks=[*image_blocks, TextBlock(text=user_text)],
-                    ),
-                ]
+            for artifact, usage in results:
+                if artifact is not None:
+                    artifacts.append(artifact)
+                if usage:
+                    cost_tracker.add_usage(
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0),
+                        cost=usage.get("cost", 0.0),
+                    )
 
-                try:
-                    allm = client.as_structured_llm(OutputCaptionSegment)
-                    response = await allm.achat(messages)
-                    caption_result = response.raw
-                except Exception as e:
-                    logger.warning(f"Failed to caption segment {seg.segment_index}: {e}")
-                    return None
-
-                artifact = SegmentCaptionArtifact(
-                    related_audio_segment_artifact_id=seg.artifact_id,
-                    related_video_id=seg.related_video_id,
-                    related_video_minio_url=seg.related_video_minio_url,
-                    related_video_extension=seg.related_video_extension,
-                    related_video_fps=seg.related_video_fps,
-                    start_frame=start_frame,
-                    end_frame=end_frame,
-                    start_timestamp=seg.start_timestamp,
-                    end_timestamp=seg.end_timestamp,
-                    start_sec=seg.start_sec,
-                    end_sec=seg.end_sec,
-                    audio_text=seg.audio_text,
-                    summary_caption=caption_result.summary_caption if caption_result else "",
-                    event_captions=caption_result.event_captions if caption_result else [],
-                    user_id=seg.user_id,
-                )
-                return artifact
-
-        tasks = [caption_segment(seg, video_bytes) for seg, video_bytes in preprocessed]
-        results = await asyncio.gather(*tasks)
-
-        artifacts = [r for r in results if r is not None]
-        logger.info(f"[SegmentCaptionTask] Created {len(artifacts)} caption artifact(s)")
-        return artifacts
+        logger.info(
+            f"[SegmentCaptionTask] Created {len(artifacts)} caption artifact(s) | "
+            f"total_cost=${cost_tracker.total_cost:.6f} | "
+            f"prompt_tokens={cost_tracker.total_prompt_tokens} | "
+            f"completion_tokens={cost_tracker.total_completion_tokens}"
+        )
+        return artifacts, cost_tracker
 
     async def postprocess(
         self, result: list[SegmentCaptionArtifact]
@@ -304,7 +328,7 @@ async def segment_caption_chunk_task(
     caption_config = OpenRouterConfig(
         model=model,
         base_url=base_url,
-        api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        api_key=SecretStr(os.environ.get("OPENROUTER_API_KEY", "")),
     )
 
     task_impl = SegmentCaptionTask(
