@@ -2,23 +2,32 @@ from __future__ import annotations
 
 import asyncio
 import base64
+
+from llm_json import json
 import os
+import re
+from langchain_core.output_parsers import PydanticOutputParser
 from pathlib import Path
 from typing import TypeVar
-
+from pydantic import SecretStr
 from loguru import logger
 from pydantic import BaseModel
 
-from llama_index.llms.openrouter import OpenRouter as LlamaIndexOpenRouter
-from llama_index.core.llms import ChatMessage, ImageBlock, TextBlock, MessageRole
-from llama_index.core.multi_modal_llms import MultiModalLLM
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import (
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    AIMessage,
+)
+from langchain_core.output_parsers import PydanticOutputParser
 
 
 T = TypeVar("T", bound=BaseModel)
 
 
 class OpenRouterConfig(BaseModel):
-    api_key: str | None = None
+    api_key: SecretStr | None = None
     base_url: str = "https://openrouter.ai/api/v1"
     model: str = "google/gemini-2.5-flash-preview"
     max_tokens: int = 4096
@@ -27,7 +36,7 @@ class OpenRouterConfig(BaseModel):
 
     def __post_init__(self):
         if self.api_key is None:
-            self.api_key = os.getenv("OPENROUTER_API_KEY", "")
+            self.api_key = SecretStr(os.getenv("OPENROUTER_API_KEY", ""))
 
 
 class OpenRouterResult(BaseModel):
@@ -39,28 +48,35 @@ class OpenRouterResult(BaseModel):
 
 class OpenRouterClient:
     """
-    Pure LlamaIndex-based OpenRouter client with structured output support.
+    LangChain-based OpenRouter client with structured output support.
 
-    This client wraps LlamaIndex's OpenRouter LLM and provides:
-    - achat(): Raw chat completion with LlamaIndex ChatMessage format
+    This client wraps LangChain's ChatOpenAI (pointed at OpenRouter) and provides:
+    - achat(): Raw chat completion with LangChain BaseMessage format
     - as_structured_llm(): Structured output for Pydantic models
     - acomplete(): Text completion interface
     - stream_chat()/stream_complete(): Streaming interfaces
 
-    All methods use LlamaIndex's native APIs - no raw HTTP requests.
+    All methods use LangChain's native APIs.
     """
 
     def __init__(self, config: OpenRouterConfig):
         self.config = config
-        self.llm = LlamaIndexOpenRouter(
-            api_key=config.api_key or "",
+        self.llm = ChatOpenAI(
+            api_key=config.api_key,
+            base_url=config.base_url,
             model=config.model,
-            max_tokens=config.max_tokens,
+            max_completion_tokens=config.max_tokens,
             temperature=config.temperature,
+            timeout=config.timeout,
+            model_kwargs={
+                "extra_body": {
+                    "reasoning": {"effort": "none"}
+                }
+            },
         )
 
     async def close(self):
-        """Close any open resources (no-op for LlamaIndex clients)."""
+        """Close any open resources (no-op for LangChain clients)."""
         pass
 
     async def __aenter__(self):
@@ -70,98 +86,107 @@ class OpenRouterClient:
         await self.close()
 
     def as_structured_llm(self, output_cls: type[T]):
-        """
-        Create a structured LLM for Pydantic output.
+        parser = PydanticOutputParser(pydantic_object=output_cls)
 
-        Args:
-            output_cls: Pydantic model class for structured output
+        async def ainvoke(messages: list[BaseMessage], **kwargs) -> tuple[T, dict]:
+            format_instructions = parser.get_format_instructions()
+            augmented = [
+                SystemMessage(content=f"You must respond with valid JSON.\n{format_instructions}"),
+                *messages,
+            ]
 
-        Returns:
-            LLM instance configured for structured output
-        """
-        return self.llm.as_structured_llm(output_cls)
+            response = await self.llm.ainvoke(augmented, **kwargs)
+            usage = self._extract_usage(response)
+            from typing import cast
+            raw = (
+                cast(str, response.content)
+                .strip()
+                .removeprefix("```json")
+                .removeprefix("```")
+                .removesuffix("```")
+                .strip()
+            )
+            repaired = json.loads(raw)
+            parsed = parser.parse(json.dumps(repaired))
+
+            return parsed, usage
+
+        return ainvoke
 
     async def achat(
         self,
-        messages: list[ChatMessage],
+        messages: list[BaseMessage],
         **kwargs,
-    ) -> ChatMessage:
+    ) -> AIMessage:
         """
-        Send a chat completion using LlamaIndex format.
+        Send a chat completion using LangChain message format.
 
         Args:
-            messages: List of LlamaIndex ChatMessage objects
+            messages: List of LangChain BaseMessage objects
             **kwargs: Additional parameters (temperature, max_tokens, etc.)
 
         Returns:
-            ChatMessage response
+            AIMessage response
         """
-        response = await self.llm.achat(messages, **kwargs)
-        return response.message
+        response = await self.llm.ainvoke(messages, **kwargs)
+        return response  # type: ignore[return-value]
 
-    def _extract_usage(self, response) -> dict:
-        """Extract usage info from LlamaIndex ChatResponse."""
-        usage = {}
-
-        # From additional_kwargs (always available)
-        if hasattr(response, "additional_kwargs"):
-            usage["prompt_tokens"] = response.additional_kwargs.get("prompt_tokens", 0)
-            usage["completion_tokens"] = response.additional_kwargs.get("completion_tokens", 0)
-            usage["total_tokens"] = response.additional_kwargs.get("total_tokens", 0)
-
-        # From raw.usage (more detailed, includes cost)
-        if hasattr(response, "raw") and response.raw:
-            raw = response.raw
-            if hasattr(raw, "usage") and raw.usage:
-                raw_usage = raw.usage
-                usage["prompt_tokens"] = getattr(raw_usage, "prompt_tokens", usage.get("prompt_tokens", 0))
-                usage["completion_tokens"] = getattr(raw_usage, "completion_tokens", usage.get("completion_tokens", 0))
-                usage["total_tokens"] = getattr(raw_usage, "total_tokens", usage.get("total_tokens", 0))
-                usage["cost"] = getattr(raw_usage, "cost", 0.0)
-
-        return usage
+    def _extract_usage(self, response: AIMessage) -> dict:
+        """Extract usage info from LangChain AIMessage."""
+        token_usage = response.response_metadata.get('token_usage', {})
+        completion_tokens = token_usage.get('completion_tokens', 0)
+        prompt_tokens = token_usage.get('prompt_tokens', 0)
+        total_tokens = token_usage.get('total_tokens', 0)
+        
+        
+        cost = token_usage.get('cost', 0.0)
+        return {
+            "completion_tokens": completion_tokens,
+            "prompt_tokens": prompt_tokens,
+            "total_tokens": total_tokens,
+            "cost": cost,
+        }
 
     def chat(
         self,
-        messages: list[ChatMessage],
+        messages: list[BaseMessage],
         **kwargs,
-    ) -> ChatMessage:
+    ) -> AIMessage:
         """
         Synchronous chat completion.
 
         Args:
-            messages: List of LlamaIndex ChatMessage objects
+            messages: List of LangChain BaseMessage objects
             **kwargs: Additional parameters
 
         Returns:
-            ChatMessage response
+            AIMessage response
         """
-        response = self.llm.chat(messages, **kwargs)
-        return response.message
+        response = self.llm.invoke(messages, **kwargs)
+        return response  # type: ignore[return-value]
 
     async def acomplete(
         self,
         prompt: str,
         **kwargs,
-    ) -> ChatMessage:
+    ) -> AIMessage:
         """
-        Text completion interface.
+        Text completion interface (wraps a single HumanMessage).
 
         Args:
             prompt: Text prompt for completion
             **kwargs: Additional parameters
 
         Returns:
-            ChatMessage with completion
+            AIMessage with completion
         """
-        response = await self.llm.acomplete(prompt, **kwargs)
-        return ChatMessage(role=MessageRole.ASSISTANT, content=response.text)
+        return await self.achat([HumanMessage(content=prompt)], **kwargs)
 
     def complete(
         self,
         prompt: str,
         **kwargs,
-    ) -> ChatMessage:
+    ) -> AIMessage:
         """
         Synchronous text completion.
 
@@ -170,27 +195,26 @@ class OpenRouterClient:
             **kwargs: Additional parameters
 
         Returns:
-            ChatMessage with completion
+            AIMessage with completion
         """
-        response = self.llm.complete(prompt, **kwargs)
-        return ChatMessage(role=MessageRole.ASSISTANT, content=response.text)
+        return self.chat([HumanMessage(content=prompt)], **kwargs)
 
     def stream_chat(
         self,
-        messages: list[ChatMessage],
+        messages: list[BaseMessage],
         **kwargs,
     ):
         """
         Streaming chat completion.
 
         Args:
-            messages: List of LlamaIndex ChatMessage objects
+            messages: List of LangChain BaseMessage objects
             **kwargs: Additional parameters
 
         Yields:
-            ChatMessage deltas
+            AIMessageChunk deltas
         """
-        yield from self.llm.stream_chat(messages, **kwargs)
+        yield from self.llm.stream(messages, **kwargs)
 
     def stream_complete(
         self,
@@ -205,9 +229,9 @@ class OpenRouterClient:
             **kwargs: Additional parameters
 
         Yields:
-            Text completion deltas
+            AIMessageChunk deltas
         """
-        yield from self.llm.stream_complete(prompt, **kwargs)
+        yield from self.stream_chat([HumanMessage(content=prompt)], **kwargs)
 
     @staticmethod
     def encode_image(image_path: str | Path) -> str:
@@ -230,6 +254,29 @@ class OpenRouterClient:
         b64 = base64.b64encode(data).decode("utf-8")
         return f"data:{mime};base64,{b64}"
 
+    @staticmethod
+    def _prepare_image_url(image_data: bytes | str) -> tuple[str, str]:
+        """
+        Normalize image input to a (data_url, mime_type) pair.
+
+        LangChain's multimodal HumanMessage expects an image_url dict:
+          {"url": "data:<mime>;base64,<b64>"}
+        """
+        if isinstance(image_data, str) and image_data.startswith("data:"):
+            mime = image_data.split(":")[1].split(";")[0]
+            return image_data, mime
+        elif isinstance(image_data, bytes):
+            b64 = base64.b64encode(image_data).decode("utf-8")
+            mime = "image/jpeg"
+            return f"data:{mime};base64,{b64}", mime
+        else:
+            # Assume file path
+            path = Path(image_data)  # type: ignore[arg-type]
+            ext = path.suffix.lower().lstrip(".")
+            mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/png"
+            b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
+            return f"data:{mime};base64,{b64}", mime
+
     async def ainfer_text(
         self,
         prompt: str,
@@ -237,7 +284,7 @@ class OpenRouterClient:
         **kwargs,
     ) -> OpenRouterResult | None:
         """
-        Text-only inference using LlamaIndex acomplete.
+        Text-only inference.
 
         Args:
             prompt: User message
@@ -248,16 +295,16 @@ class OpenRouterClient:
             OpenRouterResult or None on error
         """
         try:
-            messages: list[ChatMessage] = []
+            messages: list[BaseMessage] = []
             if system_prompt:
-                messages.append(ChatMessage(role=MessageRole.SYSTEM, content=system_prompt))
-            messages.append(ChatMessage(role=MessageRole.USER, content=prompt))
+                messages.append(SystemMessage(content=system_prompt))
+            messages.append(HumanMessage(content=prompt))
 
-            full_response = await self.llm.achat(messages, **kwargs)
-            usage = self._extract_usage(full_response)
+            response = await self.llm.ainvoke(messages, **kwargs)
+            usage = self._extract_usage(response)  # type: ignore[arg-type]
 
             return OpenRouterResult(
-                content=full_response.message.content or "",
+                content=response.content if isinstance(response.content, str) else str(response.content),
                 model=self.config.model,
                 finish_reason="stop",
                 usage=usage,
@@ -274,7 +321,9 @@ class OpenRouterClient:
         **kwargs,
     ) -> OpenRouterResult | None:
         """
-        Image (+ optional text) inference using LlamaIndex achat.
+        Image (+ optional text) inference.
+
+        LangChain multimodal messages use a content list with type=image_url dicts.
 
         Args:
             image_data: Image bytes or data URI string
@@ -286,39 +335,25 @@ class OpenRouterClient:
             OpenRouterResult or None on error
         """
         try:
-            messages: list[ChatMessage] = []
+            messages: list[BaseMessage] = []
             if system_prompt:
-                messages.append(ChatMessage(role=MessageRole.SYSTEM, content=system_prompt))
+                messages.append(SystemMessage(content=system_prompt))
 
-            # Prepare image block
-            if isinstance(image_data, str) and image_data.startswith("data:"):
-                # Auto-detect data URI
-                mime, b64 = image_data.split(",", 1) #type:ignore
-                mime = mime.split(":")[1].split(";")[0] #type:ignore
-                image_bytes = base64.b64decode(b64)
-            elif isinstance(image_data, bytes):
-                image_bytes = image_data
-                mime = "image/jpeg"
-            else:
-                # Assume it's a file path
-                image_bytes = Path(image_data).read_bytes() #type:ignore
-                mime = "image/jpeg" if str(image_data).endswith((".jpg", ".jpeg")) else "image/png"
-
+            data_url, _ = self._prepare_image_url(image_data)
             messages.append(
-                ChatMessage(
-                    role=MessageRole.USER,
-                    blocks=[
-                        ImageBlock(image=image_bytes, image_mimetype=mime), #type:ignore
-                        TextBlock(text=prompt),
-                    ],
+                HumanMessage(
+                    content=[
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "text", "text": prompt},
+                    ]
                 )
             )
 
-            full_response = await self.llm.achat(messages, **kwargs)
-            usage = self._extract_usage(full_response)
+            response = await self.llm.ainvoke(messages, **kwargs)
+            usage = self._extract_usage(response)  # type: ignore[arg-type]
 
             return OpenRouterResult(
-                content=full_response.message.content or "",
+                content=response.content if isinstance(response.content, str) else str(response.content),
                 model=self.config.model,
                 finish_reason="stop",
                 usage=usage,
@@ -335,7 +370,7 @@ class OpenRouterClient:
         **kwargs,
     ) -> OpenRouterResult | None:
         """
-        Multi-image inference using LlamaIndex achat.
+        Multi-image inference.
 
         Args:
             image_data_list: List of image bytes or data URIs
@@ -347,37 +382,24 @@ class OpenRouterClient:
             OpenRouterResult or None on error
         """
         try:
-            messages: list[ChatMessage] = []
+            messages: list[BaseMessage] = []
             if system_prompt:
-                messages.append(ChatMessage(role=MessageRole.SYSTEM, content=system_prompt))
+                messages.append(SystemMessage(content=system_prompt))
 
-            blocks = []
+            content: list[dict] = []
             for image_data in image_data_list:
-                if isinstance(image_data, str) and image_data.startswith("data:"):
-                    # Parse data URI
-                    mime, b64 = image_data.split(",", 1)
-                    mime = mime.split(":")[1].split(";")[0]
-                    image_bytes = base64.b64decode(b64)
-                elif isinstance(image_data, bytes):
-                    image_bytes = image_data
-                    mime = "image/jpeg"
-                else:
-                    # Assume file path
-                    image_bytes = Path(image_data).read_bytes() #type:ignore
-                    mime = (
-                        "image/jpeg" if str(image_data).endswith((".jpg", ".jpeg")) else "image/png"
-                    )
+                data_url, _ = self._prepare_image_url(image_data)
+                content.append({"type": "image_url", "image_url": {"url": data_url}})
+            content.append({"type": "text", "text": prompt})
 
-                blocks.append(ImageBlock(image=image_bytes, image_mimetype=mime))
+            human_message = HumanMessage(content=content) #type:ignore
+            messages.append(human_message)
 
-            blocks.append(TextBlock(text=prompt))
-            messages.append(ChatMessage(role=MessageRole.USER, blocks=blocks))
-
-            full_response = await self.llm.achat(messages, **kwargs)
-            usage = self._extract_usage(full_response)
+            response = await self.llm.ainvoke(messages, **kwargs)
+            usage = self._extract_usage(response)  # type: ignore[arg-type]
 
             return OpenRouterResult(
-                content=full_response.message.content or "",
+                content=response.content if isinstance(response.content, str) else str(response.content),
                 model=self.config.model,
                 finish_reason="stop",
                 usage=usage,
@@ -388,25 +410,25 @@ class OpenRouterClient:
 
     async def ainfer_chat(
         self,
-        messages: list[ChatMessage],
+        messages: list[BaseMessage],
         **kwargs,
     ) -> OpenRouterResult | None:
         """
-        Chat completion using LlamaIndex ChatMessage format.
+        Chat completion using LangChain BaseMessage format.
 
         Args:
-            messages: List of LlamaIndex ChatMessage objects
+            messages: List of LangChain BaseMessage objects
             **kwargs: Additional parameters
 
         Returns:
             OpenRouterResult or None on error
         """
         try:
-            full_response = await self.llm.achat(messages, **kwargs)
-            usage = self._extract_usage(full_response)
+            response = await self.llm.ainvoke(messages, **kwargs)
+            usage = self._extract_usage(response)  # type: ignore[arg-type]
 
             return OpenRouterResult(
-                content=full_response.message.content or "",
+                content=response.content if isinstance(response.content, str) else str(response.content),
                 model=self.config.model,
                 finish_reason="stop",
                 usage=usage,
@@ -470,7 +492,7 @@ class OpenRouterClient:
 
     async def batch_ainfer_chat(
         self,
-        messages_list: list[list[ChatMessage]],
+        messages_list: list[list[BaseMessage]],
         max_concurrent: int = 10,
         **kwargs,
     ) -> list[OpenRouterResult | None]:
@@ -487,7 +509,7 @@ class OpenRouterClient:
         """
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def _limited(messages: list[ChatMessage]):
+        async def _limited(messages: list[BaseMessage]):
             async with semaphore:
                 return await self.ainfer_chat(messages, **kwargs)
 
