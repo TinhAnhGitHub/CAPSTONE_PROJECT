@@ -17,6 +17,7 @@ def video_registration_cache_key(
     if video_input is None:
         return None
     url_hash = _hash_string(video_input.video_s3_url)
+    print(f"{url_hash=}")
     return f"video-reg-{video_input.video_id}-{url_hash}"
 
 
@@ -34,12 +35,12 @@ def video_artifact_cache_key(
 def autoshot_artifact_cache_key(
     _context: Any, parameters: dict[str, Any]
 ) -> str | None:
-    """Cache key: video_id + url hash."""
-    autoshot_artifact = parameters.get("autoshot_artifact")
-    if autoshot_artifact is None:
+    """Cache key for autoshot task - uses video_artifact parameter."""
+    video_artifact = parameters.get("video_artifact")
+    if video_artifact is None:
         return None
-    url_hash = _hash_string(autoshot_artifact.related_video_minio_url)
-    return f"autoshot-{autoshot_artifact.related_video_id}-{url_hash}"
+    url_hash = _hash_string(video_artifact.video_minio_url)
+    return f"autoshot-{video_artifact.video_id}-{url_hash}"
 
 
 def asr_batch_cache_key(
@@ -142,26 +143,6 @@ def segment_caption_embedding_cache_key(
     key_string = "|".join(sorted(key_parts))
     key_hash = _hash_string(key_string)
     return f"seg-cap-emb-{video_id}-{key_hash}"
-
-
-def segment_caption_multimodal_embedding_cache_key(
-    _context: Any, parameters: dict[str, Any]
-) -> str | None:
-    """Cache key: video_id + sorted frame ranges."""
-    items = parameters.get("items")
-    if not items:
-        return None
-
-    video_id = None
-    key_parts = []
-    for artifact in items:
-        if video_id is None:
-            video_id = artifact.related_video_id
-        key_parts.append(f"{artifact.start_frame}-{artifact.end_frame}")
-
-    key_string = "|".join(sorted(key_parts))
-    key_hash = _hash_string(key_string)
-    return f"seg-cap-mm-emb-{video_id}-{key_hash}"
 
 
 def image_batch_cache_key_caption(
@@ -270,26 +251,6 @@ def caption_embedding_batch_cache_key(
     return f"cap-emb-{video_id}-{key_hash}"
 
 
-def caption_multimodal_embedding_batch_cache_key(
-    _context: Any, parameters: dict[str, Any]
-) -> str | None:
-    """Cache key: video_id + sorted frame indices."""
-    items = parameters.get("items")
-    if not items:
-        return None
-
-    video_id = None
-    key_parts = []
-    for artifact in items:
-        if video_id is None:
-            video_id = artifact.related_video_id
-        key_parts.append(str(artifact.frame_index))
-
-    key_string = "|".join(sorted(key_parts))
-    key_hash = _hash_string(key_string)
-    return f"cap-mm-emb-{video_id}-{key_hash}"
-
-
 def image_qdrant_indexing_cache_key(
     _context: Any, parameters: dict[str, Any]
 ) -> str | None:
@@ -310,26 +271,6 @@ def image_qdrant_indexing_cache_key(
     return f"img-qdrant-{video_id}-{key_hash}"
 
 
-def caption_qdrant_indexing_cache_key(
-    _context: Any, parameters: dict[str, Any]
-) -> str | None:
-    """Cache key: video_id + sorted frame indices."""
-    text_items = parameters.get("text_items")
-    if not text_items:
-        return None
-
-    video_id = None
-    key_parts = []
-    for artifact in text_items:
-        if video_id is None:
-            video_id = artifact.related_video_id
-        key_parts.append(str(artifact.frame_index))
-
-    key_string = "|".join(sorted(key_parts))
-    key_hash = _hash_string(key_string)
-    return f"cap-qdrant-{video_id}-{key_hash}"
-
-
 def segment_qdrant_indexing_cache_key(
     _context: Any, parameters: dict[str, Any]
 ) -> str | None:
@@ -348,26 +289,6 @@ def segment_qdrant_indexing_cache_key(
     key_string = "|".join(sorted(key_parts))
     key_hash = _hash_string(key_string)
     return f"seg-qdrant-{video_id}-{key_hash}"
-
-
-def segment_caption_qdrant_indexing_cache_key(
-    _context: Any, parameters: dict[str, Any]
-) -> str | None:
-    """Cache key: video_id + sorted frame ranges."""
-    text_items = parameters.get("text_items")
-    if not text_items:
-        return None
-
-    video_id = None
-    key_parts = []
-    for artifact in text_items:
-        if video_id is None:
-            video_id = artifact.related_video_id
-        key_parts.append(f"{artifact.start_frame}-{artifact.end_frame}")
-
-    key_string = "|".join(sorted(key_parts))
-    key_hash = _hash_string(key_string)
-    return f"seg-cap-qdrant-{video_id}-{key_hash}"
 
 
 def kg_pipeline_cache_key(
@@ -441,6 +362,46 @@ def audio_transcript_qdrant_indexing_cache_key(
     return f"audio-trans-qdrant-{video_id}-{key_hash}"
 
 
+def image_caption_qdrant_indexing_cache_key(
+    _context: Any, parameters: dict[str, Any]
+) -> str | None:
+    """Cache key: video_id + sorted frame indices."""
+    items = parameters.get("items")
+    if not items:
+        return None
+
+    video_id = None
+    key_parts = []
+    for artifact in items:
+        if video_id is None:
+            video_id = artifact.related_video_id
+        key_parts.append(str(artifact.frame_index))
+
+    key_string = "|".join(sorted(key_parts))
+    key_hash = _hash_string(key_string)
+    return f"img-cap-qdrant-{video_id}-{key_hash}"
+
+
+def segment_caption_qdrant_indexing_cache_key(
+    _context: Any, parameters: dict[str, Any]
+) -> str | None:
+    """Cache key: video_id + sorted frame ranges."""
+    items = parameters.get("items")
+    if not items:
+        return None
+
+    video_id = None
+    key_parts = []
+    for artifact in items:
+        if video_id is None:
+            video_id = artifact.related_video_id
+        key_parts.append(f"{artifact.start_frame}-{artifact.end_frame}")
+
+    key_string = "|".join(sorted(key_parts))
+    key_hash = _hash_string(key_string)
+    return f"seg-cap-qdrant-{video_id}-{key_hash}"
+
+
 CACHE_KEY_FUNCTIONS: dict[str, Any] = {
     "video_registration_cache_key": video_registration_cache_key,
     "video_artifact_cache_key": video_artifact_cache_key,
@@ -450,18 +411,16 @@ CACHE_KEY_FUNCTIONS: dict[str, Any] = {
     "segment_embedding_cache_key": segment_embedding_cache_key,
     "segment_caption_cache_key": segment_caption_cache_key,
     "segment_caption_embedding_cache_key": segment_caption_embedding_cache_key,
-    "segment_caption_multimodal_embedding_cache_key": segment_caption_multimodal_embedding_cache_key,
     "image_batch_cache_key_caption": image_batch_cache_key_caption,
     "image_batch_cache_key_embedding": image_batch_cache_key_embedding,
     "image_batch_cache_key_ocr": image_batch_cache_key_ocr,
     "image_extraction_batch_cache_key": image_extraction_batch_cache_key,
     "caption_embedding_batch_cache_key": caption_embedding_batch_cache_key,
-    "caption_multimodal_embedding_batch_cache_key": caption_multimodal_embedding_batch_cache_key,
     "image_qdrant_indexing_cache_key": image_qdrant_indexing_cache_key,
-    "caption_qdrant_indexing_cache_key": caption_qdrant_indexing_cache_key,
     "segment_qdrant_indexing_cache_key": segment_qdrant_indexing_cache_key,
-    "segment_caption_qdrant_indexing_cache_key": segment_caption_qdrant_indexing_cache_key,
     "kg_pipeline_cache_key": kg_pipeline_cache_key,
     "audio_transcript_embedding_cache_key": audio_transcript_embedding_cache_key,
     "audio_transcript_qdrant_indexing_cache_key": audio_transcript_qdrant_indexing_cache_key,
+    "image_caption_qdrant_indexing_cache_key": image_caption_qdrant_indexing_cache_key,
+    "segment_caption_qdrant_indexing_cache_key": segment_caption_qdrant_indexing_cache_key,
 }
