@@ -279,7 +279,6 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             stats["event_entities"] = len(ee_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(ee_docs)} event-entity links")
 
-        # === Insert Event Sequences ===
         es_docs = []
         for edge in preprocessed.event_edges:
             from_key = _strip_collection(edge.get("_from", ""))

@@ -8,16 +8,16 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections import defaultdict
-from typing import cast
 
 import numpy as np
-from pydantic import BaseModel, Field
+import llm_json
+from pydantic import BaseModel, Field, field_validator
 from scipy.sparse import csr_matrix
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 
-from llama_index.core.llms import ChatMessage, TextBlock
+from langchain_core.messages import HumanMessage
 
 from video_pipeline.core.client.inference import MMBertClient, SpladeClient
 
@@ -30,18 +30,19 @@ from .models import (
     CostTracker,
 )
 
+
 class ResolvedSubGroup(BaseModel):
     local_ids: list[str] = Field(
         ...,
         description="The local_ids of entities that refer to the SAME real-world object/person.",
     )
-    merged_desc: str = Field(
-        ...,
+    merged_desc: str | None = Field(
+        default=None,
         description="A single, unified description synthesised from all members.",
     )
-    canonical_name: str = Field(
-        ...,
-        description="The single best name to use for this entity going forward.",
+    canonical_name: str | None = Field(
+        default=None,
+        description="The single best name to use for this entity going forward. If omitted, will be extracted from merged_desc.",
     )
 
 
@@ -50,6 +51,7 @@ class EntityOutput(BaseModel):
         ...,
         description="List of resolved sub-groups, one per distinct real-world entity.",
     )
+
 
 
 def load_and_flatten(kg_segments: list[KGSegment]) -> list[dict]:
@@ -170,17 +172,19 @@ Rules:
 
 Input entities:
 {entity_context}
+
+
+Each entity_group represents one real-world entity with its merged local_ids, unified description, and canonical name.
 """
 
-    msg = ChatMessage(blocks=[TextBlock(text=prompt)])
+    msg = HumanMessage(content=prompt)
 
     async with semaphore:
         try:
-            response = await structured_llm.achat([msg])
-            parsed = cast(EntityOutput, response.raw)
-            prompt_tokens = response.additional_kwargs.get('prompt_tokens', 0) or 0
-            completion_tokens = response.additional_kwargs.get('completion_tokens', 0) or 0
-            cost = response.additional_kwargs.get('cost', 0.0) or 0.0
+            parsed, usage = await structured_llm([msg])
+            prompt_tokens = usage.get('prompt_tokens', 0) or 0
+            completion_tokens = usage.get('completion_tokens', 0) or 0
+            cost = usage.get('cost', 0.0) or 0.0
             cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
             all_local_ids = {e["local_id"] for e in entities_in_cluster}
@@ -191,6 +195,21 @@ Input entities:
                 global_id = f"GLOBAL_{uuid.uuid4().hex[:8]}"
                 merged_desc = sub_group.merged_desc
                 canonical_name = sub_group.canonical_name
+                
+                if not merged_desc:
+                    descs = []
+                    for local_id in sub_group.local_ids:
+                        for e in entities_in_cluster:
+                            if e["local_id"] == local_id and e.get("desc"):
+                                descs.append(e["desc"])
+                                break
+                    merged_desc = " ".join(descs) if descs else ""
+                
+                if not canonical_name:
+                    first_sentence = merged_desc.split('.')[0].strip()
+                    canonical_name = first_sentence[:50] if len(first_sentence) > 50 else first_sentence
+                
+                
 
                 for local_id in sub_group.local_ids:
                     if local_id not in all_local_ids or local_id in seen:

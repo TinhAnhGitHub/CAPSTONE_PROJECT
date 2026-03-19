@@ -1,14 +1,11 @@
 import asyncio
-from collections import defaultdict
-from typing import Any, cast
+from typing import Any
 
 import igraph as ig
 import leidenalg
-import numpy as np
 from pydantic import BaseModel, Field
-from tqdm import tqdm
 
-from llama_index.core.llms import ChatMessage, TextBlock
+from langchain_core.messages import HumanMessage
 
 from video_pipeline.core.client.inference import MMBertClient
 
@@ -92,23 +89,32 @@ async def summarize_community(
         for e in member_entities
     ]
     prompt = f"""You are analysing a Knowledge Graph extracted from a video.
-    The following entities form a tightly connected cluster (Community {community_id}).
-    Summarise what this community represents in the video.
+The following entities form a tightly connected cluster (Community {community_id}).
+Summarise what this community represents in the video.
 
-    Entities:
-    {chr(10).join(entity_lines)}
-    """
-    msg = ChatMessage(blocks=[TextBlock(text=prompt)])
+Entities:
+{chr(10).join(entity_lines)}
+
+Output a JSON object with exactly this structure (no trailing commas):
+{{
+  "title": "Short 4-6 word title",
+  "summary": "2-3 sentence description of what this entity cluster represents."
+}}
+
+Fields:
+- title: a concise 4-6 word title for this community
+- summary: a 2-3 sentence description of what this entity cluster represents
+"""
+    msg = HumanMessage(content=prompt)
     async with semaphore:
         try:
-            response = await structured_llm.achat([msg])
+            result, usage = await structured_llm([msg])
 
-            prompt_tokens = response.additional_kwargs.get('prompt_tokens', 0) or 0
-            completion_tokens = response.additional_kwargs.get('completion_tokens', 0) or 0
-            cost = response.additional_kwargs.get('cost', 0.0) or 0.0
+            prompt_tokens = usage.get('prompt_tokens', 0) or 0
+            completion_tokens = usage.get('completion_tokens', 0) or 0
+            cost = usage.get('cost', 0.0) or 0.0
             cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
-            result = cast(CommunitySummary, response.raw)
             return {"title": result.title, "summary": result.summary}
         except Exception as ex:
             print(f"  [WARN] Community {community_id} summary error: {ex}")

@@ -96,7 +96,27 @@ No free text allowed in IDs.
 OUTPUT
 -----------------------------------
 
-Return ONLY structured output matching the schema.
+Return ONLY a JSON object with exactly this structure (no trailing commas):
+
+{
+  "entities": [
+    {
+      "entity_id": "entity_01",
+      "entity_name": "Man",
+      "entity_type": "Person",
+      "desc": "A person in the scene",
+      "vis_des": "Wearing a blue shirt"
+    }
+  ],
+  "relations": [
+    {
+      "subject_id": "entity_01",
+      "relation_desc": "walks towards",
+      "object_id": "entity_02"
+    }
+  ]
+}
+
 Do not add explanations.
 Do not add extra fields.
 """

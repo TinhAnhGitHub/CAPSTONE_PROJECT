@@ -7,14 +7,13 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from typing import cast
 
 import numpy as np
 from pydantic import BaseModel, Field
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 
-from llama_index.core.llms import ChatMessage, TextBlock
+from langchain_core.messages import HumanMessage
 
 from video_pipeline.core.client.inference import MMBertClient
 
@@ -30,7 +29,6 @@ from .models import (
 )
 
 
-# LLM-bound models
 class EventLinkOutput(BaseModel):
     should_link: bool = Field(..., description="True if the two events are meaningfully related.")
     link_type: str = Field(..., description="One of: SEMANTICALLY_SIMILAR, SHARES_CONTEXT, CAUSAL, or UNRELATED.")
@@ -145,19 +143,29 @@ Link types:
 - CAUSAL               : A causes or directly leads to B
 - UNRELATED            : no meaningful connection
 
-Return JSON with: should_link (bool), link_type (str), reason (str).
+Output a JSON object with exactly this structure (no trailing commas):
+{{
+  "should_link": true,
+  "link_type": "SEMANTICALLY_SIMILAR",
+  "reason": "A brief explanation"
+}}
+
+Fields:
+- should_link: boolean (true/false)
+- link_type: one of SEMANTICALLY_SIMILAR, SHARES_CONTEXT, CAUSAL, UNRELATED
+- reason: a one-sentence justification
 """
-    msg = ChatMessage(blocks=[TextBlock(text=prompt)])
+    msg = HumanMessage(content=prompt)
     async with semaphore:
         try:
-            response = await structured_llm.achat([msg])
+            result, usage = await structured_llm([msg])
 
-            prompt_tokens = response.additional_kwargs.get('prompt_tokens', 0) or 0
-            completion_tokens = response.additional_kwargs.get('completion_tokens', 0) or 0
-            cost = response.additional_kwargs.get('cost', 0.0) or 0.0
+            prompt_tokens = usage.get('prompt_tokens', 0) or 0
+            completion_tokens = usage.get('completion_tokens', 0) or 0
+            cost = usage.get('cost', 0.0) or 0.0
             cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
-            return cast(EventLinkOutput, response.raw)
+            return result
         except Exception as ex:
             print(f"  [WARN] LLM link error ({event_a.key} ↔ {event_b.key}): {ex}")
             return None
@@ -370,30 +378,29 @@ Link types:
 - CAUSAL_MICRO               : micro-event A directly causes micro-event B
 - UNRELATED                  : no meaningful connection
 
-Return JSON with: should_link (bool), link_type (str), reason (str).
+Output a JSON object with exactly this structure (no trailing commas):
+{{
+  "should_link": true,
+  "link_type": "SEMANTICALLY_SIMILAR_MICRO",
+  "reason": "A brief explanation"
+}}
+
+Fields:
+- should_link: boolean (true/false)
+- link_type: one of SEMANTICALLY_SIMILAR_MICRO, SHARES_CONTEXT_MICRO, CAUSAL_MICRO, UNRELATED
+- reason: a one-sentence justification
 """
-    msg = ChatMessage(blocks=[TextBlock(text=prompt)])
+    msg = HumanMessage(content=prompt)
     async with semaphore:
         try:
-            response = await structured_llm.achat([msg])
+            result, usage = await structured_llm([msg])
 
-            # Extract usage from raw_response (the original ChatResponse)
-            if hasattr(response, 'raw_response') and response.raw_response is not None:
-                raw_resp = response.raw_response
-                if hasattr(raw_resp, 'raw') and raw_resp.raw and hasattr(raw_resp.raw, 'usage'):
-                    usage = raw_resp.raw.usage
-                    prompt_tokens = getattr(usage, 'prompt_tokens', 0) or 0
-                    completion_tokens = getattr(usage, 'completion_tokens', 0) or 0
-                    cost = getattr(usage, 'cost', 0.0) or 0.0
-                    cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
-                elif hasattr(raw_resp, 'additional_kwargs'):
-                    # Fallback to additional_kwargs if raw.usage not available
-                    prompt_tokens = raw_resp.additional_kwargs.get('prompt_tokens', 0) or 0
-                    completion_tokens = raw_resp.additional_kwargs.get('completion_tokens', 0) or 0
-                    cost = raw_resp.additional_kwargs.get('cost', 0.0) or 0.0
-                    cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
+            prompt_tokens = usage.get('prompt_tokens', 0) or 0
+            completion_tokens = usage.get('completion_tokens', 0) or 0
+            cost = usage.get('cost', 0.0) or 0.0
+            cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
-            return cast(MicroLinkOutput, response.raw)
+            return result
         except Exception as ex:
             print(f"  [WARN] Micro LLM link error ({micro_a.key} ↔ {micro_b.key}): {ex}")
             return None

@@ -1,12 +1,3 @@
-"""Knowledge Graph Pipeline Task.
-
-A single task that runs the entire KG pipeline:
-1. KG Extraction - Extract entities, events, relationships from segment captions
-2. Entity Resolution - Resolve entities globally using hybrid embeddings and LLM
-3. Event Linking - Build event/micro-event nodes and edges
-4. Community Detection - Detect communities using Leiden algorithm
-5. Node2Vec - Train structural embeddings on graph variants
-"""
 from __future__ import annotations
 
 import os
@@ -14,6 +5,7 @@ from typing import Any
 
 from prefect import get_run_logger, task
 from prefect.artifacts import acreate_markdown_artifact
+from pydantic import SecretStr
 
 from video_pipeline.task.base.base_task import TaskConfig, BaseTask
 from video_pipeline.core.client.progress import StageRegistry
@@ -281,10 +273,12 @@ async def kg_pipeline_task(
 
     model = kwargs.get("model", "qwen/qwen3-coder-next")
     base_url = kwargs.get("base_url", "https://openrouter.ai/api/v1")
+    max_tokens = kwargs.get("max_tokens", 8192)  #
     llm_config = OpenRouterConfig(
         model=model,
         base_url=base_url,
-        api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        max_tokens=max_tokens,
+        api_key=SecretStr(os.environ.get("OPENROUTER_API_KEY", "")),
     )
     llm_client = OpenRouterClient(config=llm_config)
 

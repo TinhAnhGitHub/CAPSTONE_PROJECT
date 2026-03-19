@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import cast
 
 from pydantic import BaseModel, Field
-from llama_index.core.llms import ChatMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from .models import CaptionSegment, KGSegment, EntityDoc, MicroEventDoc, RelationshipDoc, CostTracker
 from .prompt import GRAPH_PROMPT
@@ -111,18 +110,17 @@ async def extract_kg_from_segment(
     user_prompt = build_user_prompt(segment)
 
     messages = [
-        ChatMessage(role="system", content=GRAPH_PROMPT),
-        ChatMessage(role="user", content=user_prompt),
+        SystemMessage(content=GRAPH_PROMPT),
+        HumanMessage(content=user_prompt),
     ]
 
     async with semaphore:
         try:
-            response = await as_llm.achat(messages)
-            kg = cast(VideoGraphExtraction, response.raw)
+            kg, usage = await as_llm(messages)
 
-            prompt_tokens = response.additional_kwargs.get('prompt_tokens', 0) or 0
-            completion_tokens = response.additional_kwargs.get('completion_tokens', 0) or 0
-            cost = response.additional_kwargs.get('cost', 0.0) or 0.0
+            prompt_tokens = usage.get('prompt_tokens', 0) or 0
+            completion_tokens = usage.get('completion_tokens', 0) or 0
+            cost = usage.get('cost', 0.0) or 0.0
             cost_tracker.add_usage(prompt_tokens, completion_tokens, cost)
 
             return KGSegment(
