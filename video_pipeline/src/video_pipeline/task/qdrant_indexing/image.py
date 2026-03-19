@@ -53,7 +53,6 @@ class ImageQdrantIndexingTask(BaseTask[list[ImageEmbeddingArtifact], list[str]])
             {
                 "id": artifact.artifact_id,
                 IMAGE_DENSE_FIELD: vector,
-                # payload
                 "frame_index": artifact.frame_index,
                 "timestamp": artifact.timestamp,
                 "timestamp_sec": artifact.timestamp_sec,

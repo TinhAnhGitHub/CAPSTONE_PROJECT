@@ -1,12 +1,7 @@
-"""Audio Transcript Qdrant indexing task.
-
-Indexes audio transcript embeddings into Qdrant for semantic search
-over spoken content extracted from ASR.
-"""
-
 from __future__ import annotations
 
 from prefect import get_run_logger, task
+from qdrant_client.models import SparseVector
 
 from video_pipeline.core.artifact import AudioTranscriptEmbedArtifact
 from video_pipeline.core.client.progress import StageRegistry
@@ -17,38 +12,24 @@ from video_pipeline.task.base.base_task import BaseTask
 from video_pipeline.task.qdrant_indexing.config import (
     AUDIO_TRANSCRIPT_QDRANT_INDEXING_CONFIG,
     AUDIO_TRANSCRIPT_DENSE_FIELD,
+    AUDIO_TRANSCRIPT_SPARSE_FIELD,
     build_audio_transcript_collection_name,
     get_audio_transcript_index_configs,
 )
 from video_pipeline.task.qdrant_indexing.utils import (
     load_npy_from_minio,
     make_qdrant_client,
+    encode_sparse_vectors,
     create_summary_artifact,
 )
 
 
-AudioTranscriptPreprocessed = tuple[AudioTranscriptEmbedArtifact, list[float]]
+AudioTranscriptPreprocessed = tuple[AudioTranscriptEmbedArtifact, list[float], SparseVector, str]
 
 
 @StageRegistry.register
 class AudioTranscriptQdrantIndexingTask(BaseTask[list[AudioTranscriptEmbedArtifact], list[str]]):
-    """Index audio transcript embeddings into Qdrant as dense vectors.
-
-    This task indexes AudioTranscriptEmbedArtifact objects into Qdrant,
-    enabling semantic similarity search over spoken content from ASR.
-
-    The embeddings are stored as dense vectors (768-dim from mmBERT),
-    with payload metadata for retrieval and filtering.
-
-    Pipeline Position:
-        Runs after AudioTranscriptEmbedding.
-        Input: AudioTranscriptEmbedArtifact
-        Output: List of Qdrant point IDs
-
-    Collection Schema:
-        - Vector: audio_transcript_dense (768-dim, COSINE)
-        - Payload: segment_index, timestamps, video_id, user_id, audio_text preview
-    """
+    """Index audio transcript embeddings into Qdrant as dense vectors."""
 
     config = AUDIO_TRANSCRIPT_QDRANT_INDEXING_CONFIG
 
@@ -68,14 +49,22 @@ class AudioTranscriptQdrantIndexingTask(BaseTask[list[AudioTranscriptEmbedArtifa
             f"[AudioTranscriptQdrantIndexingTask] Downloading {len(input_data)} embedding(s) from MinIO"
         )
 
-        preprocessed = []
+        items_with_vectors = []
+        texts_for_sparse = []
         for artifact in input_data:
             assert artifact.object_name, (
                 f"AudioTranscriptEmbedArtifact {artifact.artifact_id} has no object_name"
             )
             vector = load_npy_from_minio(self.minio_client, artifact.user_id, artifact.object_name)
-            preprocessed.append((artifact, vector))
-
+            audio_text = artifact.audio_text
+            texts_for_sparse.append(audio_text)
+            items_with_vectors.append((artifact, vector))
+        
+        sparse_vectors = encode_sparse_vectors(texts_for_sparse)
+        preprocessed = [
+            (art, vec, sparse_vec, art.audio_text)
+            for (art, vec), sparse_vec in zip(items_with_vectors, sparse_vectors)
+        ]
         logger.info(
             f"[AudioTranscriptQdrantIndexingTask] Preprocessing done — {len(preprocessed)} vector(s) ready"
         )
@@ -105,7 +94,8 @@ class AudioTranscriptQdrantIndexingTask(BaseTask[list[AudioTranscriptEmbedArtifa
             {
                 "id": artifact.artifact_id,
                 AUDIO_TRANSCRIPT_DENSE_FIELD: vector,
-                # payload
+                AUDIO_TRANSCRIPT_SPARSE_FIELD: sparse_vec,
+
                 "related_audio_segment_artifact_id": artifact.related_audio_segment_artifact_id,
                 "related_video_id": artifact.related_video_id,
                 "segment_index": artifact.segment_index,
@@ -118,9 +108,9 @@ class AudioTranscriptQdrantIndexingTask(BaseTask[list[AudioTranscriptEmbedArtifa
                 "embedding_dim": artifact.embedding_dim,
                 "user_id": artifact.user_id,
                 "minio_url": artifact.minio_url_path,
-                "audio_text": artifact.audio_text,
+                "audio_text": audio_text,
             }
-            for artifact, vector in preprocessed
+            for artifact, vector, sparse_vec, audio_text in preprocessed
         ]
 
         inserted_ids = await client.insert_vectors(data)
@@ -144,7 +134,6 @@ class AudioTranscriptQdrantIndexingTask(BaseTask[list[AudioTranscriptEmbedArtifa
             points_count=len(final_result),
             extra_info={"Embedding Type": "Dense (mmBERT 768-dim)", "Source": "ASR Transcript"},
         )
-
 
 @task(
     **{**AUDIO_TRANSCRIPT_QDRANT_INDEXING_CONFIG.to_task_kwargs(), "name": "Audio Transcript Qdrant Indexing Chunk"}  # type: ignore

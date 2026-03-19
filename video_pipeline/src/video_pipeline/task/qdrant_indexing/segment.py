@@ -90,7 +90,7 @@ class SegmentQdrantIndexingTask(BaseTask[list[SegmentEmbeddingArtifact], list[st
         )
 
 
-@task(**{**SEGMENT_QDRANT_INDEXING_CONFIG.to_task_kwargs(), "name": "Segment Qdrant Indexing Chunk"})
+@task(**{**SEGMENT_QDRANT_INDEXING_CONFIG.to_task_kwargs(), "name": "Segment Qdrant Indexing Chunk"}) #type:ignore
 async def segment_qdrant_indexing_chunk_task(items: list[SegmentEmbeddingArtifact]) -> list[str]:
     """Index a batch of segment embeddings into Qdrant."""
     from video_pipeline.config import get_settings
