@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from typing import cast
 import re
 from PIL import Image as PILImage
 import numpy as np
@@ -9,7 +10,7 @@ from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
 
 from video_pipeline.task.base.base_task import TaskConfig, BaseTask
 from video_pipeline.core.client.progress import StageRegistry
-from video_pipeline.core.artifact import ImageArtifact, ImageEmbeddingArtifact
+from video_pipeline.core.artifact import ImageCaptionArtifact, ImageEmbeddingArtifact
 from video_pipeline.core.storage.pg_tracker import ArtifactPersistentVisitor
 from video_pipeline.core.client.storage.minio import MinioStorageClient
 from video_pipeline.core.client.storage.pg.runtime import get_postgres_client, shutdown_postgres_client
@@ -20,33 +21,26 @@ from video_pipeline.config import get_settings
 IMAGE_EMBEDDING_CONFIG = TaskConfig.from_yaml("image_embedding")
 _base_kwargs = IMAGE_EMBEDDING_CONFIG.to_task_kwargs()
 
-_PreprocessedItem = tuple[ImageArtifact, bytes]
+_PreprocessedItem = tuple[ImageCaptionArtifact, bytes]
 
 
 @StageRegistry.register
-class ImageEmbeddingTask(BaseTask[list[ImageArtifact], list[ImageEmbeddingArtifact]]):
-    """Embed extracted frames using QwenVL embedding model in batch.
-
-    preprocess() downloads image bytes for the batch from MinIO once.
-    execute_single() sends the whole batch to QwenVL concurrently and builds embedding artifacts.
-    postprocess() uploads embedding .npy files to MinIO and persists to Postgres.
-    """
+class ImageEmbeddingTask(BaseTask[list[ImageCaptionArtifact], list[ImageEmbeddingArtifact]]):
+    """Embed images with their captions using QwenVL multimodal embedding."""
 
     config = IMAGE_EMBEDDING_CONFIG
 
-    async def preprocess(self, input_data: list[ImageArtifact]) -> list[_PreprocessedItem]:
-        """Download image bytes for every artifact in the batch."""
+    async def preprocess(self, input_data: list[ImageCaptionArtifact]) -> list[_PreprocessedItem]:
         logger = get_run_logger()
         logger.info(f"[ImageEmbeddingTask] Downloading {len(input_data)} image(s) from MinIO")
 
         preprocessed: list[_PreprocessedItem] = []
         for artifact in input_data:
-            assert artifact.object_name is not None, (
-                f"ImageArtifact {artifact.artifact_id} has no object_name"
-            )
+            prefix = f"s3://{artifact.user_id}/"
+            image_object_name = artifact.image_minio_url.removeprefix(prefix)
             image_bytes = self.minio_client.get_object_bytes(
                 bucket=artifact.user_id,
-                object_name=artifact.object_name,
+                object_name=image_object_name,
             )
             preprocessed.append((artifact, image_bytes))
 
@@ -58,60 +52,77 @@ class ImageEmbeddingTask(BaseTask[list[ImageArtifact], list[ImageEmbeddingArtifa
         preprocessed: list[_PreprocessedItem],
         client: QwenVLEmbeddingClient,
     ) -> list[tuple[ImageEmbeddingArtifact, bytes]]:
-        """Embed a batch of image frames via QwenVL concurrently.
+        """Embed each image + caption pair via QwenVL.
+
+        Uses _infer_single_image with the caption text to produce a true
+        multimodal embedding that combines visual and textual information.
 
         Args:
-            item: list of (ImageArtifact, frame_bytes) — the full batch.
+            preprocessed: list of (ImageCaptionArtifact, image_bytes).
             client: QwenVL embedding client.
-            context: Task execution context.
 
         Returns:
             list of (ImageEmbeddingArtifact, npy_bytes) ready for postprocess.
         """
         logger = get_run_logger()
-        logger.info(f"[ImageEmbeddingTask] Batch embedding {len(preprocessed)} frame(s)")
+        logger.info(f"[ImageEmbeddingTask] Embedding {len(preprocessed)} image(s) with captions")
 
-        
-        def _to_jpeg(data: bytes, size: int = 640) -> bytes:
-            buf = io.BytesIO()
-            img = PILImage.open(io.BytesIO(data)).convert("RGB")
-            img = img.resize((size, size), PILImage.Resampling.LANCZOS)
-            img.save(buf, format="JPEG", quality=90)
-            return buf.getvalue()
+        import asyncio
 
-        image_bytes_list = [_to_jpeg(frame_bytes) for _, frame_bytes in preprocessed]
-        embeddings: list[list[float]] = await client.ainfer_image(image_bytes_list)
+        async def embed_single(
+            caption_artifact: ImageCaptionArtifact, image_bytes: bytes
+        ) -> tuple[ImageEmbeddingArtifact, bytes] | None:
+            def _to_jpeg(data: bytes, size: int = 640) -> bytes:
+                buf = io.BytesIO()
+                img = PILImage.open(io.BytesIO(data)).convert("RGB")
+                img = img.resize((size, size), PILImage.Resampling.LANCZOS)
+                img.save(buf, format="JPEG", quality=90)
+                return buf.getvalue()
 
-        output: list[tuple[ImageEmbeddingArtifact, bytes]] = []
-        for (image_artifact, _), embedding_vector in zip(preprocessed, embeddings):
+            jpeg_bytes = _to_jpeg(image_bytes)
+            caption_text = cast(dict, caption_artifact.metadata)['caption']
+
+            embedding_vector = await client._infer_single_image(jpeg_bytes, text=caption_text)
+
+            if not embedding_vector:
+                logger.warning(f"No embedding for frame {caption_artifact.frame_index}")
+                return None
+
             logger.info(
-                f"[ImageEmbeddingTask] Embedding done | frame={image_artifact.frame_index} "
+                f"[ImageEmbeddingTask] Done | frame={caption_artifact.frame_index} "
                 f"dim={len(embedding_vector)}"
             )
-
             artifact = ImageEmbeddingArtifact(
-                frame_index=image_artifact.frame_index,
-                timestamp=image_artifact.timestamp,
-                timestamp_sec=image_artifact.timestamp_sec,
-                related_video_id=image_artifact.related_video_id,
-                related_video_fps=image_artifact.related_video_fps,
-                image_minio_url=image_artifact.minio_url_path,
+                caption_text=cast(dict, caption_artifact.metadata)['caption'],
+                frame_index=caption_artifact.frame_index,
+                timestamp=caption_artifact.timestamp,
+                timestamp_sec=caption_artifact.timestamp_sec,
+                related_video_id=caption_artifact.related_video_id,
+                related_video_fps=caption_artifact.related_video_fps,
+                image_minio_url=caption_artifact.image_minio_url,
                 extension=".npy",
-                image_id=image_artifact.artifact_id,
-                user_id=image_artifact.user_id,
+                image_id=caption_artifact.image_id,
+                user_id=caption_artifact.user_id,
                 object_name=(
-                    f"embedding/image/{image_artifact.related_video_id}/"
-                    f"{image_artifact.frame_index:08d}_{image_artifact.timestamp}.npy"
+                    f"embedding/image/{caption_artifact.related_video_id}/"
+                    f"{caption_artifact.frame_index:08d}_{caption_artifact.timestamp}.npy"
                 ),
-                metadata={"embedding_dim": len(embedding_vector)},
+                metadata={
+                    "embedding_dim": len(embedding_vector),
+                    "caption_preview": caption_text[:100] if caption_text else "",
+                },
             )
 
             npy_buffer = io.BytesIO()
             np.save(npy_buffer, np.array(embedding_vector, dtype=np.float32))
             npy_bytes = npy_buffer.getvalue()
 
-            output.append((artifact, npy_bytes))
+            return (artifact, npy_bytes)
 
+        tasks = [embed_single(artifact, img_bytes) for artifact, img_bytes in preprocessed]
+        results = await asyncio.gather(*tasks)
+
+        output = [r for r in results if r is not None]
         logger.info(f"[ImageEmbeddingTask] Batch done — {len(output)} embedding(s) produced")
         return output
 
@@ -145,15 +156,15 @@ class ImageEmbeddingTask(BaseTask[list[ImageArtifact], list[ImageEmbeddingArtifa
             )
 
         markdown = (
-f"# Image Embedding Summary\n\n"
+f"# Image Embedding Summary (Multimodal)\n\n"
 f"| Field | Value |\n"
 f"|-------|-------|\n"
 f"| **Video ID** | `{video_id}` |\n"
 f"| **User ID** | `{first.user_id}` |\n"
 f"| **FPS** | `{first.related_video_fps}` |\n"
-f"| **Frames Embedded** | `{len(final_result)}` |\n"
+f"| **Frames Embedded** | `{len(final_result)} |\n"
 f"| **Embedding Dim** | `{embedding_dim}` |\n\n"
-f"## Embedded Frames\n\n"
+f"## Embedded Frames (Image + Caption)\n\n"
 f"| Frame | Timestamp | Embedding (.npy) |\n"
 f"|-------|-----------|------------------|\n"
 f"{frame_rows}"
@@ -193,16 +204,15 @@ f"{frame_rows}"
 
 @task(**{**_base_kwargs, "name": "Image Embedding Chunk"})  # type: ignore
 async def image_embedding_chunk_task(
-    items: list[ImageArtifact],
+    items: list[ImageCaptionArtifact],
 ) -> list[ImageEmbeddingArtifact]:
-    """Embed a batch of image frames using ImageEmbeddingTask.execute().
+    """Embed a batch of images with captions using ImageEmbeddingTask.
 
-    Downloads image bytes in preprocess(), then calls execute_single() once with
-    the whole batch, embedding all frames concurrently via QwenVL.
+    Takes ImageCaptionArtifacts (image + caption), downloads images, and creates
+    multimodal embeddings that combine visual and textual information.
 
     Args:
-        items: Batch of ImageArtifacts to embed.
-        context: Task execution context.
+        items: Batch of ImageCaptionArtifacts to embed.
 
     Returns:
         List of ImageEmbeddingArtifacts, one per frame in the batch.
