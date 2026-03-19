@@ -1,37 +1,19 @@
-"""Qdrant indexing tasks for video pipeline.
-
-This module provides tasks for indexing various embedding artifacts into Qdrant:
-
-- Image embeddings (dense only)
-- Caption embeddings (hybrid: dense + sparse)
-- Segment embeddings (dense only)
-- Segment caption embeddings (hybrid: dense + sparse)
-- Audio transcript embeddings (dense only)
-
-Usage:
-    from video_pipeline.task.qdrant_indexing import (
-        image_qdrant_indexing_chunk_task,
-        caption_qdrant_indexing_chunk_task,
-        segment_qdrant_indexing_chunk_task,
-        segment_caption_qdrant_indexing_chunk_task,
-        audio_transcript_qdrant_indexing_chunk_task,
-    )
-"""
-
 from video_pipeline.task.qdrant_indexing.config import (
     QDRANT_INDEXING_CONFIG,
     BASE_KWARGS,
     ADDITIONAL_KWARGS,
     IMAGE_DENSE_FIELD,
-    CAPTION_TEXT_DENSE_FIELD,
-    CAPTION_MM_DENSE_FIELD,
-    CAPTION_SPARSE_FIELD,
     SEGMENT_DENSE_FIELD,
     AUDIO_TRANSCRIPT_DENSE_FIELD,
+    IMAGE_CAPTION_DENSE_FIELD,
+    IMAGE_CAPTION_SPARSE_FIELD,
+    SEGMENT_CAPTION_DENSE_FIELD,
+    SEGMENT_CAPTION_SPARSE_FIELD,
     build_image_collection_name,
-    build_caption_collection_name,
     build_segment_collection_name,
     build_audio_transcript_collection_name,
+    build_image_caption_collection_name,
+    build_segment_caption_collection_name,
 )
 
 from video_pipeline.task.qdrant_indexing.image import (
@@ -39,24 +21,24 @@ from video_pipeline.task.qdrant_indexing.image import (
     image_qdrant_indexing_chunk_task,
 )
 
-from video_pipeline.task.qdrant_indexing.caption import (
-    CaptionQdrantIndexingTask,
-    caption_qdrant_indexing_chunk_task,
-)
-
 from video_pipeline.task.qdrant_indexing.segment import (
     SegmentQdrantIndexingTask,
     segment_qdrant_indexing_chunk_task,
 )
 
-from video_pipeline.task.qdrant_indexing.segment_caption import (
-    SegmentCaptionQdrantIndexingTask,
-    segment_caption_qdrant_indexing_chunk_task,
-)
-
 from video_pipeline.task.qdrant_indexing.audio_transcript import (
     AudioTranscriptQdrantIndexingTask,
     audio_transcript_qdrant_indexing_chunk_task,
+)
+
+from video_pipeline.task.qdrant_indexing.image_caption import (
+    ImageCaptionQdrantIndexingTask,
+    image_caption_qdrant_indexing_chunk_task,
+)
+
+from video_pipeline.task.qdrant_indexing.segment_caption import (
+    SegmentCaptionQdrantIndexingTask,
+    segment_caption_qdrant_indexing_chunk_task,
 )
 
 
@@ -66,25 +48,27 @@ __all__ = [
     "BASE_KWARGS",
     "ADDITIONAL_KWARGS",
     "IMAGE_DENSE_FIELD",
-    "CAPTION_TEXT_DENSE_FIELD",
-    "CAPTION_MM_DENSE_FIELD",
-    "CAPTION_SPARSE_FIELD",
     "SEGMENT_DENSE_FIELD",
     "AUDIO_TRANSCRIPT_DENSE_FIELD",
-    # Collection builders
+    "IMAGE_CAPTION_DENSE_FIELD",
+    "IMAGE_CAPTION_SPARSE_FIELD",
+    "SEGMENT_CAPTION_DENSE_FIELD",
+    "SEGMENT_CAPTION_SPARSE_FIELD",
+
     "build_image_collection_name",
-    "build_caption_collection_name",
     "build_segment_collection_name",
     "build_audio_transcript_collection_name",
-    # Tasks
+    "build_image_caption_collection_name",
+    "build_segment_caption_collection_name",
+
     "ImageQdrantIndexingTask",
     "image_qdrant_indexing_chunk_task",
-    "CaptionQdrantIndexingTask",
-    "caption_qdrant_indexing_chunk_task",
     "SegmentQdrantIndexingTask",
     "segment_qdrant_indexing_chunk_task",
-    "SegmentCaptionQdrantIndexingTask",
-    "segment_caption_qdrant_indexing_chunk_task",
     "AudioTranscriptQdrantIndexingTask",
     "audio_transcript_qdrant_indexing_chunk_task",
+    "ImageCaptionQdrantIndexingTask",
+    "image_caption_qdrant_indexing_chunk_task",
+    "SegmentCaptionQdrantIndexingTask",
+    "segment_caption_qdrant_indexing_chunk_task",
 ]
