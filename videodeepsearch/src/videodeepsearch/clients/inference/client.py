@@ -11,7 +11,7 @@ import httpx
 import numpy as np
 from loguru import logger
 
-from videodeepsearch.clients.inference.schema import MMBertConfig, QwenVLEmbeddingConfig
+from videodeepsearch.clients.inference.schema import MMBertConfig, QwenVLEmbeddingConfig, SpladeConfig
 
 
 class QwenVLEmbeddingClient:
@@ -241,7 +241,161 @@ class MMBertClient:
         return list(await asyncio.gather(*tasks))
 
 
+class SpladeClient:
+    """Client for SPLADE sparse embeddings via Triton Inference Server.
+
+    SPLADE produces sparse vectors suitable for hybrid search with Qdrant.
+    Uses gRPC protocol to communicate with Triton.
+    """
+
+    def __init__(self, config: SpladeConfig):
+        """Initialize the SPLADE client.
+
+        Args:
+            config: Configuration with url, model_name, timeout, etc.
+        """
+        from tritonclient.grpc import InferenceServerClient
+
+        self.config = config
+        self._client: InferenceServerClient | None = None
+
+    def _get_client(self):
+        """Get or create the Triton gRPC client."""
+        if self._client is None:
+            from tritonclient.grpc import InferenceServerClient
+
+            self._client = InferenceServerClient(
+                url=self.config.url,
+                verbose=self.config.verbose,
+            )
+        return self._client
+
+    def close(self) -> None:
+        """Close the Triton client."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
+    def __enter__(self) -> "SpladeClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def check_health(self) -> bool:
+        """Check if Triton server is live and model is ready.
+
+        Returns:
+            True if healthy, False otherwise
+        """
+        try:
+            client = self._get_client()
+
+            if not client.is_server_live():
+                logger.error("[SpladeClient] Triton server is not live")
+                return False
+
+            if not client.is_model_ready(self.config.model_name):
+                logger.error(
+                    f"[SpladeClient] Model '{self.config.model_name}' is not ready"
+                )
+                return False
+
+            logger.success(
+                f"[SpladeClient] Triton server healthy, model '{self.config.model_name}' ready"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"[SpladeClient] Health check failed: {e}")
+            return False
+
+    def _encode_batch(self, texts: list[str]) -> list[dict[int, float]]:
+        """Encode a single batch of texts to sparse vectors.
+
+        Args:
+            texts: List of texts (must be <= max_batch_size)
+
+        Returns:
+            List of sparse vectors as {token_index: value}
+        """
+        import pickle
+        from tritonclient.grpc import InferInput, InferRequestedOutput
+
+        if not texts:
+            return []
+
+        client = self._get_client()
+
+        text_input = InferInput("TEXT", [len(texts), 1], "BYTES")
+        text_input.set_data_from_numpy(np.array([[t] for t in texts], dtype=object))
+
+        outputs = [
+            InferRequestedOutput("INDICES"),
+            InferRequestedOutput("VALUES"),
+        ]
+
+        result = client.infer(
+            model_name=self.config.model_name,
+            inputs=[text_input],
+            outputs=outputs,
+            timeout=self.config.timeout,
+        )
+
+        indices_batch = result.as_numpy("INDICES")
+        values_batch = result.as_numpy("VALUES")
+
+        sparse_vectors: list[dict[int, float]] = []
+        for i in range(len(texts)):
+            indices = pickle.loads(indices_batch[i]).tolist()
+            values = pickle.loads(values_batch[i]).tolist()
+            # Convert to {index: value} format for Qdrant
+            sparse_vectors.append({int(idx): float(val) for idx, val in zip(indices, values)})
+
+        return sparse_vectors
+
+    def encode(self, texts: list[str]) -> list[dict[int, float]]:
+        """Encode texts to sparse vectors, handling batching.
+
+        Args:
+            texts: List of text strings
+
+        Returns:
+            List of sparse vectors as {token_index: value}
+        """
+        if not texts:
+            return []
+
+        max_batch = self.config.max_batch_size
+
+        if len(texts) <= max_batch:
+            return self._encode_batch(texts)
+
+        all_vectors: list[dict[int, float]] = []
+        for i in range(0, len(texts), max_batch):
+            batch = texts[i : i + max_batch]
+            batch_vectors = self._encode_batch(batch)
+            all_vectors.extend(batch_vectors)
+
+        logger.debug(
+            f"[SpladeClient] Encoded {len(texts)} text(s) in {(len(texts) + max_batch - 1) // max_batch} batch(es)"
+        )
+        return all_vectors
+
+    async def aencode(self, texts: list[str]) -> list[dict[int, float]]:
+        """Async wrapper for encode.
+
+        Args:
+            texts: List of text strings
+
+        Returns:
+            List of sparse vectors as {token_index: value}
+        """
+        return self.encode(texts)
+
+
 __all__ = [
     "QwenVLEmbeddingClient",
     "MMBertClient",
+    "SpladeClient",
 ]
