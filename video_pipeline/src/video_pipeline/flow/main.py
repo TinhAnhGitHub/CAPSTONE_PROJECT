@@ -23,33 +23,25 @@ from video_pipeline.task.image_caption_embedding.main import (
     ImageCaptionEmbeddingTask,
     image_caption_embedding_chunk_task,
 )
-from video_pipeline.task.image_caption_multimodal_embedding.main import (
-    ImageCaptionMultimodalEmbeddingTask,
-    image_caption_multimodal_embedding_chunk_task,
-)
 from video_pipeline.task.image_embedding.main import ImageEmbeddingTask, image_embedding_chunk_task
 from video_pipeline.task.image_extraction.main import ImageExtractionTask, image_chunk_task
 from video_pipeline.task.ocr_indexing.main import OCRIndexingTask, ocr_indexing_chunk_task
 from video_pipeline.task.qdrant_indexing import (
-    CaptionQdrantIndexingTask,
     ImageQdrantIndexingTask,
-    SegmentCaptionQdrantIndexingTask,
     SegmentQdrantIndexingTask,
     AudioTranscriptQdrantIndexingTask,
-    caption_qdrant_indexing_chunk_task,
+    ImageCaptionQdrantIndexingTask,
+    SegmentCaptionQdrantIndexingTask,
     image_qdrant_indexing_chunk_task,
-    segment_caption_qdrant_indexing_chunk_task,
     segment_qdrant_indexing_chunk_task,
     audio_transcript_qdrant_indexing_chunk_task,
+    image_caption_qdrant_indexing_chunk_task,
+    segment_caption_qdrant_indexing_chunk_task,
 )
 from video_pipeline.task.segment_caption.main import SegmentCaptionTask, segment_caption_chunk_task
 from video_pipeline.task.segment_caption_embedding.main import (
     SegmentCaptionEmbeddingTask,
     segment_caption_embedding_chunk_task,
-)
-from video_pipeline.task.segment_caption_multimodal_embedding.main import (
-    SegmentCaptionMultimodalEmbeddingTask,
-    segment_caption_multimodal_embedding_chunk_task,
 )
 from video_pipeline.task.segment_embedding.main import (
     SegmentEmbeddingTask,
@@ -72,8 +64,6 @@ from video_pipeline.task.autoshot.main import AutoshotArtifact
 
 @dataclass
 class TimingRecord:
-    """Records timing information for a single task/stage."""
-
     name: str
     start_time: float = 0.0
     end_time: float = 0.0
@@ -136,7 +126,6 @@ async def run_video_registration(
         t.stop()
     return video_artifact
 
-
 async def run_autoshot(
     video_artifact: VideoArtifact,
     tracker: HTTPProgressTracker | None,
@@ -154,7 +143,6 @@ async def run_autoshot(
         t.stop()
     return shot_result, shots_fut
 
-
 async def run_preprocess(
     shot_result: AutoshotArtifact,
     shots_fut: Any,
@@ -167,7 +155,6 @@ async def run_preprocess(
         asr_batches, image_batches = preprocess_fut.result()  # type: ignore
         t.stop()
     return asr_batches, image_batches
-
 
 async def run_asr(
     asr_batches: list,
@@ -188,7 +175,6 @@ async def run_asr(
         t.stop()
     return asr_results, asr_batch_futures
 
-
 async def run_audio_segment(
     asr_results: list,
     tracker: HTTPProgressTracker | None,
@@ -207,18 +193,17 @@ async def run_audio_segment(
 
 
 async def run_segment_embedding(
-    segment_batches: list,
-    audio_segment_results: list,
+    segment_caption_batches: list,
+    segment_caption_results: list,
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
 ) -> tuple[list, Any]:
-    """Stage 6a: Generate segment embeddings."""
+    """Stage 6a: Generate segment embeddings (multimodal: frames + caption)."""
     with timing.record("Segment Embedding") as t:
         t.start()
         segment_embedding_futures = segment_embedding_chunk_task.map(  # type: ignore
-            segment_batches,
-            wait_for=[audio_segment_task],
+            segment_caption_batches,
         )
         segment_embedding_results = [
             a for batch in segment_embedding_futures.result() for a in batch
@@ -242,7 +227,6 @@ async def run_segment_caption(
         t.start()
         segment_caption_futures = segment_caption_chunk_task.map(  # type: ignore
             segment_batches,
-            wait_for=[audio_segment_task],
         )
         segment_caption_results = [a for batch in segment_caption_futures.result() for a in batch]
         await SegmentCaptionTask.summary_artifact(segment_caption_results)
@@ -292,7 +276,6 @@ async def run_audio_transcript_embedding(
         t.start()
         audio_transcript_embedding_futures = audio_transcript_embedding_chunk_task.map(  # type: ignore
             segment_batches,
-            wait_for=[audio_segment_task],
         )
         audio_transcript_embedding_results = [
             a for batch in audio_transcript_embedding_futures.result() for a in batch
@@ -356,37 +339,6 @@ async def run_segment_caption_embedding(
     return segment_caption_embedding_results, segment_caption_embedding_futures
 
 
-async def run_segment_caption_multimodal_embedding(
-    segment_caption_batches: list,
-    segment_caption_futures: Any,
-    tracker: HTTPProgressTracker | None,
-    video_id: str,
-    timing: TimingRegistry,
-) -> tuple[list, Any]:
-    """Stage 7b: Generate segment caption multimodal embeddings."""
-    with timing.record("Segment Caption MM Embedding") as t:
-        t.start()
-        segment_caption_multimodal_embedding_futures = (
-            segment_caption_multimodal_embedding_chunk_task.map(  # type: ignore
-                segment_caption_batches,
-                wait_for=segment_caption_futures,
-            )
-        )
-        segment_caption_multimodal_embedding_results = [
-            a for batch in segment_caption_multimodal_embedding_futures.result() for a in batch
-        ]
-        await SegmentCaptionMultimodalEmbeddingTask.summary_artifact(
-            segment_caption_multimodal_embedding_results
-        )
-        if tracker:
-            await tracker.complete_stage(video_id, SegmentCaptionMultimodalEmbeddingTask.__name__)
-        t.stop()
-    return (
-        segment_caption_multimodal_embedding_results,
-        segment_caption_multimodal_embedding_futures,
-    )
-
-
 async def run_image_extraction(
     image_batches: list,
     preprocess_fut: Any,
@@ -432,18 +384,18 @@ async def run_image_caption_ocr(
 
 
 async def run_image_embedding(
-    analysis_batches: list,
-    image_batch_futures: Any,
+    caption_batches: list,
+    caption_ocr_batch_futures: Any,
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
 ) -> tuple[list, Any]:
-    """Stage 8b: Generate image embeddings."""
+    """Stage 8b: Generate image embeddings (multimodal: image + caption)."""
     with timing.record("Image Embedding") as t:
         t.start()
         embedding_batch_futures = image_embedding_chunk_task.map(  # type: ignore
-            analysis_batches,
-            wait_for=[image_batch_futures],
+            caption_batches,
+            wait_for=[caption_ocr_batch_futures],
         )
         embedding_results = [a for batch in embedding_batch_futures.result() for a in batch]
         await ImageEmbeddingTask.summary_artifact(embedding_results)
@@ -525,97 +477,52 @@ async def run_image_caption_embedding(
     return caption_embedding_results, caption_embedding_futures
 
 
-async def run_image_caption_multimodal_embedding(
-    caption_mm_batches: list,
-    caption_batch_futures: Any,
+async def run_image_caption_qdrant_indexing(
+    caption_embedding_results: list,
+    caption_embedding_futures: Any,
+    batch_size: int,
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
 ) -> tuple[list, Any]:
-    """Stage 9b: Generate image caption multimodal embeddings."""
-    with timing.record("Image Caption MM Embedding") as t:
+    """Stage 10b: Index image caption text embeddings into Qdrant."""
+    with timing.record("Image Caption Qdrant Indexing") as t:
         t.start()
-        caption_multimodal_embedding_futures = image_caption_multimodal_embedding_chunk_task.map(  # type: ignore
-            caption_mm_batches,
-            wait_for=[caption_batch_futures],
+        caption_index_batches = make_batches(caption_embedding_results, batch_size)
+        caption_index_futures = image_caption_qdrant_indexing_chunk_task.map(  # type: ignore
+            caption_index_batches,
+            wait_for=caption_embedding_futures,
         )
-        caption_multimodal_embedding_results = [
-            a for batch in caption_multimodal_embedding_futures.result() for a in batch
-        ]
-        await ImageCaptionMultimodalEmbeddingTask.summary_artifact(
-            caption_multimodal_embedding_results
-        )
+        caption_index_ids = [uid for batch in caption_index_futures.result() for uid in batch]
+        await ImageCaptionQdrantIndexingTask.summary_artifact(caption_index_ids)
         if tracker:
-            await tracker.complete_stage(video_id, ImageCaptionMultimodalEmbeddingTask.__name__)
+            await tracker.complete_stage(video_id, ImageCaptionQdrantIndexingTask.__name__)
         t.stop()
-    return caption_multimodal_embedding_results, caption_multimodal_embedding_futures
+    return caption_index_ids, caption_index_futures
 
 
 async def run_segment_caption_qdrant_indexing(
     segment_caption_embedding_results: list,
-    segment_caption_multimodal_embedding_results: list,
     segment_caption_embedding_futures: Any,
-    segment_caption_multimodal_embedding_futures: Any,
-    segment_batch_size: int,
+    batch_size: int,
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
-) -> list:
-    """Stage 11: Index segment caption embeddings in Qdrant."""
+) -> tuple[list, Any]:
+    """Stage 11b: Index segment caption text embeddings into Qdrant."""
     with timing.record("Segment Caption Qdrant Indexing") as t:
         t.start()
-        segment_caption_index_text_batches = make_batches(
-            segment_caption_embedding_results, segment_batch_size
+        caption_index_batches = make_batches(segment_caption_embedding_results, batch_size)
+        caption_index_futures = segment_caption_qdrant_indexing_chunk_task.map(  # type: ignore
+            caption_index_batches,
+            wait_for=segment_caption_embedding_futures,
         )
-        segment_caption_index_mm_batches = make_batches(
-            segment_caption_multimodal_embedding_results, segment_batch_size
-        )
-        segment_caption_index_futures = segment_caption_qdrant_indexing_chunk_task.map(  # type: ignore
-            segment_caption_index_text_batches,
-            segment_caption_index_mm_batches,
-            wait_for=[
-                segment_caption_embedding_futures,
-                segment_caption_multimodal_embedding_futures,
-            ],
-        )
-        segment_caption_index_ids = [
-            uid for batch in segment_caption_index_futures.result() for uid in batch
-        ]
-        await SegmentCaptionQdrantIndexingTask.summary_artifact(segment_caption_index_ids)
+        caption_index_ids = [uid for batch in caption_index_futures.result() for uid in batch]
+        await SegmentCaptionQdrantIndexingTask.summary_artifact(caption_index_ids)
         if tracker:
             await tracker.complete_stage(video_id, SegmentCaptionQdrantIndexingTask.__name__)
         t.stop()
-    return segment_caption_index_ids
-
-
-async def run_caption_qdrant_indexing(
-    caption_embedding_results: list,
-    caption_multimodal_embedding_results: list,
-    caption_embedding_futures: Any,
-    caption_multimodal_embedding_futures: Any,
-    analysis_batch_size: int,
-    tracker: HTTPProgressTracker | None,
-    video_id: str,
-    timing: TimingRegistry,
-) -> list:
-    """Stage 11: Index image caption embeddings in Qdrant."""
-    with timing.record("Caption Qdrant Indexing") as t:
-        t.start()
-        caption_index_text_batches = make_batches(caption_embedding_results, analysis_batch_size)
-        caption_index_mm_batches = make_batches(
-            caption_multimodal_embedding_results, analysis_batch_size
-        )
-        caption_index_futures = caption_qdrant_indexing_chunk_task.map(  # type: ignore
-            caption_index_text_batches,
-            caption_index_mm_batches,
-            wait_for=[caption_embedding_futures, caption_multimodal_embedding_futures],
-        )
-        caption_index_ids = [uid for batch in caption_index_futures.result() for uid in batch]
-        await CaptionQdrantIndexingTask.summary_artifact(caption_index_ids)
-        if tracker:
-            await tracker.complete_stage(video_id, CaptionQdrantIndexingTask.__name__)
-        t.stop()
-    return caption_index_ids
+    return caption_index_ids, caption_index_futures
 
 
 async def run_kg_pipeline(
@@ -671,7 +578,7 @@ async def run_audio_branch(
 ) -> dict[str, Any]:
     """
     Run the complete audio/segment branch:
-    ASR → AudioSegment → SegmentEmbedding/Caption/AudioTranscriptEmbedding → Embeddings → Qdrant indexing
+    ASR → AudioSegment → SegmentCaption → SegmentEmbedding (multimodal) / AudioTranscriptEmbedding → Qdrant indexing
     """
     asr_results, asr_batch_futures = await run_asr(
         asr_batches, preprocess_fut, tracker, video_id, timing
@@ -682,18 +589,19 @@ async def run_audio_branch(
     segment_batch_size: int = 5
     segment_batches = make_batches(audio_segment_results, segment_batch_size)
 
-    # Parallel: SegmentEmbedding (visual), SegmentCaption (LLM), AudioTranscriptEmbedding (text)
-    segment_embedding_results, segment_embedding_futures = await run_segment_embedding(
-        segment_batches, audio_segment_results, tracker, video_id, timing
-    )
     segment_caption_results, segment_caption_futures = await run_segment_caption(
         segment_batches, audio_segment_results, tracker, video_id, timing
     )
+
+    segment_caption_batches = make_batches(segment_caption_results, segment_batch_size)
+    segment_embedding_results, segment_embedding_futures = await run_segment_embedding(
+        segment_caption_batches, segment_caption_results, tracker, video_id, timing
+    )
+
     audio_transcript_embedding_results, audio_transcript_embedding_futures = await run_audio_transcript_embedding(
         segment_batches, audio_segment_results, tracker, video_id, timing
     )
 
-    # Indexing
     segment_index_ids, segment_index_futures = await run_segment_qdrant_indexing(
         segment_embedding_results,
         segment_embedding_futures,
@@ -711,19 +619,20 @@ async def run_audio_branch(
         timing,
     )
 
-    segment_caption_batches = make_batches(segment_caption_results, segment_batch_size)
-
     (
         segment_caption_embedding_results,
         segment_caption_embedding_futures,
     ) = await run_segment_caption_embedding(
         segment_caption_batches, segment_caption_futures, tracker, video_id, timing
     )
-    (
-        segment_caption_multimodal_embedding_results,
-        segment_caption_multimodal_embedding_futures,
-    ) = await run_segment_caption_multimodal_embedding(
-        segment_caption_batches, segment_caption_futures, tracker, video_id, timing
+
+    segment_caption_index_ids, segment_caption_index_futures = await run_segment_caption_qdrant_indexing(
+        segment_caption_embedding_results,
+        segment_caption_embedding_futures,
+        segment_batch_size,
+        tracker,
+        video_id,
+        timing,
     )
 
     kg_results, kg_futures = await run_kg_pipeline(
@@ -750,10 +659,9 @@ async def run_audio_branch(
         "audio_transcript_embedding_results": audio_transcript_embedding_results,
         "audio_transcript_index_ids": audio_transcript_index_ids,
         "segment_caption_embedding_results": segment_caption_embedding_results,
-        "segment_caption_multimodal_embedding_results": segment_caption_multimodal_embedding_results,
         "segment_index_ids": segment_index_ids,
+        "segment_caption_index_ids": segment_caption_index_ids,
         "segment_caption_embedding_futures": segment_caption_embedding_futures,
-        "segment_caption_multimodal_embedding_futures": segment_caption_multimodal_embedding_futures,
         "segment_batch_size": segment_batch_size,
         "kg_results": kg_results,
         "arango_results": arango_results,
@@ -769,7 +677,7 @@ async def run_image_branch(
 ) -> dict[str, Any]:
     """
     Run the complete image branch:
-    ImageExtraction → ImageCaption+OCR/ImageEmbedding → CaptionEmbeddings → Qdrant/Elasticsearch indexing
+    ImageExtraction → ImageCaption+OCR → ImageEmbedding (multimodal) → CaptionEmbeddings → Qdrant/Elasticsearch indexing
     """
     image_results, image_batch_futures = await run_image_extraction(
         image_batches, preprocess_fut, tracker, video_id, timing
@@ -778,16 +686,18 @@ async def run_image_branch(
     analysis_batch_size: int = 10
     analysis_batches = make_batches(image_results, analysis_batch_size)
 
-    # Combined caption + OCR task
     (caption_results, ocr_results), caption_ocr_batch_futures = await run_image_caption_ocr(
         analysis_batches, image_batch_futures, tracker, video_id, timing
     )
+
+    caption_batch_size: int = 10
+    caption_batches = make_batches(caption_results, caption_batch_size)
     embedding_results, embedding_batch_futures = await run_image_embedding(
-        analysis_batches, image_batch_futures, tracker, video_id, timing
+        caption_batches, caption_ocr_batch_futures, tracker, video_id, timing
     )
 
     image_index_ids, image_index_futures = await run_image_qdrant_indexing(
-        embedding_results, embedding_batch_futures, analysis_batch_size, tracker, video_id, timing
+        embedding_results, embedding_batch_futures, caption_batch_size, tracker, video_id, timing
     )
 
     ocr_batch_size: int = 20
@@ -796,18 +706,14 @@ async def run_image_branch(
     )
 
     caption_embedding_batch_size: int = 5
-    caption_mm_batch_size: int = 2
     caption_embedding_batches = make_batches(caption_results, caption_embedding_batch_size)
-    caption_mm_batches = make_batches(caption_results, caption_mm_batch_size)
 
     caption_embedding_results, caption_embedding_futures = await run_image_caption_embedding(
         caption_embedding_batches, caption_ocr_batch_futures, tracker, video_id, timing
     )
-    (
-        caption_multimodal_embedding_results,
-        caption_multimodal_embedding_futures,
-    ) = await run_image_caption_multimodal_embedding(
-        caption_mm_batches, caption_ocr_batch_futures, tracker, video_id, timing
+
+    caption_index_ids, caption_index_futures = await run_image_caption_qdrant_indexing(
+        caption_embedding_results, caption_embedding_futures, caption_embedding_batch_size, tracker, video_id, timing
     )
 
     return {
@@ -816,11 +722,10 @@ async def run_image_branch(
         "embedding_results": embedding_results,
         "ocr_results": ocr_results,
         "caption_embedding_results": caption_embedding_results,
-        "caption_multimodal_embedding_results": caption_multimodal_embedding_results,
         "image_index_ids": image_index_ids,
         "ocr_index_ids": ocr_index_ids,
+        "caption_index_ids": caption_index_ids,
         "caption_embedding_futures": caption_embedding_futures,
-        "caption_multimodal_embedding_futures": caption_multimodal_embedding_futures,
         "analysis_batch_size": analysis_batch_size,
     }
 
@@ -832,39 +737,16 @@ async def run_final_qdrant_indexing(
     video_id: str,
     timing: TimingRegistry,
 ) -> dict[str, Any]:
-    """Run final Qdrant indexing for captions."""
-    segment_caption_index_ids = await run_segment_caption_qdrant_indexing(
-        audio_branch["segment_caption_embedding_results"],
-        audio_branch["segment_caption_multimodal_embedding_results"],
-        audio_branch["segment_caption_embedding_futures"],
-        audio_branch["segment_caption_multimodal_embedding_futures"],
-        audio_branch["segment_batch_size"],
-        tracker,
-        video_id,
-        timing,
-    )
+    """Run final Qdrant indexing.
 
-    caption_index_ids = await run_caption_qdrant_indexing(
-        image_branch["caption_embedding_results"],
-        image_branch["caption_multimodal_embedding_results"],
-        image_branch["caption_embedding_futures"],
-        image_branch["caption_multimodal_embedding_futures"],
-        image_branch["analysis_batch_size"],
-        tracker,
-        video_id,
-        timing,
-    )
-
+    Note: Segment and image embeddings now include captions (multimodal),
+    so they are indexed within their respective branches. This function
+    exists for potential future indexing needs.
+    """
     return {
-        "segment_caption_index_ids": segment_caption_index_ids,
-        "caption_index_ids": caption_index_ids,
+        "segment_caption_index_ids": [],
+        "caption_index_ids": [],
     }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Summary artifact creation
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 async def create_summary_artifact(
     video_id: str,
@@ -880,7 +762,6 @@ async def create_summary_artifact(
 
     timing_table = timing.to_markdown_table()
 
-    # KG stats
     kg_artifact = audio_branch.get('kg_results')
     kg_entities = kg_artifact.total_canonical_entities if kg_artifact else 0
     kg_raw_entities = kg_artifact.total_raw_entities if kg_artifact else 0
@@ -893,14 +774,12 @@ async def create_summary_artifact(
     kg_nodes_embed = kg_artifact.total_nodes_with_embeddings if kg_artifact else 0
     kg_modularity = kg_artifact.graph_modularity if kg_artifact else 0.0
 
-    # Cost tracking
     kg_prompt_tokens = kg_artifact.total_prompt_tokens if kg_artifact else 0
     kg_completion_tokens = kg_artifact.total_completion_tokens if kg_artifact else 0
     kg_cost = kg_artifact.total_llm_cost if kg_artifact else 0.0
     kg_llm_calls = kg_artifact.llm_calls if kg_artifact else 0
     kg_model = kg_artifact.llm_model if kg_artifact else ""
 
-    # Format cost display
     cost_display = f"${kg_cost:.4f}" if kg_cost > 0 else "N/A"
     tokens_display = f"{kg_prompt_tokens:,}" if kg_prompt_tokens > 0 else "N/A"
 
@@ -956,33 +835,26 @@ async def create_summary_artifact(
             f"| Shots | {n_shots} |\n"
             f"| ASR Artifacts | {len(audio_branch['asr_results'])} |\n"
             f"| Audio Segments | {len(audio_branch['audio_segment_results'])} |\n"
-            f"| Segment Embeddings | {len(audio_branch['segment_embedding_results'])} |\n"
+            f"| Segment Embeddings (Multimodal) | {len(audio_branch['segment_embedding_results'])} |\n"
             f"| Segment Captions | {len(audio_branch['segment_caption_results'])} |\n"
             f"| Audio Transcript Embeddings | {len(audio_branch['audio_transcript_embedding_results'])} |\n"
             f"| Segment Caption Text Embeddings | {len(audio_branch['segment_caption_embedding_results'])} |\n"
-            f"| Segment Caption MM Embeddings | {len(audio_branch['segment_caption_multimodal_embedding_results'])} |\n"
             f"| Image Artifacts | {len(image_branch['image_results'])} |\n"
             f"| Caption Artifacts | {len(image_branch['caption_results'])} |\n"
-            f"| Image Embeddings | {len(image_branch['embedding_results'])} |\n"
+            f"| Image Embeddings (Multimodal) | {len(image_branch['embedding_results'])} |\n"
             f"| OCR Artifacts | {len(image_branch['ocr_results'])} |\n"
             f"| OCR Elasticsearch Documents | {len(image_branch['ocr_index_ids'])} |\n"
             f"| Caption Text Embeddings | {len(image_branch['caption_embedding_results'])} |\n"
-            f"| Caption Multimodal Embeddings | {len(image_branch['caption_multimodal_embedding_results'])} |\n"
             f"| Image Qdrant Points | {len(image_branch['image_index_ids'])} |\n"
-            f"| Caption Qdrant Points | {len(final_indexing['caption_index_ids'])} |\n"
+            f"| Image Caption Qdrant Points | {len(image_branch['caption_index_ids'])} |\n"
             f"| Segment Qdrant Points | {len(audio_branch['segment_index_ids'])} |\n"
-            f"| Audio Transcript Qdrant Points | {len(audio_branch['audio_transcript_index_ids'])} |\n"
-            f"| Segment Caption Qdrant Points | {len(final_indexing['segment_caption_index_ids'])} |\n\n"
+            f"| Segment Caption Qdrant Points | {len(audio_branch['segment_caption_index_ids'])} |\n"
+            f"| Audio Transcript Qdrant Points | {len(audio_branch['audio_transcript_index_ids'])} |\n\n"
             f"{kg_section}"
             f"## Timing Breakdown\n\n"
             f"{timing_table}\n"
         ),
     )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Main flow
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 @flow(
@@ -1069,14 +941,14 @@ async def single_video_processing_flow(
             f"asr={len(audio_branch['asr_results'])} | audio_seg={len(audio_branch['audio_segment_results'])} | "
             f"seg_embed={len(audio_branch['segment_embedding_results'])} | seg_cap={len(audio_branch['segment_caption_results'])} | "
             f"seg_cap_text_embed={len(audio_branch['segment_caption_embedding_results'])} | "
-            f"seg_cap_mm_embed={len(audio_branch['segment_caption_multimodal_embedding_results'])} | "
             f"images={len(image_branch['image_results'])} | captions={len(image_branch['caption_results'])} | "
             f"img_embed={len(image_branch['embedding_results'])} | "
             f"ocr={len(image_branch['ocr_results'])} | ocr_index={len(image_branch['ocr_index_ids'])} | "
             f"cap_text_embed={len(image_branch['caption_embedding_results'])} | "
-            f"cap_mm_embed={len(image_branch['caption_multimodal_embedding_results'])} | "
-            f"seg_qdrant={len(audio_branch['segment_index_ids'])} | seg_cap_qdrant={len(final_indexing['segment_caption_index_ids'])} | "
-            f"img_qdrant={len(image_branch['image_index_ids'])} | cap_qdrant={len(final_indexing['caption_index_ids'])}"
+            f"seg_qdrant={len(audio_branch['segment_index_ids'])} | "
+            f"seg_cap_qdrant={len(audio_branch['segment_caption_index_ids'])} | "
+            f"img_qdrant={len(image_branch['image_index_ids'])} | "
+            f"img_cap_qdrant={len(image_branch['caption_index_ids'])}"
         )
 
         if tracker:
