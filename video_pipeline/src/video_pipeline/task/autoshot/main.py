@@ -1,6 +1,8 @@
 from __future__ import annotations
+import os
 import re
 import tempfile
+import asyncio
 import numpy as np
 from prefect import get_run_logger, task
 from prefect.artifacts import acreate_markdown_artifact, acreate_table_artifact
@@ -23,52 +25,86 @@ from .helper import (
 )
 AUTOSHOT_CONFIG = TaskConfig.from_yaml("autoshot_detection")
 
+# Maximum concurrent batch inference requests to Triton
+MAX_CONCURRENT_BATCHES = 4
+
+
 @StageRegistry.register
 class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
 
     async def preprocess(
         self, input_data: VideoArtifact
-    ) -> tuple[np.ndarray, VideoArtifact]:
+    ) -> tuple[np.ndarray, VideoArtifact, str]:
+        """Download video via streaming and extract frames.
+
+        Returns:
+            Tuple of (frames, video_artifact, temp_file_path for cleanup)
+        """
         logger = get_run_logger()
-        logger.debug(f"Preprocessing video for autoshot: {input_data.video_id}")
+        logger.info(f"Preprocessing video for autoshot: {input_data.video_id}")
 
         video_path = input_data.video_minio_url
         bucket, object_name = split_minio_url(video_path)
-        video_bytes = self.minio_client.get_object_bytes(bucket, object_name)
 
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_file:
-            tmp_file.write(video_bytes)
-            tmp_file.flush()
-            frames = get_frames_fast(tmp_file.name)
+        # Create temp file and stream video directly to it (avoids OOM)
+        tmp_file = tempfile.NamedTemporaryFile(
+            suffix=f".{input_data.video_extension or '.mp4'}",
+            delete=False
+        )
+        tmp_path = tmp_file.name
+        tmp_file.close()
 
-        return (frames, input_data)
+        try:
+            # Stream video to temp file instead of loading all into memory
+            self.minio_client.stream_object_to_file(bucket, object_name, tmp_path)
+            logger.info(f"[AutoshotTask] Streamed video to {tmp_path}")
+
+            # Extract frames using ffmpeg
+            frames = get_frames_fast(tmp_path)
+            logger.info(f"[AutoshotTask] Extracted {len(frames)} frames")
+        except Exception:
+            # Clean up temp file on error
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
+            raise
+
+        return (frames, input_data, tmp_path)
 
     async def execute(
         self,
-        preprocessed: tuple[np.ndarray, VideoArtifact],
+        preprocessed: tuple[np.ndarray, VideoArtifact, str],
         client: AutoShotClient,
     ) -> tuple[np.ndarray, VideoArtifact]:
-        """Run autoshot inference on video frames.
+        """Run autoshot inference on video frames with concurrent batch processing.
 
         Args:
-            item: Tuple of (frames, video_artifact)
+            preprocessed: Tuple of (frames, video_artifact, temp_file_path)
             client: AutoShot inference client
-            context: Task execution context
 
         Returns:
             Tuple of (predictions, video_artifact)
-
-        Raises:
-            ValueError: If autoshot client returns None
         """
-        frames, artifact = preprocessed
-        results = []
+        frames, artifact, _tmp_path = preprocessed
+        logger = get_run_logger()
 
-        for batch in get_batches(frames=frames):
-            client_batch = preprocess_input_client(batch)
-            client_result = await client.ainfer(client_batch)
-            result = postprocess_output_client(client_result)  #type:ignore
-            results.append(result)
+        # Collect all batches
+        batches = list(get_batches(frames=frames))
+        n_batches = len(batches)
+        logger.info(f"[AutoshotTask] Processing {n_batches} batches with {MAX_CONCURRENT_BATCHES} concurrent requests")
+
+        # Use semaphore to limit concurrent requests
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+
+        async def process_batch(batch: np.ndarray) -> np.ndarray:
+            async with semaphore:
+                client_batch = preprocess_input_client(batch)
+                client_result = await client.ainfer(client_batch)
+                return postprocess_output_client(client_result)  # type: ignore
+
+        # Process all batches concurrently
+        results = await asyncio.gather(*[process_batch(batch) for batch in batches])
 
         predictions = np.concatenate(results, axis=0)[: len(frames)]
 
@@ -215,12 +251,33 @@ async def autoshot_task(
         artifact_visitor=ArtifactPersistentVisitor(minio_client, postgres_client),
         minio_client=minio_client
     )
+
+    temp_file_path: str | None = None
     try:
         async with AutoShotClient(url=settings.triton.url, config=autoshot_config) as client:
-            logger.info("[AutoshotTask] Starting execute_template (preprocess -> execute -> postprocess)")
-            artifact = await task_impl.execute_template(video_artifact, client)
-            logger.info(f"[AutoshotTask] Completed | artifact_id={artifact.artifact_id}")
+            logger.info("[AutoshotTask] Starting preprocess -> execute -> postprocess")
+
+            # Preprocess: download video and extract frames
+            frames, artifact, temp_file_path = await task_impl.preprocess(video_artifact)
+            logger.info(f"[AutoshotTask] Preprocess done | {len(frames)} frames extracted")
+
+            # Execute: run inference
+            predictions, artifact = await task_impl.execute((frames, artifact, temp_file_path), client)
+            logger.info("[AutoshotTask] Execute done")
+
+            # Postprocess: create artifact
+            autoshot_artifact = await task_impl.postprocess((predictions, artifact))
+            await AutoshotTask.summary_artifact(autoshot_artifact)
+
+            logger.info(f"[AutoshotTask] Completed | artifact_id={autoshot_artifact.artifact_id}")
     finally:
+        # Clean up temp file
+        if temp_file_path:
+            try:
+                os.unlink(temp_file_path)
+                logger.debug(f"[AutoshotTask] Cleaned up temp file: {temp_file_path}")
+            except FileNotFoundError:
+                pass
         await shutdown_postgres_client(postgres_client)
 
-    return artifact
+    return autoshot_artifact
