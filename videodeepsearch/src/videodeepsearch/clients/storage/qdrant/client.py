@@ -51,7 +51,7 @@ class BaseQdrantClient(Generic[T], ABC):
             grpc_port=grpc_port,
             prefer_grpc=prefer_grpc,
         )
-        self.collection_name = collection_name
+        self.base_collection_name = collection_name
 
     async def close(self) -> None:
         """Close the Qdrant client connection."""
@@ -98,8 +98,10 @@ class BaseQdrantClient(Generic[T], ABC):
         self,
         query_vector: list[float],
         vector_name: str,
+        collection_name: str,
         limit: int = 10,
         query_filter: Filter | None = None,
+        
     ) -> list[T]:
         """Search using a dense vector.
 
@@ -113,7 +115,7 @@ class BaseQdrantClient(Generic[T], ABC):
             List of domain objects
         """
         response = await self.client.query_points(
-            collection_name=self.collection_name,
+            collection_name=collection_name,
             query=query_vector,
             using=vector_name,
             query_filter=query_filter,
@@ -127,6 +129,7 @@ class BaseQdrantClient(Generic[T], ABC):
         self,
         sparse_vector: dict[int, float],
         vector_name: str,
+        collection_name: str,
         limit: int = 10,
         query_filter: Filter | None = None,
     ) -> list[T]:
@@ -142,7 +145,7 @@ class BaseQdrantClient(Generic[T], ABC):
             List of domain objects
         """
         response = await self.client.query_points(
-            collection_name=self.collection_name,
+            collection_name=collection_name,
             query=SparseVector(
                 indices=list(sparse_vector.keys()),
                 values=list(sparse_vector.values()),
@@ -161,6 +164,7 @@ class BaseQdrantClient(Generic[T], ABC):
         dense_vector_name: str,
         sparse_vector: dict[int, float],
         sparse_vector_name: str,
+        collection_name: str,
         limit: int = 10,
         query_filter: Filter | None = None,
         dense_weight: float = 0.7,
@@ -199,47 +203,8 @@ class BaseQdrantClient(Generic[T], ABC):
 
         # Use RRF fusion to combine results
         response = await self.client.query_points(
-            collection_name=self.collection_name,
+            collection_name=collection_name,
             query=RrfQuery(rrf=Rrf(weights=[dense_weight, sparse_weight])),
-            prefetch=prefetch_queries,
-            limit=limit,
-            with_payload=True,
-        )
-
-        return [self._hit_to_item(hit) for hit in response.points]
-
-    async def search_multi_dense(
-        self,
-        vectors: list[tuple[str, list[float]]],
-        weights: list[float],
-        limit: int = 10,
-        query_filter: Filter | None = None,
-    ) -> list[T]:
-        """Search using multiple dense vectors with weighted RRF fusion.
-
-        Args:
-            vectors: List of (vector_name, vector) tuples
-            weights: Weights for each vector (must match length of vectors)
-            limit: Maximum number of results
-            query_filter: Optional filter to apply
-
-        Returns:
-            List of domain objects
-        """
-        assert len(vectors) == len(weights), "Vectors and weights must have same length"
-
-        prefetch_queries = [
-            Prefetch(
-                query=vec,
-                using=name,
-                filter=query_filter,
-            )
-            for name, vec in vectors
-        ]
-
-        response = await self.client.query_points(
-            collection_name=self.collection_name,
-            query=RrfQuery(rrf=Rrf(weights=weights)),
             prefetch=prefetch_queries,
             limit=limit,
             with_payload=True,

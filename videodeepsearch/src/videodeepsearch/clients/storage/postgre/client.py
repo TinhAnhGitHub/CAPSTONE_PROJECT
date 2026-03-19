@@ -158,7 +158,6 @@ class PostgresClient:
             Caption text string, or empty string if not found
         """
         async with self.get_session() as session:
-            # Get children of ImageArtifact filtered by ImageCaptionArtifact type
             lineage_query = select(ArtifactLineageSchema.child_artifact_id).where(
                 ArtifactLineageSchema.parent_artifact_id == image_id
             )
@@ -168,7 +167,6 @@ class PostgresClient:
             if not child_ids:
                 return ""
 
-            # Query for ImageCaptionArtifact among children
             artifact_query = select(ArtifactSchema).where(
                 ArtifactSchema.artifact_id.in_(child_ids),
                 ArtifactSchema.artifact_type == "ImageCaptionArtifact",
@@ -179,6 +177,5 @@ class PostgresClient:
             if not caption_artifact:
                 return ""
 
-            # Extract caption from metadata
             metadata = caption_artifact.artifact_metadata or {}
             return metadata.get("caption", "")
