@@ -1,209 +1,56 @@
-"""Video Search Toolkit with dependency injection and caching support.
-
-This toolkit provides semantic search capabilities for video content,
-supporting both image and segment retrieval with multiple embedding modalities.
-
-Embedding Model Selection Guide:
-- MMBert: Prefer for text-only semantic search, document retrieval, sentence similarity.
-          Cleaner language embedding space for Vietnamese text.
-
-- QwenVL: Prefer for multimodal scenarios, shared text-image space.
-          Use when queries may later include images.
-
-All tools return ToolResult for unified interface.
-"""
-
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 from typing import Any, Literal
 
-from agno.tools import Toolkit, tool
+from agno.tools import tool
 from agno.tools.function import ToolResult
-from loguru import logger
 
 from videodeepsearch.clients.storage.qdrant import (
-    CaptionQdrantClient,
     ImageQdrantClient,
     SegmentQdrantClient,
+    AudioQdrantClient,
 )
-from videodeepsearch.clients.inference import MMBertClient, QwenVLEmbeddingClient
-from videodeepsearch.clients.storage.minio import MinioStorageClient
-from videodeepsearch.clients.storage.postgre import PostgresClient
-from videodeepsearch.schemas import ImageInterface, SegmentInterface
+from videodeepsearch.clients.inference import MMBertClient, QwenVLEmbeddingClient, SpladeClient
+from videodeepsearch.schemas import ImageInterface, SegmentInterface, AudioInterface
 from videodeepsearch.toolkit.common import (
     CacheManager,
     SearchResultContainer,
-    SparseEncoderInterface,
 )
 
 
-def extract_minio_url(url: str) -> tuple[str, str]:
-    """Parse MinIO URL to extract bucket and object name.
-
-    Args:
-        url: MinIO URL (either http://host/bucket/object or bucket/object format)
-
-    Returns:
-        Tuple of (bucket_name, object_name)
-    """
-    if url.startswith("http"):
-        parts = url.split("/", 4)
-        if len(parts) >= 5:
-            return parts[3], parts[4]
-    parts = url.split("/", 1)
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return "videos", url
-
-
-class VideoSearchToolkit(Toolkit):
-    """Toolkit for semantic video search with dependency injection.
-
-    Provides tools for:
-    - Visual similarity search (using QwenVL visual embeddings)
-    - Caption-based search (using MMBert text or QwenVL multimodal embeddings)
-    - Segment search (using various embedding types)
-
-    All tools support caching and return ToolResult for unified interface.
-    """
+class VideoSearchToolkit:
 
     def __init__(
         self,
         image_qdrant_client: ImageQdrantClient,
-        caption_qdrant_client: CaptionQdrantClient,
         segment_qdrant_client: SegmentQdrantClient,
+        audio_qdrant_client: AudioQdrantClient,
         qwenvl_client: QwenVLEmbeddingClient,
         mmbert_client: MMBertClient,
-        minio_client: MinioStorageClient,
-        postgres_client: PostgresClient,
-        sparse_encoder: SparseEncoderInterface | None = None,
+        splade_client: SpladeClient,
         cache_ttl: int = 1800,
         cache_dir: str | None = None,
     ):
-        """Initialize the VideoSearchToolkit.
-
-        Args:
-            image_qdrant_client: Client for visual image search
-            caption_qdrant_client: Client for caption-based search
-            segment_qdrant_client: Client for segment search
-            qwenvl_client: QwenVL embedding client for visual/multimodal embeddings
-            mmbert_client: MMBert embedding client for text embeddings
-            minio_client: MinIO storage client for fetching captions
-            postgres_client: PostgreSQL client for metadata queries
-            sparse_encoder: Optional sparse encoder for hybrid search
-            cache_ttl: Cache time-to-live in seconds (default 30 minutes)
-            cache_dir: Optional custom cache directory
-        """
         self.image_client = image_qdrant_client
-        self.caption_client = caption_qdrant_client
         self.segment_client = segment_qdrant_client
+        self.audio_client = audio_qdrant_client
         self.qwenvl = qwenvl_client
         self.mmbert = mmbert_client
-        self.storage = minio_client
-        self.postgres_client = postgres_client
-        self.sparse_encoder = sparse_encoder
+        self.splade = splade_client
         self.cache_ttl = cache_ttl
         self.cache_manager = CacheManager(cache_dir)
 
         self._result_store: dict[str, SearchResultContainer] = {}
 
-        super().__init__(name="Video Search Tools")
-
-    async def _fetch_caption(self, minio_url: str) -> str:
-        """Fetch caption from MinIO JSON file.
-
-        Args:
-            minio_url: MinIO URL pointing to the caption JSON file
-
-        Returns:
-            Caption string, or empty string if not found
-        """
-        bucket, object_name = extract_minio_url(minio_url)
-        loop = asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None,
-            self.storage.read_json,
-            bucket,
-            object_name,
-        )
-        if data is None:
-            logger.warning(f"Data is None at {minio_url=}")
-            return ""
-        caption: str = data.get("caption", "")
-        return caption
-
-    async def _fetch_image_caption_from_postgres(self, artifact_id: str) -> str:
-        """Fetch image caption from PostgreSQL by finding related ImageCaptionArtifact.
-
-        The artifact_id can be either:
-        - ImageEmbeddingArtifact id: We query for its metadata to get image_id,
-          then find the ImageCaptionArtifact sibling
-        - ImageArtifact id: Directly find the ImageCaptionArtifact child
-
-        Args:
-            artifact_id: Artifact ID to start the search from
-
-        Returns:
-            Caption string, or empty string if not found
-        """
-        try:
-            artifact = await self.postgres_client.get_artifact(artifact_id)
-            if artifact is None:
-                logger.warning(f"Artifact {artifact_id} not found in PostgreSQL")
-                return ""
-            if artifact.artifact_type == "ImageEmbeddingArtifact":
-                image_id = artifact.artifact_metadata.get("image_id", "")
-                if not image_id:
-                    return ""
-                return await self.postgres_client.get_caption_by_image_id(image_id)
-            elif artifact.artifact_type == "ImageArtifact":
-                return await self.postgres_client.get_caption_by_image_id(artifact_id)
-            elif artifact.artifact_type == "ImageCaptionArtifact":
-                return artifact.artifact_metadata.get("caption", "")
-            return ""
-
-        except Exception as e:
-            logger.warning(f"Failed to fetch caption from PostgreSQL for {artifact_id}: {e}")
-            return ""
-
-    async def _populate_image_captions(
-        self,
-        results: list[ImageInterface],
-        prefer_postgres: bool = False,
-    ) -> None:
-        """Populate captions for image search results.
-
-        Tries to get caption from Qdrant payload first, then falls back to
-        PostgreSQL or MinIO if needed.
-
-        Args:
-            results: List of ImageInterface results to populate
-            prefer_postgres: If True, always fetch from PostgreSQL (for visual search)
-        """
-        for item in results:
-            # If already has caption from Qdrant and not forcing PostgreSQL, skip
-            if item.image_caption and not prefer_postgres:
-                continue
-
-            # For visual search results, prefer PostgreSQL
-            if prefer_postgres:
-                caption = await self._fetch_image_caption_from_postgres(item.id)
-                if caption:
-                    item.image_caption = caption
-                    continue
-
-            # Fallback to MinIO if no caption found
-            if not item.image_caption and item.minio_path:
-                item.image_caption = await self._fetch_caption(item.minio_path)
+        # super().__init__(name="Video Search Tools")
 
     def _store_result(
         self,
         tool_name: str,
         kwargs: dict[str, Any],
-        results: list[ImageInterface] | list[SegmentInterface],
+        results: list[ImageInterface] | list[SegmentInterface] | list[AudioInterface],
     ) -> ToolResult:
         """Store results in memory and return ToolResult.
 
@@ -215,12 +62,17 @@ class VideoSearchToolkit(Toolkit):
         Returns:
             ToolResult with search results and cache instructions
         """
-        result_type = "image" if results and isinstance(results[0], ImageInterface) else "segment"
+        if results and isinstance(results[0], ImageInterface):
+            result_type = "image"
+        elif results and isinstance(results[0], AudioInterface):
+            result_type = "audio"
+        else:
+            result_type = "segment"
 
         container = SearchResultContainer(
             tool_name=tool_name,
             tool_kwargs=kwargs,
-            results=results,
+            results=results, #type:ignore
             result_type=result_type,
         )
 
@@ -239,85 +91,6 @@ class VideoSearchToolkit(Toolkit):
 
         return ToolResult(content=content)
 
-    # =========================================================================
-    # Image Search Tools - Visual (QwenVL)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search for images using visual similarity based on a natural-language description. "
-            "Encodes the input query into a CLIP-style visual embedding (QwenVL) and performs "
-            "dense similarity search across indexed video frames."
-        ),
-        instructions=(
-            "Use when query describes what the image LOOKS LIKE, not what's happening. "
-            "Query should be in English and visually descriptive. "
-            "Best for: objects, scenes, visual patterns, colors, compositions."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def get_images_from_visual_query(
-        self,
-        visual_query: str,
-        top_k: int = 10,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-    ) -> ToolResult:
-        """Search images by visual description using QwenVL visual embeddings.
-
-        Best for queries describing WHAT THE IMAGE LOOKS LIKE (objects, scenes,
-        visual patterns). The query must be in English.
-
-        Args:
-            visual_query: English text describing visual appearance
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-
-        Returns:
-            ToolResult with search results
-        """
-        kwargs = {
-            "visual_query": visual_query,
-            "top_k": top_k,
-            "video_ids": video_ids,
-            "user_id": user_id,
-        }
-
-        embeddings = await self.qwenvl.ainfer_text([visual_query])
-        query_vector = embeddings[0]
-
-        results = await self.image_client.search_visual(
-            query_vector=query_vector,
-            video_ids=video_ids,
-            user_id=user_id,
-            limit=top_k,
-        )
-
-        # Fetch captions from PostgreSQL for visual search results
-        await self._populate_image_captions(results, prefer_postgres=True)
-
-        return self._store_result("get_images_from_visual_query", kwargs, results)
-
-    # =========================================================================
-    # Image Search Tools - Caption (MMBert - Text)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search images by Vietnamese caption text using MMBert semantic embeddings. "
-            "MMBert provides cleaner language embedding space optimized for text. "
-            "Performs dense semantic search over image captions."
-        ),
-        instructions=(
-            "Use when query is in english describing image content/meaning. "
-            "Best for: semantic search, document retrieval, sentence similarity. "
-            "Prefer MMBert when your system is text-only."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
     async def get_images_from_caption_query_mmbert(
         self,
         caption_query: str,
@@ -328,23 +101,23 @@ class VideoSearchToolkit(Toolkit):
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
     ) -> ToolResult:
-        """Search images by Vietnamese caption using MMBert text embeddings.
+        """Search images by caption using MMBert text embeddings.
 
         Best for queries about WHAT'S HAPPENING or described in captions.
-        The caption query must be in Vietnamese.
+        The caption query must be in English.
 
         Prefer MMBert for:
-        - Semantic search in Vietnamese
+        - Semantic search in English
         - Document retrieval
         - Sentence similarity
         - Text-only systems
 
         Args:
-            caption_query: Vietnamese text describing image content
+            caption_query: English text describing image content
             top_k: Number of results to return (default 10)
             video_ids: Optional list of video IDs to filter
             user_id: Optional user ID to filter
-            use_hybrid: Enable hybrid search with sparse encoder (requires sparse_encoder)
+            use_hybrid: Enable hybrid search with sparse encoder (requires splade_client)
             dense_weight: Weight for dense search in hybrid mode (default 0.7)
             sparse_weight: Weight for sparse search in hybrid mode (default 0.3)
 
@@ -367,9 +140,9 @@ class VideoSearchToolkit(Toolkit):
 
         dense_vector = embeddings[0]
 
-        if use_hybrid and self.sparse_encoder:
-            sparse_vector = (await self.sparse_encoder.encode([caption_query]))[0]
-            results = await self.caption_client.search_hybrid_text(
+        if use_hybrid:
+            sparse_vector = (await self.splade.aencode([caption_query]))[0]
+            results = await self.image_client.search_image_hybrid_mmbert(
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
                 video_ids=video_ids,
@@ -379,53 +152,48 @@ class VideoSearchToolkit(Toolkit):
                 sparse_weight=sparse_weight,
             )
         else:
-            results = await self.caption_client.search_text(
+            results = await self.image_client.search_image_dense_mmbert(
                 query_vector=dense_vector,
                 video_ids=video_ids,
                 user_id=user_id,
                 limit=top_k,
             )
 
-        await self._populate_image_captions(results)
-
         return self._store_result("get_images_from_caption_query_mmbert", kwargs, results)
 
-    # =========================================================================
-    # Image Search Tools - Caption (QwenVL - Multimodal)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search images by caption text using QwenVL multimodal embeddings. "
-            "QwenVL provides a unified text-image embedding space. "
-            "Use when your system also uses image embeddings or queries may later include images."
-        ),
-        instructions=(
-            "Use when you need shared text-image embedding space. "
-            "Best for: multimodal systems, when queries might later include images. "
-            "Query can be in Vietnamese or English."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def get_images_from_caption_query_qwenvl(
+    # @tool(
+    #     description=(
+    #         "Search images using QwenVL unified multimodal embeddings. "
+    #         "QwenVL provides a unified text-image embedding space, allowing flexible queries. "
+    #         "Works for visual descriptions, semantic captions, or any text query about images."
+    #     ),
+    #     instructions=(
+    #         "Use for any image search query - visual appearance, semantic content, or mixed. "
+    #         "Query can describe what the image LOOKS LIKE or what's HAPPENING in it. "
+    #         "Best for: visual search, caption search, multimodal retrieval."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
+    async def get_images_from_qwenvl_query(
         self,
-        caption_query: str,
+        query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
     ) -> ToolResult:
-        """Search images by caption using QwenVL multimodal embeddings.
+        """Search images using QwenVL unified multimodal embeddings.
 
-        Best for queries requiring a unified text-image embedding space.
-
-        Prefer QwenVL for:
-        - Multimodal systems with both text and images
-        - Shared text-image embedding space
-        - Queries that may later include images
+        QwenVL provides a unified embedding space for both visual and semantic queries.
+        The query can be any text describing the image - visual appearance, content,
+        events, objects, or semantic meaning.
 
         Args:
-            caption_query: Text describing image content (Vietnamese or English)
+            query: Text query describing the image. Can be:
+                - Visual description (e.g., "a red car on a sunny street")
+                - Semantic content (e.g., "people having a conversation")
+                - Objects/scenes (e.g., "kitchen with modern appliances")
+                - Any combination of the above
             top_k: Number of results to return (default 10)
             video_ids: Optional list of video IDs to filter
             user_id: Optional user ID to filter
@@ -434,65 +202,65 @@ class VideoSearchToolkit(Toolkit):
             ToolResult with search results
         """
         kwargs = {
-            "caption_query": caption_query,
+            "query": query,
             "top_k": top_k,
             "video_ids": video_ids,
             "user_id": user_id,
         }
 
-        embeddings = await self.qwenvl.ainfer_text([caption_query])
+        embeddings = await self.qwenvl.ainfer_text([query])
         query_vector = embeddings[0]
 
-        results = await self.caption_client.search_multimodal(
+        results = await self.image_client.search_image_dense_qwenvl(
             query_vector=query_vector,
             video_ids=video_ids,
             user_id=user_id,
             limit=top_k,
         )
 
-        await self._populate_image_captions(results)
+        return self._store_result("get_images_from_qwenvl_query", kwargs, results)
 
-        return self._store_result("get_images_from_caption_query_qwenvl", kwargs, results)
-
-    # =========================================================================
-    # Segment Search Tools - Event (MMBert - Vietnamese Text)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search for video segments by Vietnamese event/scene description using MMBert. "
-            "Retrieves multi-frame sequences based on semantic similarity to event descriptions. "
-            "MMBert provides cleaner language embedding space for Vietnamese text."
-        ),
-        instructions=(
-            "Use when query describes an EVENT, ACTION, or SCENE in Vietnamese. "
-            "Best for: finding continuous video sequences, temporal events, conversations. "
-            "Prefer MMBert for text-only semantic search in Vietnamese."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
+    # @tool(
+    #     description=(
+    #         "Search for video segments by event/scene description using MMBert. "
+    #         "Retrieves multi-frame sequences based on semantic similarity to event descriptions. "
+    #         "MMBert provides cleaner language embedding space for text."
+    #     ),
+    #     instructions=(
+    #         "Use when query describes an EVENT, ACTION, or SCENE. "
+    #         "Best for: finding continuous video sequences, temporal events, conversations. "
+    #         "Prefer MMBert for text-only semantic search."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
     async def get_segments_from_event_query_mmbert(
         self,
         event_query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
+        use_hybrid: bool = False,
+        dense_weight: float = 0.7,
+        sparse_weight: float = 0.3,
     ) -> ToolResult:
-        """Search segments by Vietnamese event description using MMBert.
+        """Search segments by event description using MMBert.
 
         Best for queries about EVENTS, ACTIONS, or SCENES (multi-frame sequences).
-        The event query must be in Vietnamese.
+        The event query must be in English.
 
         Prefer MMBert for:
-        - Semantic search in Vietnamese
+        - Semantic search in English
         - Event/scene retrieval based on text descriptions
 
         Args:
-            event_query: Vietnamese text describing event/scene
+            event_query: English text describing event/scene
             top_k: Number of results to return (default 10)
             video_ids: Optional list of video IDs to filter
             user_id: Optional user ID to filter
+            use_hybrid: Enable hybrid search with sparse encoder (requires splade_client)
+            dense_weight: Weight for dense search in hybrid mode (default 0.7)
+            sparse_weight: Weight for sparse search in hybrid mode (default 0.3)
 
         Returns:
             ToolResult with search results
@@ -502,6 +270,9 @@ class VideoSearchToolkit(Toolkit):
             "top_k": top_k,
             "video_ids": video_ids,
             "user_id": user_id,
+            "use_hybrid": use_hybrid,
+            "dense_weight": dense_weight,
+            "sparse_weight": sparse_weight,
         }
 
         embeddings = await self.mmbert.ainfer([event_query])
@@ -510,50 +281,60 @@ class VideoSearchToolkit(Toolkit):
 
         query_vector = embeddings[0]
 
-        results = await self.segment_client.search_segment(
-            query_vector=query_vector,
-            video_ids=video_ids,
-            user_id=user_id,
-            limit=top_k,
-        )
+        if use_hybrid:
+            sparse_vector = (await self.splade.aencode([event_query]))[0]
+            results = await self.segment_client.search_segment_hybrid_mmbert(
+                dense_vector=query_vector,
+                sparse_vector=sparse_vector,
+                video_ids=video_ids,
+                user_id=user_id,
+                limit=top_k,
+                dense_weight=dense_weight,
+                sparse_weight=sparse_weight,
+            )
+        else:
+            results = await self.segment_client.search_segment_dense_mmbert(
+                query_vector=query_vector,
+                video_ids=video_ids,
+                user_id=user_id,
+                limit=top_k,
+            )
 
         return self._store_result("get_segments_from_event_query_mmbert", kwargs, results)
 
-    # =========================================================================
-    # Segment Search Tools - Event (QwenVL - Multimodal)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search for video segments using QwenVL multimodal embeddings. "
-            "Provides unified text-image embedding space for segment retrieval. "
-            "Use when your system also uses image embeddings."
-        ),
-        instructions=(
-            "Use when you need shared text-image embedding space for segments. "
-            "Best for: multimodal systems, when queries might later include images. "
-            "Query can be in Vietnamese or English."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def get_segments_from_event_query_qwenvl(
+    # @tool(
+    #     description=(
+    #         "Search for video segments using QwenVL unified multimodal embeddings. "
+    #         "Provides unified text-image embedding space for segment retrieval. "
+    #         "Works for visual descriptions, event queries, or any text about segments."
+    #     ),
+    #     instructions=(
+    #         "Use for any segment search query - visual appearance, event descriptions, or mixed. "
+    #         "Query can describe what the SCENE LOOKS LIKE or what's HAPPENING in it. "
+    #         "Best for: visual search, event retrieval, multimodal segment queries."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
+    async def get_segments_from_qwenvl_query(
         self,
-        event_query: str,
+        query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
     ) -> ToolResult:
-        """Search segments by event description using QwenVL multimodal embeddings.
+        """Search segments using QwenVL unified multimodal embeddings.
 
-        Best for queries requiring a unified text-image embedding space.
-
-        Prefer QwenVL for:
-        - Multimodal systems with both text and images
-        - Shared text-image embedding space
+        QwenVL provides a unified embedding space for both visual and semantic queries.
+        The query can be any text describing the segment - visual appearance, events,
+        actions, or semantic meaning.
 
         Args:
-            event_query: Text describing event/scene (Vietnamese or English)
+            query: Text query describing the segment. Can be:
+                - Visual description (e.g., "outdoor scene with trees and sunlight")
+                - Event/action (e.g., "people discussing project plans")
+                - Scene context (e.g., "meeting room with whiteboard")
+                - Any combination of the above
             top_k: Number of results to return (default 10)
             video_ids: Optional list of video IDs to filter
             user_id: Optional user ID to filter
@@ -562,56 +343,52 @@ class VideoSearchToolkit(Toolkit):
             ToolResult with search results
         """
         kwargs = {
-            "event_query": event_query,
+            "query": query,
             "top_k": top_k,
             "video_ids": video_ids,
             "user_id": user_id,
         }
 
-        embeddings = await self.qwenvl.ainfer_text([event_query])
+        embeddings = await self.qwenvl.ainfer_text([query])
         query_vector = embeddings[0]
 
-        results = await self.segment_client.search_segment(
+        results = await self.segment_client.search_segment_dense_qwenvl(
             query_vector=query_vector,
             video_ids=video_ids,
             user_id=user_id,
             limit=top_k,
         )
 
-        return self._store_result("get_segments_from_event_query_qwenvl", kwargs, results)
-
-    # =========================================================================
-    # Segment Search Tools - Visual (QwenVL)
-    # =========================================================================
+        return self._store_result("get_segments_from_qwenvl_query", kwargs, results)
 
     @tool(
         description=(
-            "Search for video segments using visual similarity. "
-            "Encodes the visual description into QwenVL embedding and searches "
-            "for segments with similar visual content."
+            "Search for audio transcripts by text query using MMBert dense embeddings. "
+            "Retrieves audio segments based on semantic similarity to spoken content. "
+            "Best for finding what was said or discussed in videos."
         ),
         instructions=(
-            "Use when query describes what the SCENE LOOKS LIKE visually. "
-            "Query should be in English and visually descriptive. "
-            "Best for: visual patterns, scene appearances, object-based segment retrieval."
+            "Use when query is about SPOKEN CONTENT, SPEECH, or AUDIO. "
+            "Best for: finding specific phrases, topics discussed, conversations. "
+            "Prefer MMBert for text-only semantic search over audio transcripts."
         ),
         cache_results=True,
         cache_ttl=1800,
     )
-    async def get_segments_from_visual_query(
+    async def get_audio_from_query_dense(
         self,
-        visual_query: str,
+        audio_query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
     ) -> ToolResult:
-        """Search segments by visual description using QwenVL embeddings.
+        """Search audio transcripts by text query using dense embeddings.
 
-        Best for queries describing WHAT THE SCENE LOOKS LIKE visually.
-        The visual query must be in English.
+        Best for queries about SPOKEN CONTENT in videos.
+        The audio query must be in English.
 
         Args:
-            visual_query: English text describing visual appearance
+            audio_query: English text describing spoken content to find
             top_k: Number of results to return (default 10)
             video_ids: Optional list of video IDs to filter
             user_id: Optional user ID to filter
@@ -620,105 +397,102 @@ class VideoSearchToolkit(Toolkit):
             ToolResult with search results
         """
         kwargs = {
-            "visual_query": visual_query,
+            "audio_query": audio_query,
             "top_k": top_k,
             "video_ids": video_ids,
             "user_id": user_id,
         }
 
-        embeddings = await self.qwenvl.ainfer_text([visual_query])
-        query_vector = embeddings[0]
+        embeddings = await self.mmbert.ainfer([audio_query])
+        if embeddings is None:
+            return ToolResult(content="Error: MMBert encoding failed")
 
-        results = await self.segment_client.search_segment(
-            query_vector=query_vector,
+        dense_vector = embeddings[0]
+
+        results = await self.audio_client.search_audio_dense(
+            query_vector=dense_vector,
             video_ids=video_ids,
             user_id=user_id,
             limit=top_k,
         )
 
-        return self._store_result("get_segments_from_visual_query", kwargs, results)
+        return self._store_result("get_audio_from_query_dense", kwargs, results)
 
-    # =========================================================================
-    # Multi-Modal Search (Combined Visual + Caption)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search images using combined visual + caption signals (multimodal fusion). "
-            "Performs multimodal retrieval by fusing visual and semantic search signals. "
-            "Enables finding images that match both visual appearance AND semantic description."
-        ),
-        instructions=(
-            "Use when you need to match BOTH visual appearance AND semantic meaning. "
-            "Visual query in English, caption query in Vietnamese. "
-            "Best for: complex queries requiring multi-faceted matching."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def get_images_from_multimodal_query(
+    # @tool(
+    #     description=(
+    #         "Search for audio transcripts using hybrid dense + sparse search. "
+    #         "Combines MMBert dense embeddings with SPLADE sparse embeddings for better retrieval. "
+    #         "Best for precise keyword matching combined with semantic understanding."
+    #     ),
+    #     instructions=(
+    #         "Use when query contains SPECIFIC KEYWORDS or PHRASES that must be matched exactly. "
+    #         "Hybrid search combines semantic understanding with keyword precision. "
+    #         "Best for: finding exact phrases, technical terms, named entities in audio."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
+    async def get_audio_from_query_hybrid(
         self,
-        visual_query: str,
-        caption_query: str,
+        audio_query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
-        visual_weight: float = 0.5,
-        caption_weight: float = 0.5,
+        dense_weight: float = 0.7,
+        sparse_weight: float = 0.3,
     ) -> ToolResult:
-        """Search images using combined visual and caption signals.
+        """Search audio transcripts using hybrid dense + sparse search.
 
-        Best for queries requiring BOTH visual appearance AND semantic meaning.
-        Visual query in English, caption query in Vietnamese.
+        Best for queries that need both semantic understanding and keyword matching.
+        The audio query must be in English.
 
         Args:
-            visual_query: English text describing visual appearance
-            caption_query: Vietnamese text describing content
+            audio_query: English text describing spoken content to find
             top_k: Number of results to return (default 10)
             video_ids: Optional list of video IDs to filter
             user_id: Optional user ID to filter
-            visual_weight: Weight for visual search (default 0.5)
-            caption_weight: Weight for caption search (default 0.5)
+            dense_weight: Weight for dense search (default 0.7)
+            sparse_weight: Weight for sparse search (default 0.3)
 
         Returns:
             ToolResult with search results
         """
         kwargs = {
-            "visual_query": visual_query,
-            "caption_query": caption_query,
+            "audio_query": audio_query,
             "top_k": top_k,
             "video_ids": video_ids,
             "user_id": user_id,
-            "visual_weight": visual_weight,
-            "caption_weight": caption_weight,
+            "dense_weight": dense_weight,
+            "sparse_weight": sparse_weight,
         }
 
-        visual_emb = await self.qwenvl.ainfer_text([visual_query])
-        caption_emb = await self.qwenvl.ainfer_text([caption_query])
+        dense_embeddings = await self.mmbert.ainfer([audio_query])
+        if dense_embeddings is None:
+            return ToolResult(content="Error: MMBert encoding failed")
 
-        results = await self.image_client.search_multi_dense(
-            vectors=[
-                ("image_dense", visual_emb[0]),
-                ("caption_mm_dense", caption_emb[0]),
-            ],
-            weights=[visual_weight, caption_weight],
+        dense_vector = dense_embeddings[0]
+        sparse_vector = (await self.splade.aencode([audio_query]))[0]
+
+        results = await self.audio_client.search_audio_hybrid(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            video_ids=video_ids,
+            user_id=user_id,
             limit=top_k,
-            query_filter=self.image_client.build_filter(video_ids, user_id),
+            dense_weight=dense_weight,
+            sparse_weight=sparse_weight,
         )
 
-        # Fetch captions from PostgreSQL for multimodal search results
-        await self._populate_image_captions(results, prefer_postgres=True)
-
-        return self._store_result("get_images_from_multimodal_query", kwargs, results)
+        return self._store_result("get_audio_from_query_hybrid", kwargs, results)
 
     # =========================================================================
     # Cache Retrieval Tool
     # =========================================================================
 
-    @tool(
-        description="View cached search results with different view modes.",
-        cache_results=False,
-    )
+    # @tool(
+    #     description="View cached search results with different view modes.",
+    #     cache_results=False,
+    # )
     def view_cache_result(
         self,
         tool_name: str,
@@ -746,6 +520,7 @@ class VideoSearchToolkit(Toolkit):
         handle_id = hashlib.md5(
             json.dumps({"tool": tool_name, "args": args}, sort_keys=True).encode()
         ).hexdigest()[:8]
+        print(f"{handle_id=}")
 
         if handle_id in self._result_store:
             container = self._result_store[handle_id]
@@ -775,6 +550,57 @@ class VideoSearchToolkit(Toolkit):
             return ToolResult(content=container.get_statistics(group_by))
         else:
             return ToolResult(content=container.get_full())
+
+
+    def view_cache_result_from_handle_id(
+        self,
+        handle_id: str,
+        view_mode: Literal["brief", "detailed", "statistics", "full"] = "brief",
+        top_n: int = 5,
+        group_by: Literal["video_id", "score_bucket"] = "video_id",
+    ) -> ToolResult:
+
+        container = self._result_store.get(handle_id)
+        if not container:
+            return ToolResult(
+                content=(
+                    f"Found cached result for {handle_id=}.\n"
+                    f"Note: Results are stored as strings. "
+                    f"Re-run the search to get structured results for viewing."
+                )
+            )
+
+        if view_mode == "brief":
+            return ToolResult(content=container.get_brief(top_n))
+        elif view_mode == "detailed":
+            return ToolResult(content=container.get_detailed(top_n))
+        elif view_mode == "statistics":
+            return ToolResult(content=container.get_statistics(group_by))
+        else:
+            return ToolResult(content=container.get_full())
+
+    def list_cached_results(self) -> ToolResult:
+        """List all available handle IDs with a brief summary.
+
+        Returns:
+            ToolResult with list of cached results
+        """
+        if not self._result_store:
+            return ToolResult(content="No cached results available.")
+
+        lines = ["=== Cached Search Results ===", ""]
+
+        for handle_id, container in self._result_store.items():
+            lines.append(f"Handle ID: {handle_id}")
+            lines.append(f"  Tool: {container.tool_name}")
+            lines.append(f"  Type: {container.result_type}")
+            lines.append(f"  Total: {len(container.results)} result(s)")
+            lines.append(f"  Args: {container.tool_kwargs}")
+            lines.append("")
+
+        return ToolResult(content="\n".join(lines))
+
+
 
 
 __all__ = ["VideoSearchToolkit"]
