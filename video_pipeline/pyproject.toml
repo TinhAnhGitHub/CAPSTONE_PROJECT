@@ -24,7 +24,11 @@ dependencies = [
     "setuptools>=82.0.1",
     "sqlalchemy>=2.0.46",
     "urllib3>=2.6.3",
+    "qdrant-client>=1.17.0",
     "uvicorn>=0.41.0",
+    "python-arango>=8.3.0",
+    "elasticsearch>=9.3.0",
+    "minio>=7.2.20",
 ]
 
 
@@ -44,9 +48,8 @@ worker = [
     "qdrant-client[fastembed]>=1.17.0",
     "tritonclient>=2.65.0",
     "setuptools>=82.0.1",
-    "llama-index-core>=0.14.15",
-    "llama-index-llms-google-genai>=0.8.7",
-    "llama-index-llms-openrouter>=0.4.4",
+    "langchain-openai>=1.1.11",
+    "langchain-core>=1.2.19",
     "elasticsearch>=9.3.0",
     "python-arango>=8.3.0",
     "scipy>=1.17.1",
@@ -57,7 +60,8 @@ worker = [
     "leidenalg>=0.11.0",
     "torch==2.6.0",
     "torch-geometric==2.7.0",
-    "gensim>=4.4.0"
+    "gensim>=4.4.0",
+    "bokeh>=3.9.0",
 ]
 
 [project.scripts]
