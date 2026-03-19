@@ -33,6 +33,7 @@ class VideoInput(BaseModel):
 
 
 VIDEO_CONFIG = TaskConfig.from_yaml("video_registration")
+print(VIDEO_CONFIG.to_task_kwargs())
 
 
 @StageRegistry.register
