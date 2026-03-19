@@ -39,7 +39,10 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
     config = IMAGE_CONFIG
 
     async def preprocess(self, input_data: list[ImageItem]) -> list[_PreprocessedImageItem]:
-        """Download the video once and extract frame bytes for every item in the batch."""
+        """Download the video once and extract frame bytes for every item in the batch.
+
+        Uses streaming download to avoid loading entire video into memory.
+        """
         logger = get_run_logger()
         autoshot_artifact = input_data[0][0]
         video_url = autoshot_artifact.related_video_minio_url
@@ -50,14 +53,11 @@ class ImageExtractionTask(BaseTask[list[ImageItem], list[ImageArtifact]]):
         )
 
         preprocessed: list[_PreprocessedImageItem] = []
-        async with self.minio_client.fetch_object_from_s3(
+        async with self.minio_client.fetch_object_streaming(
             s3_url=video_url,
             suffix=f".{video_extension}",
         ) as video_path:
-            with open(str(video_path), "rb") as f:
-                video_bytes = f.read()
-
-            reader = FastFrameReader(video_bytes)
+            reader = FastFrameReader(video_path)
             try:
                 for artifact, frame_index in input_data:
                     frame_bytes = reader.get_frame(frame_index)

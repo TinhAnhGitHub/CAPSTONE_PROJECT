@@ -11,8 +11,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import cast
-
+from pydantic import SecretStr
 from prefect import get_run_logger, task
 from prefect.artifacts import acreate_markdown_artifact
 
@@ -26,7 +25,6 @@ from video_pipeline.core.client.storage.pg.runtime import (
     shutdown_postgres_client,
 )
 from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient, OpenRouterConfig
-from llama_index.core.llms import ChatMessage, ChatResponse
 from video_pipeline.config import get_settings
 
 from .prompt import ImageCaptionOCR, CAPTION_OCR_PROMPT
@@ -105,25 +103,16 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
         ) -> tuple[ImageCaptionOCR, dict] | None:
             async with semaphore:
                 try:
-                    from llama_index.core.llms import ChatMessage, ImageBlock, TextBlock
+                    from langchain_core.messages import HumanMessage
 
-                    msg = ChatMessage(
-                        role="user",
-                        blocks=[
-                            ImageBlock(image=image_byte),
-                            TextBlock(text=CAPTION_OCR_PROMPT),
-                        ],
+                    data_url = client.encode_image_bytes(image_byte)
+                    msg = HumanMessage(
+                        content=[
+                            {"type": "image_url", "image_url": {"url": data_url}},
+                            {"type": "text", "text": CAPTION_OCR_PROMPT},
+                        ]
                     )
-                    response = await structured_llm.achat([msg])
-                    result = cast(ImageCaptionOCR, response.raw)
-
-
-                    usage = {
-                        'prompt_tokens': response.additional_kwargs.get('prompt_tokens', 0) or 0,
-                        'completion_tokens': response.additional_kwargs.get('completion_tokens', 0) or 0,
-                        'total_tokens': response.additional_kwargs.get('total_tokens', 0) or 0,
-                        'cost': response.additional_kwargs.get('cost', 0.0) or 0.0,
-                    }
+                    result, usage = await structured_llm([msg])
 
                     return result, usage
                 except Exception as e:
@@ -328,7 +317,7 @@ async def image_caption_ocr_chunk_task(
     logger.info(f"[ImageCaptionOCRChunk] Clients initialized | minio={settings.minio.endpoint}")
 
     openrouter_config = OpenRouterConfig(
-        api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        api_key=SecretStr(os.environ.get("OPENROUTER_API_KEY", "")),
         model=IMAGE_CAPTION_OCR_CONFIG.additional_kwargs["model"],
         base_url=IMAGE_CAPTION_OCR_CONFIG.additional_kwargs["base_url"],
     )
