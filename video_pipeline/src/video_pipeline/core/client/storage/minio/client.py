@@ -131,9 +131,44 @@ class MinioStorageClient:
                 f"Failed to fetch object {bucket}/{object_name}: {exc}"
             ) from exc
 
+    def stream_object_to_file(self, bucket: str, object_name: str, file_path: str, chunk_size: int = 32 * 1024 * 1024) -> int:
+        """Stream object from MinIO directly to file without loading all into memory.
+
+        Args:
+            bucket: Bucket name
+            object_name: Object name
+            file_path: Path to write the file
+            chunk_size: Size of chunks to read at a time (default 32MB)
+
+        Returns:
+            Total bytes written
+        """
+        try:
+            response = self.client.get_object(bucket, object_name)
+            try:
+                total_bytes = 0
+                with open(file_path, 'wb') as f:
+                    for chunk in response.stream(chunk_size):
+                        f.write(chunk)
+                        total_bytes += len(chunk)
+                return total_bytes
+            finally:
+                response.close()
+                response.release_conn()
+        except S3Error as exc:
+            logger.exception("Failed to stream %s/%s", bucket, object_name)
+            raise MinioStorageError(
+                f"Failed to stream object {bucket}/{object_name}: {exc}"
+            ) from exc
+
 
     @asynccontextmanager
     async def fetch_object_from_s3(self, s3_url: str, suffix: str):
+        """Fetch object from S3 into memory first, then write to temp file.
+
+        DEPRECATED: Use fetch_object_streaming() for memory efficiency.
+        This method loads the entire object into memory before writing to disk.
+        """
         parsed = urlparse(s3_url)
         if parsed.scheme == "s3":
             # s3://bucket/object
@@ -160,7 +195,47 @@ class MinioStorageClient:
         try:
             tmp.write(data)
             tmp.flush()
-            tmp.close()  
+            tmp.close()
+            yield tmp.name
+        finally:
+            try:
+                os.remove(tmp.name)
+            except FileNotFoundError:
+                pass
+
+    @asynccontextmanager
+    async def fetch_object_streaming(self, s3_url: str, suffix: str):
+        """Stream object from MinIO directly to temp file without loading into memory.
+
+        This is the memory-efficient version of fetch_object_from_s3.
+        Instead of loading the entire object into RAM before writing to disk,
+        it streams chunks directly to a temp file.
+
+        Args:
+            s3_url: S3 URL (s3://bucket/object) or HTTP URL
+            suffix: File suffix for temp file (e.g., '.mp4')
+
+        Yields:
+            Path to temp file (deleted after context exits)
+        """
+        parsed = urlparse(s3_url)
+        if parsed.scheme == "s3":
+            bucket = parsed.netloc
+            object_name = parsed.path.lstrip("/")
+        else:
+            path_parts = parsed.path.lstrip("/").split("/", 1)
+            bucket = path_parts[0]
+            object_name = path_parts[1] if len(path_parts) > 1 else ""
+
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        tmp.close()  # Close so we can write to it separately
+
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.stream_object_to_file(bucket, object_name, tmp.name)
+            )
             yield tmp.name
         finally:
             try:

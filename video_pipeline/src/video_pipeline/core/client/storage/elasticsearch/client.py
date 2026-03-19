@@ -1,5 +1,3 @@
-"""Elasticsearch client for OCR text indexing."""
-
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -16,14 +14,6 @@ from video_pipeline.core.client.storage.elasticsearch.utils import (
 
 
 class ElasticsearchOCRClient:
-    """
-    Elasticsearch client for OCR text indexing.
-
-    Prepares and indexes OCR text documents with:
-    - Text cleaning and normalization
-    - Optional semantic embeddings via MMBertClient
-    - BM25-ready analyzers
-    """
 
     def __init__(self, settings: ElasticsearchSettings, embedding_client=None):
         self.settings = settings
@@ -31,13 +21,11 @@ class ElasticsearchOCRClient:
         self._embedding_client = embedding_client  # MMBertClient instance
 
     async def connect(self) -> None:
-        """Initialize the Elasticsearch client."""
         if self._client is None:
             self._client = AsyncElasticsearch(**self.settings.get_client_kwargs())
             logger.info(f"[ElasticsearchOCRClient] Connected to {self.settings.url}")
 
     async def close(self) -> None:
-        """Close the Elasticsearch client."""
         if self._client:
             await self._client.close()
             self._client = None
@@ -55,7 +43,6 @@ class ElasticsearchOCRClient:
             logger.info(f"[ElasticsearchOCRClient] Index '{self.settings.index_name}' already exists")
 
     async def embed_text(self, text: str) -> list[float] | None:
-        """Generate embedding for text using MMBertClient."""
         if self._embedding_client is None:
             return None
 
@@ -65,7 +52,6 @@ class ElasticsearchOCRClient:
         return None
 
     async def embed_texts(self, texts: list[str]) -> list[list[float] | None]:
-        """Generate embeddings for multiple texts using MMBertClient."""
         if self._embedding_client is None:
             return [None] * len(texts)
 
@@ -88,11 +74,6 @@ class ElasticsearchOCRClient:
         image_id: str,
         generate_embedding: bool = True,
     ) -> dict[str, Any]:
-        """
-        Prepare an OCR document for indexing.
-
-        Returns a document dict ready for bulk indexing.
-        """
         cleaned_text = clean_ocr_text(raw_text)
 
         content_vector = None
@@ -129,11 +110,6 @@ class ElasticsearchOCRClient:
         image_id: str,
         generate_embedding: bool = True,
     ) -> str:
-        """
-        Index a single OCR document.
-
-        Returns the artifact ID.
-        """
         if not self._client:
             raise RuntimeError("Elasticsearch client not connected")
 
@@ -164,15 +140,6 @@ class ElasticsearchOCRClient:
         documents: list[dict[str, Any]],
         generate_embeddings: bool = True,
     ) -> int:
-        """
-        Bulk index OCR documents.
-
-        Args:
-            documents: List of document dicts with fields matching prepare_ocr_document
-            generate_embeddings: Whether to generate embeddings for cleaned_text
-
-        Returns number of documents indexed.
-        """
         if not self._client:
             raise RuntimeError("Elasticsearch client not connected")
 
@@ -185,33 +152,63 @@ class ElasticsearchOCRClient:
             if content_vector is None and generate_embeddings and cleaned_text:
                 content_vector = await self.embed_text(cleaned_text)
 
+            artifact_id = doc.get("artifact_id")
+
+            source = {
+                "artifact_id": artifact_id,
+                "user_id": doc.get("user_id"),
+                "raw_text": raw_text,
+                "cleaned_text": cleaned_text,
+                "frame_index": doc.get("frame_index", 0),
+                "timestamp": doc.get("timestamp", ""),
+                "timestamp_sec": doc.get("timestamp_sec", 0.0),
+                "video_id": doc.get("video_id"),
+                "related_video_fps": doc.get("related_video_fps", 0.0),
+                "image_minio_url": doc.get("image_minio_url", ""),
+                "image_id": doc.get("image_id", ""),
+                "indexed_at": datetime.now(timezone.utc).isoformat()
+            }
+
+            if content_vector and len(content_vector) == 768:
+                source["content_vector"] = content_vector
+
             action = {
                 "_index": self.settings.index_name,
-                "_id": doc.get("artifact_id"),
-                "_source": {
-                    "artifact_id": doc.get("artifact_id"),
-                    "user_id": doc.get("user_id"),
-                    "raw_text": raw_text,
-                    "cleaned_text": cleaned_text,
-                    "frame_index": doc.get("frame_index", 0),
-                    "timestamp": doc.get("timestamp", ""),
-                    "timestamp_sec": doc.get("timestamp_sec", 0.0),
-                    "video_id": doc.get("video_id"),
-                    "related_video_fps": doc.get("related_video_fps", 0.0),
-                    "image_minio_url": doc.get("image_minio_url", ""),
-                    "image_id": doc.get("image_id", ""),
-                    "content_vector": content_vector or [],
-                    "indexed_at": datetime.now(timezone.utc).isoformat()
-                }
+                "_id": artifact_id,
+                "_source": source
             }
             actions.append(action)
 
-        success, _ = await helpers.async_bulk(self._client, actions, raise_on_error=True)
+        if not actions:
+            logger.warning("[ElasticsearchOCRClient] No documents to index")
+            return 0
+
+        success, errors = await helpers.async_bulk(
+            self._client,
+            actions,
+            raise_on_error=False,
+        )
+
+        if errors:
+            for error_info in errors: #type: ignore
+                action_type = list(error_info.keys())[0]
+                error_data = error_info[action_type]
+                error_reason = error_data.get('error', {}).get('reason', 'Unknown')
+                error_type = error_data.get('error', {}).get('type', 'Unknown')
+                doc_id = error_data.get('_id', 'Unknown')
+                logger.error(
+                    f"[ElasticsearchOCRClient] Failed to index doc '{doc_id}': "
+                    f"type={error_type}, reason={error_reason}"
+                )
+            raise RuntimeError(
+                f"Bulk indexing failed: {len(errors)} error(s). " #type: ignore
+                f"First error: {errors[0]}" #type: ignore
+            )
+
         logger.info(f"[ElasticsearchOCRClient] Bulk indexed {success} document(s)")
         return success
 
     async def delete_by_video_id(self, video_id: str) -> int:
-        """Delete all OCR documents for a given video ID."""
         if not self._client:
             raise RuntimeError("Elasticsearch client not connected")
 
@@ -224,7 +221,6 @@ class ElasticsearchOCRClient:
         return deleted
 
     async def health_check(self) -> bool:
-        """Check Elasticsearch cluster health."""
         if not self._client:
             return False
         try:
