@@ -201,44 +201,29 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             logger.info(f"[ArangoIndexing] Inserted {len(micro_docs)} micro-events")
 
         comm_docs = []
-        comm_texts = []
         for comm in preprocessed.communities:
-            if not comm.get("embedding"):
-                text = f"{comm.get('title', '')}. {comm.get('summary', '')}"
-                comm_texts.append(text)
+            ckey = comm.get("comm_key", "")
+            n2v_node = nodes.get(ckey, {})
+            sem_emb = comm.get("embedding", [])  # Already embedded in community_detection
 
-        if comm_texts:
-            comm_embeddings = await dense_client.ainfer(comm_texts) or []
-            emb_idx = 0
-
-            for comm in preprocessed.communities:
-                ckey = comm.get("comm_key", "")
-                n2v_node = nodes.get(ckey, {})
-                sem_emb = comm.get("embedding")
-
-                if not sem_emb:
-                    sem_emb = comm_embeddings[emb_idx] if emb_idx < len(comm_embeddings) else []
-                    emb_idx += 1
-
-                comm_docs.append({
-                    "_key": _ns(video_id, ckey),
-                    "video_id": video_id,
-                    "comm_idx": comm.get("comm_idx"),
-                    "title": comm.get("title", ""),
-                    "summary": comm.get("summary", ""),
-                    "size": comm.get("size", 0),
-                    "member_keys": comm.get("member_keys", []),
-                    "event_keys": comm.get("event_keys", []),
-                    "semantic_embedding": sem_emb,
-                    "structural_embedding_full": n2v_node.get("full_heterogeneous_embedding"),
-                })
+            comm_docs.append({
+                "_key": _ns(video_id, ckey),
+                "video_id": video_id,
+                "comm_idx": comm.get("comm_idx"),
+                "title": comm.get("title", ""),
+                "summary": comm.get("summary", ""),
+                "size": comm.get("size", 0),
+                "member_keys": comm.get("member_keys", []),
+                "event_keys": comm.get("event_keys", []),
+                "semantic_embedding": sem_emb,
+                "structural_embedding_full": n2v_node.get("full_heterogeneous_embedding"),
+            })
 
         if comm_docs:
             db.collection("communities").insert_many(comm_docs, overwrite_mode="replace")
             stats["communities"] = len(comm_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(comm_docs)} communities")
 
-        # === Insert Entity Relations ===
         rel_docs = []
         for rel in preprocessed.relationships:
             subj = rel.get("subject_global", "")
@@ -260,7 +245,6 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             stats["entity_relations"] = len(rel_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(rel_docs)} entity relations")
 
-        # === Insert Event-Entity Links ===
         ee_docs = []
         for link in preprocessed.event_entity_links:
             fk = _strip_collection(link.get("_from", ""))
