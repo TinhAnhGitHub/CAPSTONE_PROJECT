@@ -72,7 +72,7 @@ if __name__ == "__main__":
         # ('384209bac6311285477382d8', 's3://video/veritasium_12.mp4'),
         # ('946330031ead69b21354d038', 's3://video/veritasium_13.mp4'),
         ('3636d10a2ad4787733c9700d', 's3://video/veritasium_14.mp4'),
-        ('9b17f473300a5436f0a053be', 's3://video/veritasium_15.mp4'),
+        # ('9b17f473300a5436f0a053be', 's3://video/veritasium_15.mp4'),
         # ('1e1d300356360ed84020821c', 's3://video/veritasium_16.mp4'),
         # ('02d242459a690605ee3a8ddf', 's3://video/veritasium_17.mp4'),
         # ('c096e9a1462d83d89826cb83', 's3://video/veritasium_18.mp4'),
