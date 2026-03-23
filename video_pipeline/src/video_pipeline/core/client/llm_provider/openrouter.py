@@ -85,7 +85,7 @@ class OpenRouterClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    def as_structured_llm(self, output_cls: type[T]):
+    def as_structured_llm(self, output_cls: type[T], max_retries: int = 3, retry_delay: float = 1.0):
         parser = PydanticOutputParser(pydantic_object=output_cls)
 
         async def ainvoke(messages: list[BaseMessage], **kwargs) -> tuple[T, dict]:
@@ -95,21 +95,36 @@ class OpenRouterClient:
                 *messages,
             ]
 
-            response = await self.llm.ainvoke(augmented, **kwargs)
-            usage = self._extract_usage(response)
-            from typing import cast
-            raw = (
-                cast(str, response.content)
-                .strip()
-                .removeprefix("```json")
-                .removeprefix("```")
-                .removesuffix("```")
-                .strip()
-            )
-            repaired = json.loads(raw)
-            parsed = parser.parse(json.dumps(repaired))
-
-            return parsed, usage
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    response = await self.llm.ainvoke(augmented, **kwargs)
+                    usage = self._extract_usage(response)
+                    from typing import cast
+                    raw = (
+                        cast(str, response.content)
+                        .strip()
+                        .removeprefix("```json")
+                        .removeprefix("```")
+                        .removesuffix("```")
+                        .strip()
+                    )
+                    repaired = json.loads(raw)
+                    parsed = parser.parse(json.dumps(repaired))
+                    return parsed, usage
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"[OpenRouter] Structured LLM attempt {attempt + 1}/{max_retries} failed: {e}. "
+                            f"Retrying in {retry_delay}s..."
+                        )
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        logger.error(
+                            f"[OpenRouter] Structured LLM failed after {max_retries} attempts: {e}"
+                        )
+            raise last_error if last_error else RuntimeError("Structured LLM failed with unknown error")
 
         return ainvoke
 
