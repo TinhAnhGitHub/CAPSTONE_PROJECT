@@ -16,7 +16,6 @@ from video_pipeline.core.client.storage.minio import MinioStorageClient
 from video_pipeline.core.client.storage.pg.schema import ArtifactSchema, ArtifactLineageSchema
 
 
-# ArangoDB collections to delete from
 ARANGO_VERTEX_COLLECTIONS = ["entities", "events", "micro_events", "communities"]
 ARANGO_EDGE_COLLECTIONS = [
     "entity_relations",
@@ -31,7 +30,6 @@ ARANGO_EDGE_COLLECTIONS = [
 
 
 class VideoDeletionService:
-    """Service to delete all artifacts associated with a video_id."""
 
     def __init__(self) -> None:
         self.settings = get_settings()
@@ -46,7 +44,6 @@ class VideoDeletionService:
         return sessionmaker()
 
     def _get_minio_client(self) -> MinioStorageClient:
-        """Get a MinIO client."""
         return MinioStorageClient(
             endpoint=self.settings.minio.endpoint,
             access_key=self.settings.minio.access_key,
@@ -55,29 +52,21 @@ class VideoDeletionService:
         )
 
     def _get_qdrant_client(self) -> AsyncQdrantClient:
-        """Get a Qdrant client."""
         return AsyncQdrantClient(
             host=self.settings.qdrant.host,
             port=self.settings.qdrant.port,
         )
 
     def _get_arango_db(self):
-        """Get ArangoDB database connection."""
         client = ArangoClient(hosts=self.settings.arango.host)
         return client.db(self.settings.arango.database)
 
     def _get_elasticsearch_client(self) -> AsyncElasticsearch:
-        """Get an Elasticsearch client."""
         es = self.settings.elasticsearch
         url = f"http://{es.host}:{es.port}"
         return AsyncElasticsearch(url)
 
     async def _get_artifacts_for_video(self, video_id: str, session: AsyncSession) -> list[dict[str, Any]]:
-        """Retrieve all artifacts related to a video_id from PostgreSQL.
-
-        Returns:
-            List of artifact metadata dicts containing object_name, user_id, etc.
-        """
         stmt = select(ArtifactSchema).where(
             ArtifactSchema.artifact_metadata["related_video_id"].as_string() == video_id
         )
@@ -94,29 +83,28 @@ class VideoDeletionService:
         return [a.artifact_metadata for a in artifacts if a.artifact_metadata]
 
     def _delete_from_arango(self, video_id: str) -> dict[str, Any]:
-        """Delete KG data from ArangoDB."""
-        result = {}
+        result: dict = {}
         try:
             db = self._get_arango_db()
 
-            # Delete from vertex collections
             for collection in ARANGO_VERTEX_COLLECTIONS:
                 try:
                     query = f"FOR doc IN {collection} FILTER doc.video_id == @video_id REMOVE doc IN {collection}"
                     cursor = db.aql.execute(query, bind_vars={"video_id": video_id})
-                    count = cursor.statistics()["writes_executed"] #type:ignore
+                    stats = cursor.statistics()  # type: ignore
+                    count = stats.get("writes_executed", 0) if stats else 0
                     result[collection] = {"deleted": count}
                     logger.info(f"[ArangoDB] Deleted {count} documents from {collection}")
                 except Exception as e:
                     result[collection] = {"error": str(e)}
                     logger.warning(f"[ArangoDB] Error deleting from {collection}: {e}")
 
-            # Delete from edge collections
             for collection in ARANGO_EDGE_COLLECTIONS:
                 try:
                     query = f"FOR doc IN {collection} FILTER doc.video_id == @video_id REMOVE doc IN {collection}"
                     cursor = db.aql.execute(query, bind_vars={"video_id": video_id})
-                    count = cursor.statistics()["writes_executed"] #type:ignore
+                    stats = cursor.statistics()  # type: ignore
+                    count = stats.get("writes_executed", 0) if stats else 0
                     result[collection] = {"deleted": count}
                     logger.info(f"[ArangoDB] Deleted {count} edges from {collection}")
                 except Exception as e:
@@ -130,8 +118,7 @@ class VideoDeletionService:
         return result
 
     async def _delete_from_elasticsearch(self, video_id: str) -> dict[str, Any]:
-        """Delete OCR documents from Elasticsearch."""
-        result = {"deleted": 0}
+        result: dict = {"deleted": 0}
         client = self._get_elasticsearch_client()
 
         try:
@@ -172,7 +159,7 @@ class VideoDeletionService:
         """
         logger.info(f"[VideoDeletion] Starting deletion for video_id={video_id}")
 
-        results = {
+        results : dict = {
             "video_id": video_id,
             "postgres": {"artifacts": 0, "lineage": 0},
             "minio": {"objects_deleted": 0, "errors": []},
@@ -221,22 +208,21 @@ class VideoDeletionService:
                 ArtifactLineageSchema.child_artifact_id.in_(artifact_ids)
             )
             lineage_result = await session.execute(lineage_stmt)
-            lineage_count = lineage_result.rowcount
+            lineage_count = lineage_result.rowcount #type:ignore
 
             parent_lineage_stmt = delete(ArtifactLineageSchema).where(
                 ArtifactLineageSchema.parent_artifact_id.in_(artifact_ids)
             )
             parent_lineage_result = await session.execute(parent_lineage_stmt)
-            lineage_count += parent_lineage_result.rowcount
+            lineage_count += parent_lineage_result.rowcount #type:ignore
 
             results["postgres"]["lineage"] = lineage_count
 
-            # Delete artifacts from PostgreSQL
             artifact_stmt = delete(ArtifactSchema).where(
                 ArtifactSchema.artifact_id.in_(artifact_ids)
             )
             artifact_result = await session.execute(artifact_stmt)
-            artifact_count = artifact_result.rowcount
+            artifact_count = artifact_result.rowcount #type:ignore
 
             results["postgres"]["artifacts"] = artifact_count
 
@@ -246,7 +232,6 @@ class VideoDeletionService:
                 f"[Postgres] Deleted {artifact_count} artifacts and {lineage_count} lineage records"
             )
 
-            # Delete from Qdrant
             qdrant_client = self._get_qdrant_client()
             collection_base = self.settings.qdrant.collection_base
             collections = [
@@ -286,11 +271,9 @@ class VideoDeletionService:
 
             await qdrant_client.close()
 
-            # Delete from ArangoDB (sync operation in thread)
             import asyncio
             results["arango"] = await asyncio.to_thread(self._delete_from_arango, video_id)
 
-            # Delete from Elasticsearch
             results["elasticsearch"] = await self._delete_from_elasticsearch(video_id)
 
             results["summary"]["success"] = True

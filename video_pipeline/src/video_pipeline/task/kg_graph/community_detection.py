@@ -69,9 +69,6 @@ def run_leiden(
     community_data: list[dict] = []
     for i, community in enumerate(partition):
         member_keys = [node_list[v] for v in community]
-        preview = member_keys[:5]
-        ellipsis = "…" if len(member_keys) > 5 else ""
-        print(f"    Community {i:>3d}: {len(member_keys):>4d} entities — {preview}{ellipsis}")
         community_data.append({"comm_idx": i, "member_keys": member_keys})
 
     return community_data, modularity
