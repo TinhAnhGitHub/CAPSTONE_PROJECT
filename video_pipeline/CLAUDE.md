@@ -18,7 +18,7 @@ This is a **Prefect-based video processing pipeline** that extracts, analyzes, a
 - **ArangoDB** for Knowledge Graph storage and graph queries
 - **Triton Inference Server** for SPLADE sparse embeddings
 - **Redis** for Prefect messaging
-- **External ML Services**: QwenVL (embeddings), mmBERT (text embeddings), ASR, LLM providers
+- **External ML Services**: QwenVL (embeddings), mmBERT (text embeddings), ASR, LLM providers (OpenRouter, Gemini)
 
 ## Commands
 
@@ -35,7 +35,7 @@ pip install -e ".[worker]"
 ### Running Services
 
 ```bash
-# Start all infrastructure (Prefect, Postgres, Redis, MinIO, Qdrant, ArangoDB)
+# Start all infrastructure (Prefect, Postgres, Redis, MinIO, Qdrant, ArangoDB, Elasticsearch)
 cd docker && docker-compose up -d
 
 # Run the API server
@@ -68,7 +68,13 @@ src/video_pipeline/
 ├── api/                    # FastAPI application
 │   ├── app.py             # Main FastAPI app with CORS, routers
 │   ├── lifespan.py        # Startup/shutdown lifecycle
-│   └── routers/           # API endpoints (upload, health, videos)
+│   ├── routers/           # API endpoints
+│   │   ├── health.py      # Health check endpoints
+│   │   ├── upload.py      # Video upload/submission endpoint
+│   │   └── videos.py      # Video retrieval and deletion endpoints
+│   └── services/          # Business logic services
+│       ├── deletion.py    # VideoDeletionService - deletes all artifacts
+│       └── retrieval.py   # VideoRetrievalService - fetches all video data
 ├── config/                 # Configuration management
 │   ├── settings.py        # Pydantic-settings based configuration
 │   ├── tasks.yaml         # Task definitions with retries, timeouts, caching
@@ -77,13 +83,26 @@ src/video_pipeline/
 │   ├── artifact/          # Pydantic models for pipeline outputs
 │   ├── client/            # External service clients
 │   │   ├── inference/     # ML service clients (ASR, OCR, Autoshot, Embeddings)
+│   │   │   ├── asr_client.py       # Qwen3-ASR client
+│   │   │   ├── autoshot_client.py  # Scene detection client
+│   │   │   ├── ocr_client.py       # OCR extraction client
+│   │   │   ├── qwenvl_embed.py     # QwenVL multimodal embeddings
+│   │   │   ├── splade_client.py    # SPLADE sparse embeddings via Triton
+│   │   │   └── te_client.py        # Text embedding client
 │   │   ├── llm_provider/  # LLM clients (Gemini, OpenRouter, Moondream)
 │   │   ├── progress/      # HTTP progress tracking
-│   │   └── storage/       # Storage clients (MinIO, Qdrant, PostgreSQL, ArangoDB)
-│   └── storage/           # Persistence layer (pg_tracker, prefect_block)
+│   │   │   ├── http_tracker.py     # HTTPProgressTracker class
+│   │   │   └── registry.py         # StageRegistry for stage names
+│   │   └── storage/       # Storage clients (MinIO, Qdrant, PostgreSQL, ArangoDB, Elasticsearch)
+│   │       ├── minio/              # MinIO object storage
+│   │       ├── pg/                 # PostgreSQL client and schema
+│   │       ├── qdrant/             # Qdrant vector database
+│   │       ├── arango/             # ArangoDB graph database
+│   │       └── elasticsearch/      # Elasticsearch OCR indexing
+│   ├── storage/           # Persistence layer (pg_tracker, prefect_block)
+│   └── state.py           # Shared state management
 ├── flow/                   # Prefect flow orchestration
 │   ├── main.py            # Main single_video_processing_flow
-│   ├── submain.py         # Alternative flow definitions
 │   ├── subtask.py         # Preprocessing tasks
 │   └── batch_helper.py    # Batching utilities
 └── task/                   # Individual processing tasks
@@ -91,29 +110,33 @@ src/video_pipeline/
     ├── video/             # Video registration
     ├── autoshot/          # Scene/shot detection
     ├── asr/               # Audio speech recognition
-    ├── audio_segment/     # Audio segmentation
+    ├── audio_segment/     # Audio segmentation into semantic chunks
+    ├── audio_transcript_embedding/  # ASR text embeddings
     ├── image_extraction/  # Frame extraction
     ├── image_caption_ocr/ # Combined frame captioning + OCR (single LLM call)
-    ├── image_embedding/   # Frame embeddings
+    ├── image_embedding/   # Frame embeddings (multimodal)
+    ├── image_caption_embedding/     # Caption text embeddings
     ├── ocr_indexing/      # OCR text indexing into Elasticsearch
     ├── segment_caption/   # Segment caption generation
-    ├── segment_embedding/ # Segment embeddings
-    ├── audio_transcript_embedding/  # Audio transcript text embeddings
+    ├── segment_embedding/ # Segment embeddings (multimodal)
+    ├── segment_caption_embedding/   # Segment caption text embeddings
     ├── kg_graph/          # Knowledge Graph pipeline (5 stages)
     ├── arango_indexing/   # Knowledge Graph indexing into ArangoDB
-    └── qdrant_indexing/   # Vector database indexing (dense + sparse)
+    └── qdrant_indexing/   # Vector database indexing
         ├── image.py       # Image embedding indexing
-        ├── caption.py     # Image caption embedding indexing
-        ├── segment.py     # Audio segment embedding indexing
-        ├── segment_caption.py  # Segment caption embedding indexing
-        └── audio_transcript.py  # Audio transcript embedding indexing
+        ├── image_caption.py     # Image caption embedding indexing
+        ├── segment.py     # Segment embedding indexing
+        ├── segment_caption.py   # Segment caption embedding indexing
+        ├── audio_transcript.py  # Audio transcript embedding indexing
+        ├── config.py      # Shared Qdrant configuration
+        └── utils.py       # Shared utilities
 ```
 
 ### Core Components
 
 #### 1. Task System (`task/base/base_task.py`)
 
-All tasks extend `BaseTask[InputT, OutputT]` and implement three methods:
+All tasks extend `BaseTask[InputT, OutputT]` and implement four methods:
 
 ```python
 class MyTask(BaseTask[InputType, OutputType]):
@@ -146,17 +169,28 @@ kwargs = config.to_task_kwargs()  # Converts to Prefect @task decorator kwargs
 
 Pydantic models representing pipeline outputs with lineage tracking:
 
+**Video & Audio Artifacts:**
 - `VideoArtifact` - Initial video metadata (fps, duration, format)
 - `AutoshotArtifact` - Scene boundary detection results
 - `ASRArtifact` - Audio transcription results
 - `AudioSegmentArtifact` - Semantically segmented audio chunks
+- `AudioTranscriptEmbedArtifact` - Embeddings of ASR text for semantic search
+
+**Image Artifacts:**
 - `ImageArtifact` - Extracted video frames
 - `ImageCaptionArtifact` - Frame captions (from combined caption+OCR task)
-- `ImageEmbeddingArtifact` - Frame visual embeddings
 - `ImageOCRArtifact` - OCR text from frames
-- `AudioTranscriptEmbedArtifact` - Embeddings of ASR text
+- `ImageEmbeddingArtifact` - Frame visual embeddings (multimodal with caption)
+- `TextCaptionEmbeddingArtifact` - Caption text embeddings
+- `ImageCaptionMultimodalEmbeddingArtifact` - Multimodal caption embeddings
+
+**Segment Artifacts:**
 - `SegmentCaptionArtifact` - Segment-level captions
-- `SegmentEmbeddingArtifact` - Segment visual embeddings
+- `SegmentEmbeddingArtifact` - Segment visual embeddings (multimodal)
+- `TextCapSegmentEmbedArtifact` - Segment caption text embeddings
+- `SegmentCaptionMultimodalEmbedArtifact` - Multimodal segment caption embeddings
+
+**Knowledge Graph Artifacts:**
 - `KGGraphArtifact` - Knowledge Graph with entities, relationships, events, communities, Node2Vec
 - `ArangoIndexingArtifact` - ArangoDB insertion statistics
 
@@ -168,7 +202,7 @@ Each artifact has:
 
 #### 3. Flow Orchestration (`flow/main.py`)
 
-The main flow `single_video_processing_flow` orchestrates the complete pipeline:
+The main flow `single_video_processing_flow` orchestrates the complete pipeline with modular helper functions:
 
 ```mermaid
 flowchart TB
@@ -184,29 +218,27 @@ flowchart TB
         subgraph AudioBranch["Audio Branch"]
             direction TB
             E[ASR] --> F[Audio Segment]
-            F --> G[Segment Embedding]
+            F --> G[Segment Embedding<br/>Multimodal]
             F --> H[Segment Caption]
             F --> GA[Audio Transcript Embedding]
             G --> I[Segment Qdrant Indexing]
             GA --> GB[Audio Transcript Qdrant Indexing]
             H --> J[Segment Caption Embedding]
-            H --> K[Segment Caption MM Embedding]
             H --> U[KG Pipeline]
         end
 
         subgraph ImageBranch["Image Branch"]
             direction TB
             L[Image Extraction] --> M[Image Caption + OCR<br/>Combined Task]
-            L --> N[Image Embedding]
+            L --> N[Image Embedding<br/>Multimodal]
             N --> P[Image Qdrant Indexing]
             M --> Q[OCR Elasticsearch Indexing]
             M --> R[Caption Embedding]
-            M --> S[Caption MM Embedding]
+            M --> S[Caption Qdrant Indexing]
         end
 
-        I --> T[Final Qdrant Indexing]
+        I --> T[Final Summary]
         J --> T
-        K --> T
         P --> T
         R --> T
         S --> T
@@ -214,6 +246,14 @@ flowchart TB
         U --> V[ArangoDB Indexing]
     end
 ```
+
+Key flow functions:
+- `run_video_registration()` - Stage 1
+- `run_autoshot()` - Stage 2
+- `run_preprocess()` - Stage 3
+- `run_audio_branch()` - Complete audio pipeline
+- `run_image_branch()` - Complete image pipeline
+- `create_summary_artifact()` - Final timing and statistics
 
 #### 4. Configuration (`config/settings.py`)
 
@@ -228,8 +268,20 @@ settings.minio.endpoint  # MinIO endpoint
 settings.postgres.connection_string  # PostgreSQL connection URL
 settings.qdrant.host  # Qdrant host
 settings.arango.host  # ArangoDB host
+settings.elasticsearch.host  # Elasticsearch host
 settings.dask.to_cluster_kwargs()  # Dask cluster config
+settings.triton.url  # Triton server URL
 ```
+
+Settings classes:
+- `MinioSettings` - Object storage configuration
+- `PostgresSettings` - Database configuration
+- `QdrantSettings` - Vector database configuration
+- `ElasticsearchSettings` - OCR text indexing configuration
+- `ArangoSettings` - Graph database configuration
+- `DaskSettings` - Parallel processing configuration
+- `TaskConfigSettings` - Global task defaults
+- `TritonSettings` - SPLADE sparse embedding server
 
 Environment-specific YAML configs in `config/environments/{env}.yaml`:
 - Set `APP_ENV=dev|staging|prod` to load the appropriate config
@@ -245,8 +297,11 @@ Environment-specific YAML configs in `config/environments/{env}.yaml`:
 
 #### 6. Inference Clients
 
-- **MMBertClient** (`core/client/inference/`): Dense text embeddings (768-dim)
-- **SpladeClient** (`core/client/inference/`): Sparse embeddings via Triton Inference Server
+- **QwenVLEmbeddingClient** (`core/client/inference/qwenvl_embed.py`): Multimodal embeddings (2048-dim)
+- **MMBertClient** (`core/client/inference/te_client.py`): Dense text embeddings (768-dim)
+- **SpladeClient** (`core/client/inference/splade_client.py`): Sparse embeddings via Triton Inference Server
+- **ASRClient** (`core/client/inference/asr_client.py`): Speech recognition
+- **AutoshotClient** (`core/client/inference/autoshot_client.py`): Scene detection
 
 ### Key Infrastructure (docker-compose)
 
@@ -257,7 +312,6 @@ Environment-specific YAML configs in `config/environments/{env}.yaml`:
 | MinIO | 9000/9001 | Object storage (API/Console) |
 | Qdrant | 6333/6334 | Vector database |
 | Elasticsearch | 9200 | OCR text search (BM25 + kNN) |
-| Triton Server | 8001/8000 | SPLADE sparse embeddings (gRPC/HTTP) |
 | PostgreSQL | 5432 | Artifact metadata |
 | ArangoDB | 8529 | Graph database for Knowledge Graph |
 | Redis | 6379 | Prefect messaging |
@@ -271,8 +325,33 @@ GET  /docs                       # OpenAPI documentation
 POST /api/uploads/               # Submit videos for processing
 GET  /api/health                 # Health check
 GET  /api/health/prefect         # Prefect connectivity check
-DELETE /api/videos/{video_id}    # Delete video and associated artifacts
+GET  /api/videos/{video_id}/full # Retrieve all data for a video
+DELETE /api/videos/{video_id}    # Delete video and all associated artifacts
 ```
+
+#### Video Retrieval Endpoint
+
+`GET /api/videos/{video_id}/full` retrieves all data across storage backends:
+
+Query parameters:
+- `sources` - Comma-separated list: `postgres,arango,qdrant,elasticsearch`
+- `include_vectors` - Boolean to include embedding vectors (default: false)
+
+Returns data from:
+- PostgreSQL: Artifact metadata and lineage
+- ArangoDB: Knowledge graph (entities, events, communities, relationships)
+- Qdrant: Embedding vectors (images, captions, segments, audio transcripts)
+- Elasticsearch: OCR text documents
+
+#### Video Deletion Endpoint
+
+`DELETE /api/videos/{video_id}` deletes all artifacts across:
+
+1. PostgreSQL - Artifact records and lineage
+2. MinIO - Object storage files
+3. Qdrant - Embedding vectors from all collections
+4. ArangoDB - Knowledge graph data
+5. Elasticsearch - OCR documents
 
 ### Data Flow
 
@@ -292,9 +371,10 @@ The pipeline depends on these external services (configured in tasks.yaml):
 
 - **Autoshot**: Scene detection model (`http://autoshot`)
 - **ASR (Qwen3-ASR)**: Speech recognition (`http://qwen3-asr:80/v1`)
-- **QwenVL Embedding**: Visual embeddings (`http://qwen_vl_embedding:8080/embedding`)
+- **QwenVL Embedding**: Multimodal embeddings (`http://qwen_vl_embedding:8080/embedding`)
 - **mmBERT**: Text embeddings (`http://mmbert:8000`)
 - **OCR (LightON)**: Text extraction from images (`http://ocr_lighton:8000`)
+- **Triton Server**: SPLADE sparse embeddings (`triton-server:8001`)
 - **OpenRouter**: LLM API for captions and KG pipeline (various models)
 - **ArangoDB**: Graph database for Knowledge Graph storage and querying
 
@@ -309,53 +389,6 @@ The KG pipeline (`task/kg_graph/`) is a 5-stage pipeline that transforms segment
 3. **Event Linking** (`event_linking.py`) - Build event/micro-event nodes and temporal edges with semantic similarity
 4. **Community Detection** (`community_detection.py`) - Detect communities using Leiden algorithm with LLM summaries
 5. **Node2Vec Embeddings** (`node2vec_embeddings.py`) - Train structural embeddings on graph variants
-
-### Cost Tracking
-
-All LLM usage across the pipeline is tracked via `CostTracker`:
-
-```python
-from video_pipeline.task.kg_graph import CostTracker
-
-cost_tracker = CostTracker()
-cost_tracker.model = "qwen/qwen3-coder-next"
-
-# Usage is automatically tracked from LLM responses
-if hasattr(response, 'raw') and hasattr(response.raw, 'usage'):
-    usage = response.raw.usage
-    cost_tracker.add_usage(
-        prompt_tokens=usage.prompt_tokens,
-        completion_tokens=usage.completion_tokens,
-        cost=usage.cost,
-    )
-```
-
-### Configuration
-
-Single unified config in `tasks.yaml`:
-
-```yaml
-kg_pipeline:
-  name: "Knowledge Graph Pipeline"
-  stage: "Analysis"
-  additional_kwargs:
-    model: "qwen/qwen3-coder-next"
-    dense_embedding_base_url: "http://mmbert:8000"
-    sparse_embedding_url: "triton:8001"
-    # Entity resolution
-    hybrid_dense_weight: 0.9
-    hybrid_sparse_weight: 0.1
-    similarity_threshold: 0.75
-    # Event linking
-    semantic_threshold: 0.80
-    llm_confirm_threshold: 0.60
-    # Community detection
-    n_iterations: 10
-    # Node2Vec
-    dim: 128
-    walk_length: 80
-    num_walks: 10
-```
 
 ### Key Models
 
@@ -372,7 +405,6 @@ The `arango_indexing` task loads the Knowledge Graph into ArangoDB for graph-bas
 
 ### Vertex Collections
 
-- `videos` - One document per ingested video
 - `entities` - CanonicalEntity nodes
 - `events` - Segment-level event nodes
 - `micro_events` - Fine-grained event nodes
@@ -393,6 +425,21 @@ The `arango_indexing` task loads the Knowledge Graph into ArangoDB for graph-bas
 
 - **Edge Serialization**: Edge models use `_from`/`_to` keys (ArangoDB format) when serialized via `to_arango_doc()`. Code reading serialized edges must use these keys, not `from_key`/`to_key`.
 - **Exception Handling**: ArangoDB exceptions (`ArangoServerError`, etc.) have non-standard constructors that break pickle serialization. Always wrap them in `RuntimeError` for Dask compatibility.
+
+## Qdrant Collections
+
+The pipeline uses multiple Qdrant collections (configured via `collection_base`):
+
+- `{collection_base}_image` - Image embeddings (multimodal)
+- `{collection_base}_caption` - Image caption text embeddings
+- `{collection_base}_segment` - Segment embeddings (multimodal)
+- `{collection_base}_segment_caption` - Segment caption text embeddings
+- `{collection_base}_audio_transcript` - Audio transcript text embeddings
+
+Each collection supports:
+- Dense vectors (mmBERT 768-dim or QwenVL 2048-dim)
+- Sparse vectors (SPLADE via Triton)
+- Payload filtering by `related_video_id`
 
 ## Development Guidelines
 
@@ -419,7 +466,28 @@ The `arango_indexing` task loads the Knowledge Graph into ArangoDB for graph-bas
 
 ### Testing
 
-Currently no test suite is present. When adding tests:
 - Place tests in a `tests/` directory at the project root
 - Use `pytest` with `pytest-asyncio` for async tests
 - Mock external services (MinIO, Qdrant, ML services)
+
+## API Services
+
+### VideoDeletionService (`api/services/deletion.py`)
+
+Handles deletion of all artifacts associated with a video_id across all storage backends:
+
+1. Queries PostgreSQL for all related artifacts
+2. Deletes objects from MinIO
+3. Deletes lineage and artifact records from PostgreSQL
+4. Deletes vectors from Qdrant (all collections)
+5. Deletes KG data from ArangoDB
+6. Deletes OCR documents from Elasticsearch
+
+### VideoRetrievalService (`api/services/retrieval.py`)
+
+Fetches all data associated with a video_id from multiple backends in parallel:
+
+- PostgreSQL: Artifacts and lineage
+- ArangoDB: Entities, events, micro_events, communities, relationships
+- Qdrant: Embedding vectors from all collections
+- Elasticsearch: OCR text documents
