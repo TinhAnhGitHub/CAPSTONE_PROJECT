@@ -67,7 +67,10 @@ def asr_batch_cache_key(
 def audio_segment_cache_key(
     _context: Any, parameters: dict[str, Any]
 ) -> str | None:
-    """Cache key: video_id + sorted frame ranges."""
+    """Cache key: video_id + sorted frame ranges + version.
+
+    Version 2: returns tuple (segments, cost_tracker) instead of just segments.
+    """
     asr_artifacts = parameters.get("asr_artifacts")
     if not asr_artifacts:
         return None
@@ -82,7 +85,7 @@ def audio_segment_cache_key(
 
     key_string = "|".join(sorted(key_parts))
     key_hash = _hash_string(key_string)
-    return f"audio-seg-{video_id}-{key_hash}"
+    return f"audio-seg-v2-{video_id}-{key_hash}"
 
 
 def segment_embedding_cache_key(
@@ -108,7 +111,10 @@ def segment_embedding_cache_key(
 def segment_caption_cache_key(
     _context: Any, parameters: dict[str, Any]
 ) -> str | None:
-    """Cache key: video_id + sorted frame ranges."""
+    """Cache key: video_id + sorted frame ranges + version.
+
+    Version 2: returns tuple (artifacts, cost_tracker) instead of just artifacts.
+    """
     segments = parameters.get("segments")
     if not segments:
         return None
@@ -122,7 +128,7 @@ def segment_caption_cache_key(
 
     key_string = "|".join(sorted(key_parts))
     key_hash = _hash_string(key_string)
-    return f"seg-cap-{video_id}-{key_hash}"
+    return f"seg-cap-v2-{video_id}-{key_hash}"
 
 
 def segment_caption_embedding_cache_key(

@@ -197,7 +197,7 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifa
 
         try:
             structured_llm = client.as_structured_llm(AudioSegments)
-            llm_result, usage = await structured_llm(messages)
+            llm_result, usage = await structured_llm(messages) #type:ignore
             cost_tracker.add_usage(
                 prompt_tokens=usage.get("prompt_tokens", 0),
                 completion_tokens=usage.get("completion_tokens", 0),
@@ -303,14 +303,14 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifa
 @task(**{**AUDIO_SEGMENT_CONFIG.to_task_kwargs(), "name": "Audio Segment"})  # type: ignore
 async def audio_segment_task(
     asr_artifacts: list[ASRArtifact],
-) -> list[AudioSegmentArtifact]:
+) -> tuple[list[AudioSegmentArtifact], CostTracker]:
     """Process ASR artifacts into audio segments using LLM or rule-based fallback.
 
     Args:
         asr_artifacts: List of ASRArtifact from ASR transcription
 
     Returns:
-        List of AudioSegmentArtifact
+        Tuple of (list of AudioSegmentArtifact, CostTracker with usage stats)
     """
     logger = get_run_logger()
     settings = get_settings()
@@ -357,4 +357,4 @@ async def audio_segment_task(
         f"prompt_tokens={cost_tracker.total_prompt_tokens} | "
         f"completion_tokens={cost_tracker.total_completion_tokens}"
     )
-    return artifacts
+    return artifacts, cost_tracker

@@ -18,6 +18,7 @@ from video_pipeline.task.autoshot.main import AutoshotTask, autoshot_task
 from video_pipeline.task.image_caption_ocr.main import (
     ImageCaptionOCRTask,
     image_caption_ocr_chunk_task,
+    IMAGE_CAPTION_OCR_CONFIG,
 )
 from video_pipeline.task.image_caption_embedding.main import (
     ImageCaptionEmbeddingTask,
@@ -51,6 +52,7 @@ from video_pipeline.task.audio_transcript_embedding.main import (
     AudioTranscriptEmbeddingTask,
     audio_transcript_embedding_chunk_task,
 )
+from video_pipeline.task.kg_graph.models import CostTracker
 from video_pipeline.task.video.main import (
     VideoArtifact,
     VideoInput,
@@ -180,16 +182,17 @@ async def run_audio_segment(
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
-) -> list:
+) -> tuple[list, CostTracker]:
     """Stage 5a continued: Segment audio from ASR results."""
     with timing.record("Audio Segmentation") as t:
         t.start()
-        audio_segment_results = await audio_segment_task(asr_results)
-        await AudioSegmentTask.summary_artifact(audio_segment_results)
+        audio_segment_fut = audio_segment_task.submit(asr_results)  # type: ignore
+        audio_segment_results, audio_segment_cost = audio_segment_fut.result()
+        await AudioSegmentTask.summary_artifact((audio_segment_results, audio_segment_cost))
         if tracker:
             await tracker.complete_stage(video_id, AudioSegmentTask.__name__)
         t.stop()
-    return audio_segment_results
+    return audio_segment_results, audio_segment_cost
 
 
 async def run_segment_embedding(
@@ -221,19 +224,30 @@ async def run_segment_caption(
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
-) -> tuple[list, Any]:
+) -> tuple[list, Any, CostTracker]:
     """Stage 6b: Generate segment captions."""
     with timing.record("Segment Caption") as t:
         t.start()
         segment_caption_futures = segment_caption_chunk_task.map(  # type: ignore
             segment_batches,
         )
-        segment_caption_results = [a for batch in segment_caption_futures.result() for a in batch]
-        await SegmentCaptionTask.summary_artifact(segment_caption_results)
+        # Each batch returns (artifacts, cost_tracker) tuple
+        batch_results = segment_caption_futures.result()
+        segment_caption_results = [a for batch, _ in batch_results for a in batch]
+        # Aggregate cost trackers
+        total_cost_tracker = CostTracker(model="google/gemini-2.5-flash-lite")
+        for _, ct in batch_results:
+            if ct:
+                total_cost_tracker.add_usage(
+                    prompt_tokens=ct.total_prompt_tokens,
+                    completion_tokens=ct.total_completion_tokens,
+                    cost=ct.total_cost,
+                )
+        await SegmentCaptionTask.summary_artifact((segment_caption_results, total_cost_tracker))  # type: ignore
         if tracker:
             await tracker.complete_stage(video_id, SegmentCaptionTask.__name__)
         t.stop()
-    return segment_caption_results, segment_caption_futures
+    return segment_caption_results, segment_caption_futures, total_cost_tracker
 
 
 async def run_segment_qdrant_indexing(
@@ -365,7 +379,7 @@ async def run_image_caption_ocr(
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
-) -> tuple[tuple[list, list], Any]:
+) -> tuple[tuple[list, list], Any, CostTracker]:
     """Stage 8b: Generate image captions and OCR in a single call."""
     with timing.record("Image Caption + OCR") as t:
         t.start()
@@ -374,13 +388,22 @@ async def run_image_caption_ocr(
             wait_for=[image_batch_futures],
         )
         batch_results = caption_ocr_batch_futures.result()
-        caption_results = [a for batch in batch_results for a in batch[0]]
-        ocr_results = [a for batch in batch_results for a in batch[1]]
-        await ImageCaptionOCRTask.summary_artifact((caption_results, ocr_results))
+        caption_results = [a for batch, _, _ in batch_results for a in batch]
+        ocr_results = [a for _, batch, _ in batch_results for a in batch]
+        model = IMAGE_CAPTION_OCR_CONFIG.additional_kwargs.get("model", "google/gemini-2.5-flash-lite")
+        total_cost_tracker = CostTracker(model=model)
+        for _, _, ct in batch_results:
+            if ct:
+                total_cost_tracker.add_usage(
+                    prompt_tokens=ct.total_prompt_tokens,
+                    completion_tokens=ct.total_completion_tokens,
+                    cost=ct.total_cost,
+                )
+        await ImageCaptionOCRTask.summary_artifact((caption_results, ocr_results, total_cost_tracker))
         if tracker:
             await tracker.complete_stage(video_id, ImageCaptionOCRTask.__name__)
         t.stop()
-    return (caption_results, ocr_results), caption_ocr_batch_futures
+    return (caption_results, ocr_results), caption_ocr_batch_futures, total_cost_tracker
 
 
 async def run_image_embedding(
@@ -584,12 +607,12 @@ async def run_audio_branch(
         asr_batches, preprocess_fut, tracker, video_id, timing
     )
 
-    audio_segment_results = await run_audio_segment(asr_results, tracker, video_id, timing)
+    audio_segment_results, audio_segment_cost = await run_audio_segment(asr_results, tracker, video_id, timing)
 
     segment_batch_size: int = 5
     segment_batches = make_batches(audio_segment_results, segment_batch_size)
 
-    segment_caption_results, segment_caption_futures = await run_segment_caption(
+    segment_caption_results, segment_caption_futures, segment_caption_cost = await run_segment_caption(
         segment_batches, audio_segment_results, tracker, video_id, timing
     )
 
@@ -654,8 +677,10 @@ async def run_audio_branch(
     return {
         "asr_results": asr_results,
         "audio_segment_results": audio_segment_results,
+        "audio_segment_cost": audio_segment_cost,
         "segment_embedding_results": segment_embedding_results,
         "segment_caption_results": segment_caption_results,
+        "segment_caption_cost": segment_caption_cost,
         "audio_transcript_embedding_results": audio_transcript_embedding_results,
         "audio_transcript_index_ids": audio_transcript_index_ids,
         "segment_caption_embedding_results": segment_caption_embedding_results,
@@ -686,7 +711,7 @@ async def run_image_branch(
     analysis_batch_size: int = 10
     analysis_batches = make_batches(image_results, analysis_batch_size)
 
-    (caption_results, ocr_results), caption_ocr_batch_futures = await run_image_caption_ocr(
+    (caption_results, ocr_results), caption_ocr_batch_futures, image_caption_ocr_cost = await run_image_caption_ocr(
         analysis_batches, image_batch_futures, tracker, video_id, timing
     )
 
@@ -727,6 +752,7 @@ async def run_image_branch(
         "caption_index_ids": caption_index_ids,
         "caption_embedding_futures": caption_embedding_futures,
         "analysis_batch_size": analysis_batch_size,
+        "image_caption_ocr_cost": image_caption_ocr_cost,
     }
 
 
@@ -757,7 +783,7 @@ async def create_summary_artifact(
     final_indexing: dict[str, Any],
     timing: TimingRegistry,
 ) -> None:
-    """Create final summary markdown artifact with timing information."""
+    """Create final summary markdown artifact with timing and cost information."""
     completed_at = datetime.now().isoformat()
 
     timing_table = timing.to_markdown_table()
@@ -822,6 +848,53 @@ async def create_summary_artifact(
 
 """
 
+    audio_segment_cost = audio_branch.get('audio_segment_cost')
+    segment_caption_cost = audio_branch.get('segment_caption_cost')
+    image_caption_ocr_cost = image_branch.get('image_caption_ocr_cost')
+
+    cost_rows = ""
+    total_prompt = 0
+    total_completion = 0
+    total_cost = 0.0
+
+
+    if audio_segment_cost and audio_segment_cost.total_cost > 0:
+        cost_rows += f"| Audio Segmentation | `{audio_segment_cost.model}` | `{audio_segment_cost.llm_calls}` | `{audio_segment_cost.total_prompt_tokens:,}` | `{audio_segment_cost.total_completion_tokens:,}` | `${audio_segment_cost.total_cost:.6f}` |\n"
+        total_prompt += audio_segment_cost.total_prompt_tokens
+        total_completion += audio_segment_cost.total_completion_tokens
+        total_cost += audio_segment_cost.total_cost
+
+
+    if segment_caption_cost and segment_caption_cost.total_cost > 0:
+        cost_rows += f"| Segment Caption | `{segment_caption_cost.model}` | `{segment_caption_cost.llm_calls}` | `{segment_caption_cost.total_prompt_tokens:,}` | `{segment_caption_cost.total_completion_tokens:,}` | `${segment_caption_cost.total_cost:.6f}` |\n"
+        total_prompt += segment_caption_cost.total_prompt_tokens
+        total_completion += segment_caption_cost.total_completion_tokens
+        total_cost += segment_caption_cost.total_cost
+
+    if image_caption_ocr_cost and image_caption_ocr_cost.total_cost > 0:
+        cost_rows += f"| Image Caption + OCR | `{image_caption_ocr_cost.model}` | `{image_caption_ocr_cost.llm_calls}` | `{image_caption_ocr_cost.total_prompt_tokens:,}` | `{image_caption_ocr_cost.total_completion_tokens:,}` | `${image_caption_ocr_cost.total_cost:.6f}` |\n"
+        total_prompt += image_caption_ocr_cost.total_prompt_tokens
+        total_completion += image_caption_ocr_cost.total_completion_tokens
+        total_cost += image_caption_ocr_cost.total_cost
+
+    if kg_artifact and kg_cost > 0:
+        cost_rows += f"| KG Pipeline | `{kg_model}` | `{kg_llm_calls}` | `{kg_prompt_tokens:,}` | `{kg_completion_tokens:,}` | `${kg_cost:.6f}` |\n"
+        total_prompt += kg_prompt_tokens
+        total_completion += kg_completion_tokens
+        total_cost += kg_cost
+
+    cost_section = ""
+    if cost_rows:
+        cost_section = f"""
+## LLM Cost Breakdown by Stage
+
+| Stage | Model | LLM Calls | Input Tokens | Output Tokens | Cost |
+|-------|-------|-----------|--------------|---------------|------|
+{cost_rows}
+| **TOTAL** | - | - | **`{total_prompt:,}`** | **`{total_completion:,}`** | **`${total_cost:.6f}`** |
+
+"""
+
     await acreate_markdown_artifact(
         description=f"Processing summary for video {video_id}",
         markdown=(
@@ -850,6 +923,7 @@ async def create_summary_artifact(
             f"| Segment Qdrant Points | {len(audio_branch['segment_index_ids'])} |\n"
             f"| Segment Caption Qdrant Points | {len(audio_branch['segment_caption_index_ids'])} |\n"
             f"| Audio Transcript Qdrant Points | {len(audio_branch['audio_transcript_index_ids'])} |\n\n"
+            f"{cost_section}"
             f"{kg_section}"
             f"## Timing Breakdown\n\n"
             f"{timing_table}\n"

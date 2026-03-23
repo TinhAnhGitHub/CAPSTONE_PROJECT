@@ -105,7 +105,7 @@ The event list should represent multiple small observations that together reflec
 
 
 @StageRegistry.register
-class SegmentCaptionTask(BaseTask[list[AudioSegmentArtifact], list[SegmentCaptionArtifact]]):
+class SegmentCaptionTask(BaseTask[list[AudioSegmentArtifact], tuple[list[SegmentCaptionArtifact], CostTracker]]):
     """Caption audio segments using VLM with visual frames and audio transcript."""
 
     config = SEGMENT_CAPTION_CONFIG
@@ -247,23 +247,28 @@ class SegmentCaptionTask(BaseTask[list[AudioSegmentArtifact], list[SegmentCaptio
         return artifacts, cost_tracker
 
     async def postprocess(
-        self, result: list[SegmentCaptionArtifact]
-    ) -> list[SegmentCaptionArtifact]:
+        self, result: tuple[list[SegmentCaptionArtifact], CostTracker]
+    ) -> tuple[list[SegmentCaptionArtifact], CostTracker]:
         """Persist segment captions to database."""
-        for res in result:
+        artifacts, cost_tracker = result
+        for res in artifacts:
             await self.artifact_visitor.visit_artifact(res)
-        return result
+        return artifacts, cost_tracker
 
     @staticmethod
-    async def summary_artifact(final_result: list[SegmentCaptionArtifact]) -> None:
+    async def summary_artifact(final_result: tuple[list[SegmentCaptionArtifact], CostTracker]) -> None:
         """Create a Prefect artifact summarizing segment captions."""
         if not final_result:
             return
 
-        first = final_result[0]
+        artifacts, cost_tracker = final_result
+        if not artifacts:
+            return
+
+        first = artifacts[0]
 
         segment_rows = ""
-        for i, seg in enumerate(final_result):
+        for i, seg in enumerate(artifacts):
             caption_preview = (
                 (seg.summary_caption[:60] + "...")
                 if len(seg.summary_caption) > 60
@@ -281,7 +286,11 @@ class SegmentCaptionTask(BaseTask[list[AudioSegmentArtifact], list[SegmentCaptio
             f"|-------|-------|\n"
             f"| **Video ID** | `{first.related_video_id}` |\n"
             f"| **User ID** | `{first.user_id}` |\n"
-            f"| **Segments Captioned** | `{len(final_result)}` |\n\n"
+            f"| **Segments Captioned** | `{len(artifacts)}` |\n"
+            f"| **Model** | `{cost_tracker.model}` |\n"
+            f"| **Prompt Tokens** | `{cost_tracker.total_prompt_tokens:,}` |\n"
+            f"| **Completion Tokens** | `{cost_tracker.total_completion_tokens:,}` |\n"
+            f"| **Total Cost** | `${cost_tracker.total_cost:.6f}` |\n\n"
             f"## Segment Captions\n\n"
             f"| # | Start | End | Events | Summary |\n"
             f"|---|-------|-----|--------|---------|\n"
@@ -298,14 +307,14 @@ class SegmentCaptionTask(BaseTask[list[AudioSegmentArtifact], list[SegmentCaptio
 @task(**{**SEGMENT_CAPTION_CONFIG.to_task_kwargs(), "name": "Segment Caption"})  # type: ignore
 async def segment_caption_chunk_task(
     segments: list[AudioSegmentArtifact],
-) -> list[SegmentCaptionArtifact]:
+) -> tuple[list[SegmentCaptionArtifact], CostTracker]:
     """Process audio segments into captions.
 
     Args:
         segments: List of AudioSegmentArtifact
 
     Returns:
-        List of SegmentCaptionArtifact
+        Tuple of (list of SegmentCaptionArtifact, CostTracker with usage stats)
     """
     logger = get_run_logger()
     settings = get_settings()
@@ -338,10 +347,13 @@ async def segment_caption_chunk_task(
     client = OpenRouterClient(config=caption_config)
 
     try:
-        artifacts = await task_impl.execute_template(segments, client)
+        artifacts, cost_tracker = await task_impl.execute_template(segments, client)
     finally:
         await client.close()
         await shutdown_postgres_client(postgres_client)
 
-    logger.info(f"[SegmentCaption] Done | {len(artifacts)} artifact(s) produced")
-    return artifacts
+    logger.info(
+        f"[SegmentCaption] Done | {len(artifacts)} artifact(s) produced | "
+        f"total_cost=${cost_tracker.total_cost:.6f}"
+    )
+    return artifacts, cost_tracker

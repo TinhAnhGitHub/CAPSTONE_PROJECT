@@ -25,6 +25,7 @@ from video_pipeline.core.client.storage.pg.runtime import (
     shutdown_postgres_client,
 )
 from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient, OpenRouterConfig
+from video_pipeline.task.kg_graph.models import CostTracker
 from video_pipeline.config import get_settings
 
 from .prompt import ImageCaptionOCR, CAPTION_OCR_PROMPT
@@ -40,7 +41,7 @@ _MergedOutput = tuple[ImageCaptionArtifact, bytes, ImageOCRArtifact, bytes]
 
 
 @StageRegistry.register
-class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact]]]):
+class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact], CostTracker]]):
     """Combined Caption + OCR task using structured output.
 
     preprocess() downloads image bytes from MinIO.
@@ -73,7 +74,7 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
         self,
         preprocessed: list[_PreprocessedItem],
         client: OpenRouterClient,
-    ) -> list[_MergedOutput]:
+    ) -> tuple[list[_MergedOutput], CostTracker]:
         """Process images with structured output for caption + OCR.
 
         Args:
@@ -81,19 +82,21 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
             client: OpenRouter inference client.
 
         Returns:
-            list of (ImageCaptionArtifact, caption_json, ImageOCRArtifact, ocr_json)
+            Tuple of (list of (ImageCaptionArtifact, caption_json, ImageOCRArtifact, ocr_json), CostTracker)
         """
         logger = get_run_logger()
         max_concurrent: int = IMAGE_CAPTION_OCR_CONFIG.additional_kwargs.get("max_concurrent", 10)
+        model = IMAGE_CAPTION_OCR_CONFIG.additional_kwargs.get("model", "google/gemini-2.5-flash-lite")
 
         logger.info(
             f"[ImageCaptionOCR] Processing {len(preprocessed)} frame(s) | max_concurrent={max_concurrent}"
         )
-        
+
         data_bytes = [ frame_bytes for _, frame_bytes in preprocessed ]
-        
+
 
         structured_llm = client.as_structured_llm(ImageCaptionOCR)
+        cost_tracker = CostTracker(model=model)
 
         import asyncio
         semaphore = asyncio.Semaphore(max_concurrent)
@@ -126,12 +129,6 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
         results = await asyncio.gather(*tasks)
 
         output: list[_MergedOutput] = []
-        total_usage: dict[str, float] = {
-            "prompt_tokens": 0.0,
-            "completion_tokens": 0.0,
-            "total_tokens": 0.0,
-            "cost": 0.0,
-        }
 
         for (image_artifact, _), result_data in zip(preprocessed, results):
             if result_data is None:
@@ -140,9 +137,12 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
             else:
                 caption_result, usage = result_data
 
-            for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
-                total_usage[key] += usage.get(key, 0)
-            total_usage["cost"] += usage.get("cost", 0.0)
+            # Track cost
+            cost_tracker.add_usage(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                cost=usage.get("cost", 0.0),
+            )
 
             logger.info(
                 f"[ImageCaptionOCR] Done | frame={image_artifact.frame_index} "
@@ -209,21 +209,21 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
 
         logger.info(
             f"[ImageCaptionOCR] Batch done — {len(output)} result(s) | "
-            f"total_prompt={int(total_usage['prompt_tokens'])} "
-            f"total_completion={int(total_usage['completion_tokens'])} "
-            f"total_tokens={int(total_usage['total_tokens'])} "
-            f"total_cost=${total_usage['cost']:.6f}"
+            f"total_prompt={cost_tracker.total_prompt_tokens} "
+            f"total_completion={cost_tracker.total_completion_tokens} "
+            f"total_cost=${cost_tracker.total_cost:.6f}"
         )
-        return output
+        return output, cost_tracker
 
     async def postprocess(
-        self, result: list[_MergedOutput]
-    ) -> tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact]]:
+        self, result: tuple[list[_MergedOutput], CostTracker]
+    ) -> tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact], CostTracker]:
         """Upload caption and OCR JSONs to MinIO and persist to Postgres."""
+        merged_outputs, cost_tracker = result
         caption_artifacts: list[ImageCaptionArtifact] = []
         ocr_artifacts: list[ImageOCRArtifact] = []
 
-        for caption_artifact, caption_bytes, ocr_artifact, ocr_bytes in result:
+        for caption_artifact, caption_bytes, ocr_artifact, ocr_bytes in merged_outputs:
             await self.artifact_visitor.visit_artifact(
                 caption_artifact, upload_to_minio=io.BytesIO(caption_bytes)
             )
@@ -233,14 +233,14 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
             caption_artifacts.append(caption_artifact)
             ocr_artifacts.append(ocr_artifact)
 
-        return caption_artifacts, ocr_artifacts
+        return caption_artifacts, ocr_artifacts, cost_tracker
 
     @staticmethod
     async def summary_artifact(
-        final_result: tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact]],
+        final_result: tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact], CostTracker],
     ) -> None:
-        caption_results, ocr_results = final_result
         """Create Prefect artifacts summarizing the batch."""
+        caption_results, ocr_results, cost_tracker = final_result
         if not caption_results:
             return
 
@@ -249,18 +249,9 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
         raw_key = f"image-caption-ocr-{video_id}".lower()
         key = re.sub(r"[^a-z0-9-]", "-", raw_key)
 
-        total_prompt = total_completion = total_tokens = 0
-        total_cost = 0.0
-        for a in caption_results:
-            u = (a.metadata or {}).get("usage") or {}
-            total_prompt += u.get("prompt_tokens", 0)
-            total_completion += u.get("completion_tokens", 0)
-            total_tokens += u.get("total_tokens", 0)
-            total_cost += u.get("cost", 0.0)
+        avg_cost = cost_tracker.total_cost / max(len(caption_results), 1)
 
-        avg_cost = total_cost / max(len(caption_results), 1)
 
-    
         frames_with_text = sum(
             1 for a in ocr_results if (a.metadata or {}).get("ocr_text", "").strip()
         )
@@ -276,10 +267,11 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
             f"| **Frames Processed** | `{len(caption_results)}` |\n"
             f"| **Frames with OCR Text** | `{frames_with_text}` |\n"
             f"| **Total OCR Characters** | `{total_ocr_chars:,}` |\n"
-            f"| **Prompt Tokens** | `{total_prompt:,}` |\n"
-            f"| **Completion Tokens** | `{total_completion:,}` |\n"
-            f"| **Total Tokens** | `{total_tokens:,}` |\n"
-            f"| **Total Cost** | `${total_cost:.6f}` |\n"
+            f"| **Model** | `{cost_tracker.model}` |\n"
+            f"| **LLM Calls** | `{cost_tracker.llm_calls}` |\n"
+            f"| **Prompt Tokens** | `{cost_tracker.total_prompt_tokens:,}` |\n"
+            f"| **Completion Tokens** | `{cost_tracker.total_completion_tokens:,}` |\n"
+            f"| **Total Cost** | `${cost_tracker.total_cost:.6f}` |\n"
             f"| **Avg Cost / Frame** | `${avg_cost:.6f}` |\n"
         )
 
@@ -293,14 +285,14 @@ class ImageCaptionOCRTask(BaseTask[list[ImageArtifact], tuple[list[ImageCaptionA
 @task(**{**_base_kwargs, "name": "Image Caption OCR Chunk"})  # type: ignore
 async def image_caption_ocr_chunk_task(
     items: list[ImageArtifact],
-) -> tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact]]:
+) -> tuple[list[ImageCaptionArtifact], list[ImageOCRArtifact], CostTracker]:
     """Process a batch of image frames for caption + OCR.
 
     Args:
         items: Batch of ImageArtifacts to process.
 
     Returns:
-        Tuple of (caption_artifacts, ocr_artifacts).
+        Tuple of (caption_artifacts, ocr_artifacts, cost_tracker).
     """
     logger = get_run_logger()
     settings = get_settings()
@@ -330,12 +322,13 @@ async def image_caption_ocr_chunk_task(
     client = OpenRouterClient(config=openrouter_config)
 
     try:
-        caption_artifacts, ocr_artifacts = await task_impl.execute_template(items, client)
+        caption_artifacts, ocr_artifacts, cost_tracker = await task_impl.execute_template(items, client)
     finally:
         await client.close()
         await shutdown_postgres_client(postgres_client)
 
     logger.info(
-        f"[ImageCaptionOCRChunk] Done | {len(caption_artifacts)} caption(s), {len(ocr_artifacts)} OCR(s)"
+        f"[ImageCaptionOCRChunk] Done | {len(caption_artifacts)} caption(s), {len(ocr_artifacts)} OCR(s) | "
+        f"total_cost=${cost_tracker.total_cost:.6f}"
     )
-    return caption_artifacts, ocr_artifacts
+    return caption_artifacts, ocr_artifacts, cost_tracker
