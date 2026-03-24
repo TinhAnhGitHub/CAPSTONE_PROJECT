@@ -5,15 +5,18 @@ from agno.learn.config import SessionContextConfig, LearningMode
 from agno.models.base import Model
 from agno.tools import Toolkit
 
+from videodeepsearch.toolkit.registry import ToolRegistry
+
+
 def get_planning_agent(
     session_id: str,
     user_id: str,
     model: Model,
     db: AsyncBaseDb | BaseDb,
-    description: str, 
-    system_prompt: str, 
+    description: str,
+    system_prompt: str,
     instructions: list[str],
-    planning_toolkit: Toolkit
+    planning_toolkit: Toolkit | ToolRegistry,
 ) -> Agent:
     """
     Planning Agent — a member of the Orchestrator sub-team.
@@ -36,6 +39,17 @@ def get_planning_agent(
         ),
     )
 
+    # Handle both Toolkit and ToolRegistry
+    if isinstance(planning_toolkit, ToolRegistry):
+        # ToolRegistry provides context about available tools
+        tool_context = planning_toolkit.generate_planning_context()
+        enhanced_instructions = instructions + [tool_context]
+        tools_list = []
+    else:
+        # Toolkit provides actual tools
+        enhanced_instructions = instructions
+        tools_list = [planning_toolkit]
+
     return Agent(
         name="Planning_Agent",
         role="Produce a detailed step-by-step execution plan for the given video retrieval demand",
@@ -43,7 +57,7 @@ def get_planning_agent(
         user_id=user_id,
         session_id=session_id,
         db=db,
-        tools=[planning_toolkit],
+        tools=tools_list,
         learning=learning,
         add_learnings_to_context=True,
         add_session_state_to_context=True,
@@ -51,7 +65,7 @@ def get_planning_agent(
         add_datetime_to_context=True,
         markdown=True,
         description=description,
-        instructions=instructions,
+        instructions=enhanced_instructions,
         system_message=system_prompt,
         debug_mode=False,
     )
