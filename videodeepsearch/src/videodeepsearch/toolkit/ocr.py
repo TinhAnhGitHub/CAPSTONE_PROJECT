@@ -121,20 +121,20 @@ class OCRSearchToolkit(Toolkit):
 
         return "\n".join(lines)
 
-    # @tool(
-    #     description=(
-    #         "Search for text in video frames using keyword matching (BM25). "
-    #         "Best for finding specific words, phrases, or exact text matches. "
-    #         "Supports fuzzy matching for handling OCR errors."
-    #     ),
-    #     instructions=(
-    #         "Use when looking for specific words, numbers, or phrases in video frames. "
-    #         "Supports fuzzy matching to handle OCR recognition errors. "
-    #         "Best for: finding specific text, numbers, labels, captions in videos."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Search for text in video frames using keyword matching (BM25). "
+            "Best for finding specific words, phrases, or exact text matches. "
+            "Supports fuzzy matching for handling OCR errors."
+        ),
+        instructions=(
+            "Use when looking for specific words, numbers, or phrases in video frames. "
+            "Supports fuzzy matching to handle OCR recognition errors. "
+            "Best for: finding specific text, numbers, labels, captions in videos."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def search_ocr_text(
         self,
         query: str,
@@ -180,18 +180,18 @@ class OCRSearchToolkit(Toolkit):
             logger.error(f"[OCRSearchToolkit] search_ocr_text failed: {e}")
             return ToolResult(content=f"Error: OCR text search failed - {str(e)}")
 
-    # @tool(
-    #     description=(
-    #         "Get all OCR text extracted from a specific video. "
-    #         "Returns all text found in video frames, sorted by frame order."
-    #     ),
-    #     instructions=(
-    #         "Use when you need all text from a specific video. "
-    #         "Useful for reviewing all OCR content or finding text within a known video."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Get all OCR text extracted from a specific video. "
+            "Returns all text found in video frames, sorted by frame order."
+        ),
+        instructions=(
+            "Use when you need all text from a specific video. "
+            "Useful for reviewing all OCR content or finding text within a known video."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_ocr_by_video(
         self,
         video_id: str,
@@ -224,11 +224,11 @@ class OCRSearchToolkit(Toolkit):
         except Exception as e:
             logger.error(f"[OCRSearchToolkit] get_ocr_by_video failed: {e}")
             return ToolResult(content=f"Error: Failed to get OCR for video - {str(e)}")
-        r
-    # @tool(
-    #     description="View cached OCR search results with different view modes.",
-    #     cache_results=False,
-    # )
+
+    @tool(
+        description="View cached OCR search results with different view modes.",
+        cache_results=False,
+    )
     def view_ocr_result(
         self,
         handle_id: str,

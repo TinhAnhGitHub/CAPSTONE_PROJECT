@@ -197,20 +197,20 @@ class VideoMetadataToolkit(Toolkit):
         return {child.artifact_type for child in children}
 
 
-    # @tool(
-    #     description=(
-    #         "List all videos for a user with basic metadata. "
-    #         "Returns video IDs, filenames, duration, fps, and resolution. "
-    #         "Use this to discover what videos are available for search."
-    #     ),
-    #     instructions=(
-    #         "Use when: user wants to see available videos, "
-    #         "need to find video IDs for further operations, "
-    #         "starting a new search session."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "List all videos for a user with basic metadata. "
+            "Returns video IDs, filenames, duration, fps, and resolution. "
+            "Use this to discover what videos are available for search."
+        ),
+        instructions=(
+            "Use when: user wants to see available videos, "
+            "need to find video IDs for further operations, "
+            "starting a new search session."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def list_user_videos(
         self,
         user_id: str,
@@ -256,20 +256,20 @@ class VideoMetadataToolkit(Toolkit):
             logger.error(f"[VideoMetadataToolkit] list_user_videos failed: {e}")
             return ToolResult(content=f"Error: Failed to list videos - {str(e)}")
 
-    # @tool(
-    #     description=(
-    #         "Get detailed metadata for a specific video. "
-    #         "Returns comprehensive information including duration, fps, resolution, "
-    #         "file location, and creation timestamp."
-    #     ),
-    #     instructions=(
-    #         "Use when: need detailed info about a specific video, "
-    #         "want to verify video properties before processing, "
-    #         "checking video existence."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Get detailed metadata for a specific video. "
+            "Returns comprehensive information including duration, fps, resolution, "
+            "file location, and creation timestamp."
+        ),
+        instructions=(
+            "Use when: need detailed info about a specific video, "
+            "want to verify video properties before processing, "
+            "checking video existence."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_video_metadata(
         self,
         video_id: str,
@@ -321,20 +321,20 @@ class VideoMetadataToolkit(Toolkit):
             logger.error(f"[VideoMetadataToolkit] get_video_metadata failed: {e}")
             return ToolResult(content=f"Error: Failed to get video metadata - {str(e)}")
 
-    # @tool(
-    #     description=(
-    #         "Get a visual timeline of video segments with timestamps and captions. "
-    #         "Shows the temporal structure of the video with segment boundaries. "
-    #         "Use this to navigate through video content chronologically."
-    #     ),
-    #     instructions=(
-    #         "Use when: user wants to see video structure, "
-    #         "need to find specific time ranges, "
-    #         "planning temporal navigation."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Get a visual timeline of video segments with timestamps and captions. "
+            "Shows the temporal structure of the video with segment boundaries. "
+            "Use this to navigate through video content chronologically."
+        ),
+        instructions=(
+            "Use when: user wants to see video structure, "
+            "need to find specific time ranges, "
+            "planning temporal navigation."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_video_timeline(
         self,
         video_id: str,

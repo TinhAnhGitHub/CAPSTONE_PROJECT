@@ -96,18 +96,18 @@ class UtilityToolkit(Toolkit):
         self.storage = minio_client
         super().__init__(name="Utility Tools")
         
-    # @tool(
-    #     description=(
-    #         "Retrieve spoken words (ASR transcript) around a video segment for context. "
-    #         "Extracts the audio transcript within a time window surrounding a segment, "
-    #         "providing spoken context to verify or enrich visual findings."
-    #     ),
-    #     instructions=(
-    #         "Use when: found a promising segment but need verbal context, "
-    #         "user query mentioned dialogue/speech/audio events, "
-    #         "want to verify if visual match aligns with spoken content."
-    #     ),
-    # )
+    @tool(
+        description=(
+            "Retrieve spoken words (ASR transcript) around a video segment for context. "
+            "Extracts the audio transcript within a time window surrounding a segment, "
+            "providing spoken context to verify or enrich visual findings."
+        ),
+        instructions=(
+            "Use when: found a promising segment but need verbal context, "
+            "user query mentioned dialogue/speech/audio events, "
+            "want to verify if visual match aligns with spoken content."
+        ),
+    )
     async def get_related_asr_from_segment(
         self,
         video_id: str,
@@ -193,16 +193,16 @@ class UtilityToolkit(Toolkit):
             context="\n\n".join(context_parts),
         ))
 
-    # @tool(
-    #     description=(
-    #         "Retrieve spoken words (ASR transcript) around a specific image/frame. "
-    #         "Extracts audio transcript within a time window surrounding an image's timestamp."
-    #     ),
-    #     instructions=(
-    #         "Use when: found a promising image but need verbal context around that moment, "
-    #         "user query mentioned dialogue at specific frames."
-    #     ),
-    # )
+    @tool(
+        description=(
+            "Retrieve spoken words (ASR transcript) around a specific image/frame. "
+            "Extracts audio transcript within a time window surrounding an image's timestamp."
+        ),
+        instructions=(
+            "Use when: found a promising image but need verbal context around that moment, "
+            "user query mentioned dialogue at specific frames."
+        ),
+    )
     async def get_related_asr_from_image(
         self,
         video_id: str,
@@ -273,18 +273,18 @@ class UtilityToolkit(Toolkit):
             context="\n\n".join(context_parts),
         ))
 
-    # @tool(
-    #     description=(
-    #         "Navigate to adjacent segments before/after a reference segment. "
-    #         "Retrieves surrounding video segments relative to a known segment, "
-    #         "enabling temporal exploration of video content. Like 'turning pages' in a video book."
-    #     ),
-    #     instructions=(
-    #         "Use when: found a promising segment and want to see what happens before/after, "
-    #         "need temporal context around a matching segment, "
-    #         "verifying if an event continues across multiple segments."
-    #     ),
-    # )
+    @tool(
+        description=(
+            "Navigate to adjacent segments before/after a reference segment. "
+            "Retrieves surrounding video segments relative to a known segment, "
+            "enabling temporal exploration of video content. Like 'turning pages' in a video book."
+        ),
+        instructions=(
+            "Use when: found a promising segment and want to see what happens before/after, "
+            "need temporal context around a matching segment, "
+            "verifying if an event continues across multiple segments."
+        ),
+    )
     async def get_adjacent_segments(
         self,
         video_id: str,
@@ -352,18 +352,18 @@ class UtilityToolkit(Toolkit):
 
         return ToolResult(content=format_interface_list(result_segments, "segment"))
 
-    # @tool(
-    #     description=(
-    #         "Navigate to adjacent frames before/after a reference image. "
-    #         "Retrieves surrounding frames relative to a known image, enabling frame-by-frame "
-    #         "exploration. Like stepping through video one frame at a time."
-    #     ),
-    #     instructions=(
-    #         "Use when: found a good frame and want to see adjacent frames, "
-    #         "checking for motion/action across consecutive frames, "
-    #         "verifying object persistence across time."
-    #     ),
-    # )
+    @tool(
+        description=(
+            "Navigate to adjacent frames before/after a reference image. "
+            "Retrieves surrounding frames relative to a known image, enabling frame-by-frame "
+            "exploration. Like stepping through video one frame at a time."
+        ),
+        instructions=(
+            "Use when: found a good frame and want to see adjacent frames, "
+            "checking for motion/action across consecutive frames, "
+            "verifying object persistence across time."
+        ),
+    )
     async def get_adjacent_images(
         self,
         video_id: str,
@@ -428,18 +428,18 @@ class UtilityToolkit(Toolkit):
 
         return ToolResult(content=format_interface_list(result_images, "image"))
 
-    # @tool(
-    #     description=(
-    #         "Extract raw frames from a video time window at specified frame rate. "
-    #         "Retrieves actual frame images from a video between two timestamps, "
-    #         "sampled at a custom frame rate. Returns images that can be viewed directly."
-    #     ),
-    #     instructions=(
-    #         "Use when: need to visually inspect specific time range in detail, "
-    #         "want to show frames directly for analysis, "
-    #         "verifying visual content in precise time window."
-    #     ),
-    # )
+    @tool(
+        description=(
+            "Extract raw frames from a video time window at specified frame rate. "
+            "Retrieves actual frame images from a video between two timestamps, "
+            "sampled at a custom frame rate. Returns images that can be viewed directly."
+        ),
+        instructions=(
+            "Use when: need to visually inspect specific time range in detail, "
+            "want to show frames directly for analysis, "
+            "verifying visual content in precise time window."
+        ),
+    )
     async def extract_frames_by_time_window(
         self,
         video_id: str,
@@ -507,16 +507,16 @@ class UtilityToolkit(Toolkit):
             images=frames_output,
         )
 
-    # @tool(
-    #     description=(
-    #         "Extract a single frame from a video at a specific timestamp. "
-    #         "Retrieves the exact frame at the given time for visual inspection."
-    #     ),
-    #     instructions=(
-    #         "Use when: need to see exactly what's in a frame at a specific moment, "
-    #         "want to visually verify content at a precise timestamp."
-    #     ),
-    # )
+    @tool(
+        description=(
+            "Extract a single frame from a video at a specific timestamp. "
+            "Retrieves the exact frame at the given time for visual inspection."
+        ),
+        instructions=(
+            "Use when: need to see exactly what's in a frame at a specific moment, "
+            "want to visually verify content at a precise timestamp."
+        ),
+    )
     async def extract_frame_at_time(
         self,
         video_id: str,

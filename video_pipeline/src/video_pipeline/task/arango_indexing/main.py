@@ -137,7 +137,6 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 ekey = event.get("_key", event.get("key", ""))
                 n2v_node = nodes.get(ekey, {})
                 sem_emb = event_embeddings[idx] if idx < len(event_embeddings) else []
-video_pipeline/src/video_pipeline/task/image_extraction
                 event_docs.append({
                     "_key": _ns(video_id, ekey),
                     "video_id": video_id,

@@ -989,10 +989,14 @@ class KGSearchToolkit(Toolkit):
                 vec_hits.extend(self._execute_aql(vec_aql, {"vec": query_emb, **video_bind, **user_bind}))
 
         else:
+
+
             aql = f"""
             WITH entities, {self.search_view}
             LET bm25_hits = (
                 FOR doc IN {self.search_view}
+                
+                
                 SEARCH ANALYZER(
                     doc.entity_name IN TOKENS(@text, 'text_en') OR
                     doc["desc"] IN TOKENS(@text, 'text_en'),

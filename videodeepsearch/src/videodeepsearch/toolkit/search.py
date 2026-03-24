@@ -91,6 +91,20 @@ class VideoSearchToolkit(Toolkit):
 
         return ToolResult(content=content)
 
+    @tool(
+        description=(
+            "Search images by caption using MMBert text embeddings. "
+            "Best for queries about WHAT'S HAPPENING or described in captions. "
+            "Supports hybrid search combining dense + sparse embeddings."
+        ),
+        instructions=(
+            "Use when query describes EVENTS, ACTIONS, or SCENES. "
+            "Query must be in English. "
+            "Best for: semantic search, document retrieval, sentence similarity."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_images_from_caption_query_mmbert(
         self,
         caption_query: str,
@@ -161,20 +175,20 @@ class VideoSearchToolkit(Toolkit):
 
         return self._store_result("get_images_from_caption_query_mmbert", kwargs, results)
 
-    # @tool(
-    #     description=(
-    #         "Search images using QwenVL unified multimodal embeddings. "
-    #         "QwenVL provides a unified text-image embedding space, allowing flexible queries. "
-    #         "Works for visual descriptions, semantic captions, or any text query about images."
-    #     ),
-    #     instructions=(
-    #         "Use for any image search query - visual appearance, semantic content, or mixed. "
-    #         "Query can describe what the image LOOKS LIKE or what's HAPPENING in it. "
-    #         "Best for: visual search, caption search, multimodal retrieval."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Search images using QwenVL unified multimodal embeddings. "
+            "QwenVL provides a unified text-image embedding space, allowing flexible queries. "
+            "Works for visual descriptions, semantic captions, or any text query about images."
+        ),
+        instructions=(
+            "Use for any image search query - visual appearance, semantic content, or mixed. "
+            "Query can describe what the image LOOKS LIKE or what's HAPPENING in it. "
+            "Best for: visual search, caption search, multimodal retrieval."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_images_from_qwenvl_query(
         self,
         query: str,
@@ -220,20 +234,20 @@ class VideoSearchToolkit(Toolkit):
 
         return self._store_result("get_images_from_qwenvl_query", kwargs, results)
 
-    # @tool(
-    #     description=(
-    #         "Search for video segments by event/scene description using MMBert. "
-    #         "Retrieves multi-frame sequences based on semantic similarity to event descriptions. "
-    #         "MMBert provides cleaner language embedding space for text."
-    #     ),
-    #     instructions=(
-    #         "Use when query describes an EVENT, ACTION, or SCENE. "
-    #         "Best for: finding continuous video sequences, temporal events, conversations. "
-    #         "Prefer MMBert for text-only semantic search."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Search for video segments by event/scene description using MMBert. "
+            "Retrieves multi-frame sequences based on semantic similarity to event descriptions. "
+            "MMBert provides cleaner language embedding space for text."
+        ),
+        instructions=(
+            "Use when query describes an EVENT, ACTION, or SCENE. "
+            "Best for: finding continuous video sequences, temporal events, conversations. "
+            "Prefer MMBert for text-only semantic search."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_segments_from_event_query_mmbert(
         self,
         event_query: str,
@@ -302,20 +316,20 @@ class VideoSearchToolkit(Toolkit):
 
         return self._store_result("get_segments_from_event_query_mmbert", kwargs, results)
 
-    # @tool(
-    #     description=(
-    #         "Search for video segments using QwenVL unified multimodal embeddings. "
-    #         "Provides unified text-image embedding space for segment retrieval. "
-    #         "Works for visual descriptions, event queries, or any text about segments."
-    #     ),
-    #     instructions=(
-    #         "Use for any segment search query - visual appearance, event descriptions, or mixed. "
-    #         "Query can describe what the SCENE LOOKS LIKE or what's HAPPENING in it. "
-    #         "Best for: visual search, event retrieval, multimodal segment queries."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Search for video segments using QwenVL unified multimodal embeddings. "
+            "Provides unified text-image embedding space for segment retrieval. "
+            "Works for visual descriptions, event queries, or any text about segments."
+        ),
+        instructions=(
+            "Use for any segment search query - visual appearance, event descriptions, or mixed. "
+            "Query can describe what the SCENE LOOKS LIKE or what's HAPPENING in it. "
+            "Best for: visual search, event retrieval, multimodal segment queries."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_segments_from_qwenvl_query(
         self,
         query: str,
@@ -418,20 +432,20 @@ class VideoSearchToolkit(Toolkit):
 
         return self._store_result("get_audio_from_query_dense", kwargs, results)
 
-    # @tool(
-    #     description=(
-    #         "Search for audio transcripts using hybrid dense + sparse search. "
-    #         "Combines MMBert dense embeddings with SPLADE sparse embeddings for better retrieval. "
-    #         "Best for precise keyword matching combined with semantic understanding."
-    #     ),
-    #     instructions=(
-    #         "Use when query contains SPECIFIC KEYWORDS or PHRASES that must be matched exactly. "
-    #         "Hybrid search combines semantic understanding with keyword precision. "
-    #         "Best for: finding exact phrases, technical terms, named entities in audio."
-    #     ),
-    #     cache_results=True,
-    #     cache_ttl=1800,
-    # )
+    @tool(
+        description=(
+            "Search for audio transcripts using hybrid dense + sparse search. "
+            "Combines MMBert dense embeddings with SPLADE sparse embeddings for better retrieval. "
+            "Best for precise keyword matching combined with semantic understanding."
+        ),
+        instructions=(
+            "Use when query contains SPECIFIC KEYWORDS or PHRASES that must be matched exactly. "
+            "Hybrid search combines semantic understanding with keyword precision. "
+            "Best for: finding exact phrases, technical terms, named entities in audio."
+        ),
+        cache_results=True,
+        cache_ttl=1800,
+    )
     async def get_audio_from_query_hybrid(
         self,
         audio_query: str,
@@ -489,10 +503,10 @@ class VideoSearchToolkit(Toolkit):
     # Cache Retrieval Tool
     # =========================================================================
 
-    # @tool(
-    #     description="View cached search results with different view modes.",
-    #     cache_results=False,
-    # )
+    @tool(
+        description="View cached search results with different view modes.",
+        cache_results=False,
+    )
     def view_cache_result(
         self,
         tool_name: str,
