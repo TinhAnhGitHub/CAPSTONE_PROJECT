@@ -1,77 +1,60 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
-
-from videodeepsearch.core.app_state import Appstate
-from videodeepsearch.agent.base import get_global_agent_registry
-from videodeepsearch.tools.base.registry import tool_registry
-
+from fastapi import APIRouter, Request
 
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-def _safe_bool(value: object) -> bool:
-    return bool(value)
-
-
 @router.get(
-    "/check_tools",
-    summary="Inspect registered search tools and their metadata."
+    "/status",
+    summary="Check readiness of all clients and models."
 )
-async def check_tools():
-    all_tools = tool_registry.list_all_tool_name()
+async def status(request: Request):
+    """Check all initialized clients in app.state."""
+    state = request.app.state
+
     return {
-        "total": len(all_tools),
-        "tools": all_tools,
- 
-    }
-
-
-@router.get(
-    "/check_agents",
-    summary="List registered agents available in the orchestrator."
-)
-async def check_agents():
-    registry = get_global_agent_registry()
-    agents = list(registry.name2ag_conf.keys())
-    return {
-        "total": len(agents),
-        "agents": agents,
-    }
-
-
-@router.get(
-    "/app_state",
-    summary="Check readiness of shared clients and factories stored in Appstate."
-)
-async def app_state_status():
-    app_state = Appstate()
-    return {
-        "milvus_image_connected": _safe_bool(app_state.image_milvus_client),
-        "milvus_segment_connected": _safe_bool(app_state.segment_milvus_client),
-        "postgres_connected": _safe_bool(app_state.postgres_client),
-        "minio_connected": _safe_bool(app_state.minio_client),
-        "external_client_connected": _safe_bool(app_state.external_client),
-        "llm_instances": list(app_state.llm_instance.keys()),
+        "postgres": bool(getattr(state, "postgres_client", None)),
+        "minio": bool(getattr(state, "minio_client", None)),
+        "qdrant_image": bool(getattr(state, "image_qdrant_client", None)),
+        "qdrant_segment": bool(getattr(state, "segment_qdrant_client", None)),
+        "qdrant_audio": bool(getattr(state, "audio_qdrant_client", None)),
+        "elasticsearch": bool(getattr(state, "es_ocr_client", None)),
+        "arangodb": bool(getattr(state, "arango_db", None)),
+        "qwenvl": bool(getattr(state, "qwenvl_client", None)),
+        "mmbert": bool(getattr(state, "mmbert_client", None)),
+        "splade": bool(getattr(state, "splade_client", None)),
+        "models": list(getattr(state, "models", {}).keys()),
+        "worker_models": list(getattr(state, "worker_models", {}).keys()),
     }
 
 
 @router.get(
     "/ready",
-    summary="Overall readiness signal for running the workflow."
+    summary="Overall readiness signal."
 )
-async def readiness():
-    state = await app_state_status()
-    healthy = all(
-        state[key]
-        for key in (
-            "tool_factory_ready",
-            "milvus_image_connected",
-            "milvus_segment_connected",
-            "postgres_connected",
-            "minio_connected",
-            "external_client_connected",
-        )
-    )
-    return {"ready": healthy, **state}
+async def readiness(request: Request):
+    """Check if all required services are ready."""
+    state = request.app.state
 
+    checks = {
+        "postgres": bool(getattr(state, "postgres_client", None)),
+        "minio": bool(getattr(state, "minio_client", None)),
+        "qdrant": all([
+            getattr(state, "image_qdrant_client", None),
+            getattr(state, "segment_qdrant_client", None),
+            getattr(state, "audio_qdrant_client", None),
+        ]),
+        "elasticsearch": bool(getattr(state, "es_ocr_client", None)),
+        "arangodb": bool(getattr(state, "arango_db", None)),
+        "inference": all([
+            getattr(state, "qwenvl_client", None),
+            getattr(state, "mmbert_client", None),
+            getattr(state, "splade_client", None),
+        ]),
+        "models": bool(getattr(state, "models", None)),
+        "worker_models": bool(getattr(state, "worker_models", None)),
+    }
+
+    ready = all(checks.values())
+    return {"ready": ready, "checks": checks}
