@@ -1,12 +1,5 @@
-"""Node2Vec Embeddings - Stage 5.
-
-Train Node2Vec structural embeddings on three graph variants.
-"""
-
 from __future__ import annotations
-
 import warnings
-
 import networkx as nx
 
 warnings.filterwarnings("ignore")
@@ -21,7 +14,6 @@ from .models import (
 from .node2vec import Node2Vec
 
 def build_entity_only_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
-    """Graph A — entity nodes + entity↔entity relationship edges."""
     G = nx.Graph()
 
     for entity in enhanced_kg.entities:
@@ -42,14 +34,16 @@ def build_entity_only_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
 
 
 def build_entity_micro_event_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
-    """Graph B — entity + micro-event nodes."""
     G = nx.Graph()
 
     for entity in enhanced_kg.entities:
-        G.add_node(entity.global_entity_id, node_type="entity", label=entity.entity_name)
+        G.add_node(node_for_adding=entity.global_entity_id, node_type="entity", label=entity.entity_name)
 
     for mn in enhanced_kg.micro_event_nodes:
         G.add_node(mn.key, node_type="micro_event", label=mn.text[:60])
+
+    for event in enhanced_kg.events:
+        G.add_node(event.key, node_type="event", label=event.caption[:60])
 
     for rel in enhanced_kg.relationships:
         subj = rel.subject_global
@@ -83,12 +77,9 @@ def build_entity_micro_event_graph(enhanced_kg: EnhancedKG) -> nx.Graph:
             else:
                 G.add_edge(from_key, to_key, weight=w)
 
-    big_event_keys = {ev.key for ev in enhanced_kg.events}
     for mn in enhanced_kg.micro_event_nodes:
         parent = mn.parent_event_key.split("/")[-1]
-        if parent in big_event_keys:
-            if not G.has_node(parent):
-                G.add_node(parent, node_type="event", label=parent)
+        if G.has_node(parent):
             G.add_edge(mn.key, parent, weight=1.5)
 
     print(f"  [B] entity_micro_event   : {G.number_of_nodes():>5} nodes, {G.number_of_edges():>6} edges")
@@ -103,7 +94,7 @@ def build_full_heterogeneous_graph(
 
     for event in enhanced_kg.events:
         if not G.has_node(event.key):
-            G.add_node(event.key, node_type="event", label=event.caption[:60])
+            G.add_node(node_for_adding=event.key, node_type="event", label=event.caption[:60])
 
     for link in enhanced_kg.event_entity_links:
         ev_key = link.from_key.split("/")[-1]
@@ -332,7 +323,6 @@ def run_node2vec(
         p=p, q=q, window=window, workers=workers, seed=seed,
     )
 
-    # Train on each graph
     print(f"  Training node2vec on Graph A (entity_only)...")
     emb_A = train_node2vec(G_A, "entity_only", **n2v_kwargs) #type:ignore
 
@@ -342,7 +332,6 @@ def run_node2vec(
     print(f"  Training node2vec on Graph C (full_heterogeneous)...")
     emb_C = train_node2vec(G_C, "full_heterogeneous", **n2v_kwargs) #type:ignore
 
-    # Assemble output
     print(f"  Assembling output...")
     output = assemble_output(
         enhanced_kg, communities, emb_A, emb_B, emb_C,
