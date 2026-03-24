@@ -1,21 +1,8 @@
-"""Utility Toolkit for ASR context retrieval and video navigation.
-
-This toolkit provides tools for:
-- ASR transcript context retrieval around segments/images
-- Video segment/frame navigation (temporal exploration)
-- Frame extraction with ToolResult for media return
-
-All tools return ToolResult for unified interface.
-"""
-
 from __future__ import annotations
 
 import base64
 import io
-import re
-from datetime import datetime
 from typing import Any, Literal
-from urllib.parse import urlparse
 
 import av
 import cv2
@@ -24,130 +11,29 @@ from agno.tools import Toolkit, tool
 from agno.tools.function import ToolResult
 from loguru import logger
 from PIL import Image as PILImage
+from tqdm import tqdm
 
 from videodeepsearch.clients.storage.minio import MinioStorageClient
 from videodeepsearch.clients.storage.postgre import PostgresClient
 from videodeepsearch.schemas import ImageInterface, SegmentInterface
-
-def extract_s3_minio_url(s3_link: str) -> tuple[str, str]:
-    """Parse S3/MinIO URL to extract bucket and object name.
-
-    Args:
-        s3_link: S3 URL (e.g., "http://host/bucket/object" or "bucket/object")
-
-    Returns:
-        Tuple of (bucket_name, object_name)
-    """
-    parsed = urlparse(s3_link)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    return bucket, key
-
-
-def time_to_seconds(time_str: str) -> float:
-    """Convert time string (HH:MM:SS.sss) to seconds.
-
-    Args:
-        time_str: Time string in format HH:MM:SS.sss
-
-    Returns:
-        Time in seconds
-    """
-    t = datetime.strptime(time_str, "%H:%M:%S.%f")
-    return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond / 1e6
-
-
-def parse_time_safe(time_str: str) -> datetime:
-    """Parse both HH:MM:SS and HH:MM:SS.sss safely.
-
-    Args:
-        time_str: Time string
-
-    Returns:
-        datetime object
-    """
-    try:
-        return datetime.strptime(time_str, "%H:%M:%S.%f")
-    except ValueError:
-        return datetime.strptime(time_str, "%H:%M:%S")
-
-
-def time_range_overlap(
-    start_input: float,
-    end_input: float,
-    start_range: float,
-    end_range: float,
-    iou: float = 0.2,
-) -> bool:
-    """Check if two time ranges overlap with IoU threshold.
-
-    Args:
-        start_input: Start of input range (seconds)
-        end_input: End of input range (seconds)
-        start_range: Start of target range (seconds)
-        end_range: End of target range (seconds)
-        iou: IoU threshold for overlap
-
-    Returns:
-        True if ranges overlap
-    """
-    s1, e1 = start_input, end_input
-    s2, e2 = start_range, end_range
-    inter = max(0, min(e1, e2) - max(s1, s2))
-    union = max(e1, e2) - min(s1, s2)
-    return (inter / union) >= iou or (s1 >= s2 and e1 <= e2)
-
-
-def convert_time_to_frame(time: str, fps: float) -> int:
-    """Convert time string to frame index.
-
-    Args:
-        time: Time string (HH:MM:SS.sss)
-        fps: Frames per second
-
-    Returns:
-        Frame index
-    """
-    seconds = time_to_seconds(time)
-    return int(seconds * fps)
-
-
-def timecode_to_frame(time_str: str, fps: float) -> int:
-    """Convert timecode string to frame index.
-
-    Args:
-        time_str: Timecode in HH:MM:SS.sss format
-        fps: Frames per second
-
-    Returns:
-        Frame index
-    """
-    match = re.match(r"^(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)$", time_str)
-    if not match:
-        raise ValueError(
-            f"Invalid timecode format: '{time_str}'. Expected format: 'HH:MM:SS.sss'"
-        )
-    hours, minutes, seconds = match.groups()
-    total_seconds = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-    return round(total_seconds * fps)
+from videodeepsearch.toolkit.common import (
+    extract_s3_minio_url,
+    time_to_seconds,
+    parse_time_safe,
+    time_range_overlap,
+    convert_time_to_frame,
+    timecode_to_frame,
+)
 
 
 def format_interface_list(items: list[Any], item_type: str) -> str:
-    """Format a list of interfaces for ToolResult content.
-
-    Args:
-        items: List of ImageInterface or SegmentInterface
-        item_type: 'image' or 'segment'
-
-    Returns:
-        Formatted string
-    """
+    """Format a list of interfaces for ToolResult content."""
     if not items:
         return f"No {item_type}s found."
 
     lines = [f"Found {len(items)} {item_type}(s):", ""]
     for i, item in enumerate(items):
-        lines.append(f"[{i}] {item.brief_representation()}")
+        lines.append(f"[{i}] {item.detailed_representation()}")
 
     return "\n".join(lines)
 
@@ -210,18 +96,18 @@ class UtilityToolkit(Toolkit):
         self.storage = minio_client
         super().__init__(name="Utility Tools")
         
-    @tool(
-        description=(
-            "Retrieve spoken words (ASR transcript) around a video segment for context. "
-            "Extracts the audio transcript within a time window surrounding a segment, "
-            "providing spoken context to verify or enrich visual findings."
-        ),
-        instructions=(
-            "Use when: found a promising segment but need verbal context, "
-            "user query mentioned dialogue/speech/audio events, "
-            "want to verify if visual match aligns with spoken content."
-        ),
-    )
+    # @tool(
+    #     description=(
+    #         "Retrieve spoken words (ASR transcript) around a video segment for context. "
+    #         "Extracts the audio transcript within a time window surrounding a segment, "
+    #         "providing spoken context to verify or enrich visual findings."
+    #     ),
+    #     instructions=(
+    #         "Use when: found a promising segment but need verbal context, "
+    #         "user query mentioned dialogue/speech/audio events, "
+    #         "want to verify if visual match aligns with spoken content."
+    #     ),
+    # )
     async def get_related_asr_from_segment(
         self,
         video_id: str,
@@ -251,18 +137,10 @@ class UtilityToolkit(Toolkit):
             artifact_id=video_id,
             filter_artifact_type=["ASRArtifact"],
         )
+        print(f"asr_artifacts: {asr_artifacts[:2]}")
 
         if not asr_artifacts:
             return ToolResult(content=f"Error: No ASR data found for video {video_id}")
-
-        asr_artifact = asr_artifacts[0]
-        bucket, object_name = extract_s3_minio_url(asr_artifact.minio_url)
-
-        asr_data = self.storage.read_json(bucket=bucket, object_name=object_name)
-        if asr_data is None:
-            return ToolResult(content="Error: Could not load ASR data from storage")
-
-        asr_tokens = asr_data.get("tokens", [])
 
         segment_start = time_to_seconds(segment_start_time)
         segment_end = time_to_seconds(segment_end_time)
@@ -280,23 +158,31 @@ class UtilityToolkit(Toolkit):
         window_start = segment_start - window_seconds
         window_end = segment_end + window_seconds
 
-        snippet_tokens = []
-        for token in asr_tokens:
-            token_start = time_to_seconds(token.get("start", "00:00:00.000"))
-            token_end = time_to_seconds(token.get("end", "00:00:00.000"))
+        matching_asr = []
 
-            if time_range_overlap(window_start, window_end, token_start, token_end):
-                snippet_tokens.append(token)
+        for artifact in asr_artifacts:
+            metadata: dict = artifact.artifact_metadata
+            start_time, end_time = metadata['timestamp']
+            start_sec = time_to_seconds(start_time)
+            end_sec = time_to_seconds(end_time)
+
+            if time_range_overlap(window_start, window_end, start_sec, end_sec):
+                text = metadata['text']
+                start_frame, end_frame = metadata['frame_num']
+                matching_asr.append((start_sec, start_time, start_frame, end_time, end_frame, text))
+
+        matching_asr.sort(key=lambda x: x[0])
 
         context_parts = []
-        for token in snippet_tokens:
+        for _, start_time, start_frame, end_time, end_frame, text in matching_asr:
             context_parts.append(ASR_TOKEN_TEMPLATE.format(
-                start=token.get("start", ""),
-                start_frame=token.get("start_frame", 0),
-                end=token.get("end", ""),
-                end_frame=token.get("end_frame", 0),
-                text=token.get("text", ""),
+                start=start_time,
+                start_frame=start_frame,
+                end=end_time,
+                end_frame=end_frame,
+                text=text,
             ).strip())
+
 
         return ToolResult(content=SNIPPET_TEMPLATE.format(
             segment_start_time=segment_start_time,
@@ -307,16 +193,16 @@ class UtilityToolkit(Toolkit):
             context="\n\n".join(context_parts),
         ))
 
-    @tool(
-        description=(
-            "Retrieve spoken words (ASR transcript) around a specific image/frame. "
-            "Extracts audio transcript within a time window surrounding an image's timestamp."
-        ),
-        instructions=(
-            "Use when: found a promising image but need verbal context around that moment, "
-            "user query mentioned dialogue at specific frames."
-        ),
-    )
+    # @tool(
+    #     description=(
+    #         "Retrieve spoken words (ASR transcript) around a specific image/frame. "
+    #         "Extracts audio transcript within a time window surrounding an image's timestamp."
+    #     ),
+    #     instructions=(
+    #         "Use when: found a promising image but need verbal context around that moment, "
+    #         "user query mentioned dialogue at specific frames."
+    #     ),
+    # )
     async def get_related_asr_from_image(
         self,
         video_id: str,
@@ -347,36 +233,36 @@ class UtilityToolkit(Toolkit):
         if not asr_artifacts:
             return ToolResult(content=f"Error: No ASR data found for video {video_id}")
 
-        asr_artifact = asr_artifacts[0]
-        bucket, object_name = extract_s3_minio_url(asr_artifact.minio_url)
-
-        asr_data = self.storage.read_json(bucket=bucket, object_name=object_name)
-        if asr_data is None:
-            return ToolResult(content="Error: Could not load ASR data from storage")
-
-        asr_tokens = asr_data.get("tokens", [])
-
         ts_center = time_to_seconds(image_timestamp)
         window_start = ts_center - window_seconds
         window_end = ts_center + window_seconds
 
-        snippet_tokens = []
-        for token in asr_tokens:
-            token_start = time_to_seconds(token.get("start", "00:00:00.000"))
-            token_end = time_to_seconds(token.get("end", "00:00:00.000"))
+        # Collect matching ASR entries with their start time for sorting
+        matching_asr = []
 
-            if time_range_overlap(window_start, window_end, token_start, token_end):
-                snippet_tokens.append(token)
+        for artifact in asr_artifacts:
+            metadata: dict = artifact.artifact_metadata
+            start_time, end_time = metadata['timestamp']
+            start_sec = time_to_seconds(start_time)
+            end_sec = time_to_seconds(end_time)
+
+            if time_range_overlap(window_start, window_end, start_sec, end_sec):
+                text = metadata['text']
+                start_frame, end_frame = metadata['frame_num']
+                matching_asr.append((start_sec, start_time, start_frame, end_time, end_frame, text))
+
+        # Sort by start time
+        matching_asr.sort(key=lambda x: x[0])
 
         context_parts = []
-        for token in snippet_tokens:
-            context_parts.append(f"""
----------------------
-Start time/index: {token.get('start', '')}/{token.get('start_frame', 0)}
-End time/index: {token.get('end', '')}/{token.get('end_frame', 0)}
-ASR content: {token.get('text', '')}
----------------------
-""")
+        for _, start_time, start_frame, end_time, end_frame, text in matching_asr:
+            context_parts.append(ASR_TOKEN_TEMPLATE.format(
+                start=start_time,
+                start_frame=start_frame,
+                end=end_time,
+                end_frame=end_frame,
+                text=text,
+            ).strip())
 
         frame_index = convert_time_to_frame(image_timestamp, video_fps)
 
@@ -384,21 +270,21 @@ ASR content: {token.get('text', '')}
             image_timestamp=image_timestamp,
             image_frame_index=frame_index,
             window_seconds=window_seconds,
-            context="\n".join(context_parts),
+            context="\n\n".join(context_parts),
         ))
 
-    @tool(
-        description=(
-            "Navigate to adjacent segments before/after a reference segment. "
-            "Retrieves surrounding video segments relative to a known segment, "
-            "enabling temporal exploration of video content. Like 'turning pages' in a video book."
-        ),
-        instructions=(
-            "Use when: found a promising segment and want to see what happens before/after, "
-            "need temporal context around a matching segment, "
-            "verifying if an event continues across multiple segments."
-        ),
-    )
+    # @tool(
+    #     description=(
+    #         "Navigate to adjacent segments before/after a reference segment. "
+    #         "Retrieves surrounding video segments relative to a known segment, "
+    #         "enabling temporal exploration of video content. Like 'turning pages' in a video book."
+    #     ),
+    #     instructions=(
+    #         "Use when: found a promising segment and want to see what happens before/after, "
+    #         "need temporal context around a matching segment, "
+    #         "verifying if an event continues across multiple segments."
+    #     ),
+    # )
     async def get_adjacent_segments(
         self,
         video_id: str,
@@ -425,41 +311,31 @@ ASR content: {token.get('text', '')}
             artifact_id=video_id,
             filter_artifact_type=["SegmentCaptionArtifact"],
         )
-
+        print(segment_artifacts[0])
         segments: list[SegmentInterface] = []
 
         for artifact in segment_artifacts:
-            bucket, object_name = extract_s3_minio_url(artifact.minio_url)
-            json_data = self.storage.read_json(bucket=bucket, object_name=object_name)
-
-            if json_data is None:
-                logger.warning(f"Could not load segment data from {artifact.minio_url}")
-                continue
-
-            caption = json_data.get("caption", "")
-
-            segment = SegmentInterface(
-                id=str(artifact.id),
+            start_frame = artifact.artifact_metadata["start_frame"]
+            end_frame = artifact.artifact_metadata["end_frame"]
+            segment_inferface = SegmentInterface(
+                id=str(artifact.artifact_id),
                 related_video_id=video_id,
-                minio_path=artifact.minio_url,
                 user_bucket=artifact.user_id,
-                start_frame=json_data.get("start_frame", 0),
-                end_frame=json_data.get("end_frame", 0),
-                start_time=json_data.get("start_timestamp", "00:00:00.000"),
-                end_time=json_data.get("end_timestamp", "00:00:00.000"),
-                segment_caption=caption,
+                start_frame=artifact.artifact_metadata.get("start_frame", 0),
+                end_frame=artifact.artifact_metadata.get("end_frame", 0),
+                start_time=artifact.artifact_metadata.get("start_timestamp", "00:00:00.000"),
+                end_time=artifact.artifact_metadata.get("end_timestamp", "00:00:00.000"),
+                segment_caption=artifact.artifact_metadata.get("summary_caption", ""),
                 score=0.0,
-                start_sec=json_data.get("start_sec"),
-                end_sec=json_data.get("end_sec"),
-                frame_indices=json_data.get("frame_indices"),
+                
             )
 
             if direction == "forward":
-                if segment.start_frame >= pivot_end_frame:
-                    segments.append(segment)
+                if start_frame >= pivot_end_frame: 
+                    segments.append(segment_inferface)
             else:
-                if segment.end_frame <= pivot_start_frame:
-                    segments.append(segment)
+                if end_frame <= pivot_start_frame:
+                    segments.append(segment_inferface)
 
         segments.sort(
             key=lambda s: parse_time_safe(s.end_time),
@@ -476,18 +352,18 @@ ASR content: {token.get('text', '')}
 
         return ToolResult(content=format_interface_list(result_segments, "segment"))
 
-    @tool(
-        description=(
-            "Navigate to adjacent frames before/after a reference image. "
-            "Retrieves surrounding frames relative to a known image, enabling frame-by-frame "
-            "exploration. Like stepping through video one frame at a time."
-        ),
-        instructions=(
-            "Use when: found a good frame and want to see adjacent frames, "
-            "checking for motion/action across consecutive frames, "
-            "verifying object persistence across time."
-        ),
-    )
+    # @tool(
+    #     description=(
+    #         "Navigate to adjacent frames before/after a reference image. "
+    #         "Retrieves surrounding frames relative to a known image, enabling frame-by-frame "
+    #         "exploration. Like stepping through video one frame at a time."
+    #     ),
+    #     instructions=(
+    #         "Use when: found a good frame and want to see adjacent frames, "
+    #         "checking for motion/action across consecutive frames, "
+    #         "verifying object persistence across time."
+    #     ),
+    # )
     async def get_adjacent_images(
         self,
         video_id: str,
@@ -516,26 +392,18 @@ ASR content: {token.get('text', '')}
         images: list[ImageInterface] = []
 
         for artifact in image_artifacts:
-            bucket, object_name = extract_s3_minio_url(artifact.minio_url)
-            json_data = self.storage.read_json(bucket=bucket, object_name=object_name)
-
-            if json_data is None:
-                logger.warning(f"Could not load image data from {artifact.minio_url}")
-                continue
-
-            caption = json_data.get("caption", "")
+            metadata: dict = artifact.artifact_metadata
 
             image = ImageInterface(
-                id=str(artifact.id),
+                id=str(artifact.artifact_id),
                 related_video_id=video_id,
-                minio_path=artifact.minio_url,
                 user_bucket=artifact.user_id,
-                frame_index=json_data.get("frame_index", 0),
-                timestamp=json_data.get("timestamp", "00:00:00.000"),
-                image_caption=caption,
+                frame_index=metadata.get("frame_index", 0),
+                timestamp=metadata.get("timestamp", "00:00:00.000"),
+                image_caption=metadata.get("caption", ""),
                 score=0.0,
-                timestamp_sec=json_data.get("timestamp_sec"),
-                related_video_fps=json_data.get("fps"),
+                timestamp_sec=metadata.get("timestamp_sec"),
+                related_video_fps=metadata.get("fps"),
             )
 
             if direction == "forward":
@@ -560,18 +428,18 @@ ASR content: {token.get('text', '')}
 
         return ToolResult(content=format_interface_list(result_images, "image"))
 
-    @tool(
-        description=(
-            "Extract raw frames from a video time window at specified frame rate. "
-            "Retrieves actual frame images from a video between two timestamps, "
-            "sampled at a custom frame rate. Returns images that can be viewed directly."
-        ),
-        instructions=(
-            "Use when: need to visually inspect specific time range in detail, "
-            "want to show frames directly for analysis, "
-            "verifying visual content in precise time window."
-        ),
-    )
+    # @tool(
+    #     description=(
+    #         "Extract raw frames from a video time window at specified frame rate. "
+    #         "Retrieves actual frame images from a video between two timestamps, "
+    #         "sampled at a custom frame rate. Returns images that can be viewed directly."
+    #     ),
+    #     instructions=(
+    #         "Use when: need to visually inspect specific time range in detail, "
+    #         "want to show frames directly for analysis, "
+    #         "verifying visual content in precise time window."
+    #     ),
+    # )
     async def extract_frames_by_time_window(
         self,
         video_id: str,
@@ -610,7 +478,7 @@ ASR content: {token.get('text', '')}
         frame_index = 0
 
         stream = container.streams.video[0]
-        for frame in container.decode(stream):  # type: ignore
+        for frame in tqdm(container.decode(stream), desc="Processing frames"):  # type: ignore
             if frame_index < start_frame:
                 frame_index += 1
                 continue
@@ -628,7 +496,7 @@ ASR content: {token.get('text', '')}
                 frame_index += 1
                 continue
 
-            frame_b64 = base64.b64encode(encoded.tobytes()).decode("utf-8")
+            frame_b64 = base64.b64encode(encoded.tobytes())
             frames_output.append(AgnoImage(content=frame_b64))
             frame_index += 1
 
@@ -639,16 +507,16 @@ ASR content: {token.get('text', '')}
             images=frames_output,
         )
 
-    @tool(
-        description=(
-            "Extract a single frame from a video at a specific timestamp. "
-            "Retrieves the exact frame at the given time for visual inspection."
-        ),
-        instructions=(
-            "Use when: need to see exactly what's in a frame at a specific moment, "
-            "want to visually verify content at a precise timestamp."
-        ),
-    )
+    # @tool(
+    #     description=(
+    #         "Extract a single frame from a video at a specific timestamp. "
+    #         "Retrieves the exact frame at the given time for visual inspection."
+    #     ),
+    #     instructions=(
+    #         "Use when: need to see exactly what's in a frame at a specific moment, "
+    #         "want to visually verify content at a precise timestamp."
+    #     ),
+    # )
     async def extract_frame_at_time(
         self,
         video_id: str,
@@ -697,7 +565,7 @@ ASR content: {token.get('text', '')}
         buf = io.BytesIO()
         PILImage.fromarray(rgb_frame).save(buf, format="WEBP")
         buf.seek(0)
-        frame_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        frame_b64 = base64.b64encode(buf.getvalue())
 
         return ToolResult(
             content=f"Frame extracted at {timestamp} (frame index: {frame_index})",

@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Any, Literal
 
-from agno.tools import tool
+from agno.tools import tool, Toolkit
 from agno.tools.function import ToolResult
 
 from videodeepsearch.clients.storage.qdrant import (
@@ -20,7 +20,7 @@ from videodeepsearch.toolkit.common import (
 )
 
 
-class VideoSearchToolkit:
+class VideoSearchToolkit(Toolkit):
 
     def __init__(
         self,
@@ -44,7 +44,7 @@ class VideoSearchToolkit:
 
         self._result_store: dict[str, SearchResultContainer] = {}
 
-        # super().__init__(name="Video Search Tools")
+        super().__init__(name="Video Search Tools")
 
     def _store_result(
         self,

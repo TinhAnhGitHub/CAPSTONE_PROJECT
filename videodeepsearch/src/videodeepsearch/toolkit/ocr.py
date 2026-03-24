@@ -121,24 +121,20 @@ class OCRSearchToolkit(Toolkit):
 
         return "\n".join(lines)
 
-    # =========================================================================
-    # Keyword Search (BM25)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search for text in video frames using keyword matching (BM25). "
-            "Best for finding specific words, phrases, or exact text matches. "
-            "Supports fuzzy matching for handling OCR errors."
-        ),
-        instructions=(
-            "Use when looking for specific words, numbers, or phrases in video frames. "
-            "Supports fuzzy matching to handle OCR recognition errors. "
-            "Best for: finding specific text, numbers, labels, captions in videos."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
+    # @tool(
+    #     description=(
+    #         "Search for text in video frames using keyword matching (BM25). "
+    #         "Best for finding specific words, phrases, or exact text matches. "
+    #         "Supports fuzzy matching for handling OCR errors."
+    #     ),
+    #     instructions=(
+    #         "Use when looking for specific words, numbers, or phrases in video frames. "
+    #         "Supports fuzzy matching to handle OCR recognition errors. "
+    #         "Best for: finding specific text, numbers, labels, captions in videos."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
     async def search_ocr_text(
         self,
         query: str,
@@ -184,151 +180,18 @@ class OCRSearchToolkit(Toolkit):
             logger.error(f"[OCRSearchToolkit] search_ocr_text failed: {e}")
             return ToolResult(content=f"Error: OCR text search failed - {str(e)}")
 
-    # =========================================================================
-    # Semantic Search (with Embeddings)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search for text in video frames using semantic similarity. "
-            "Encodes the query into an embedding vector and finds semantically "
-            "similar OCR text. Best for finding conceptually related content."
-        ),
-        instructions=(
-            "Use when the query describes a concept or meaning rather than exact words. "
-            "Requires MMBert embedding client to be configured. "
-            "Best for: finding text with similar meaning, conceptual search."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def search_ocr_semantic(
-        self,
-        query: str,
-        top_k: int = 10,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-    ) -> ToolResult:
-        """Search OCR text using semantic similarity.
-
-        Best for finding conceptually related content rather than exact matches.
-        Requires MMBert embedding client to be configured.
-
-        Args:
-            query: Text describing the concept to find
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-
-        Returns:
-            ToolResult with OCR search results
-        """
-        kwargs = {
-            "query": query,
-            "top_k": top_k,
-            "video_ids": video_ids,
-            "user_id": user_id,
-        }
-
-        if not self.mmbert:
-            return ToolResult(
-                content="Error: Semantic search requires MMBert client. Use search_ocr_text for keyword search."
-            )
-
-        try:
-            embeddings = await self.mmbert.ainfer([query])
-            if not embeddings:
-                return ToolResult(content="Error: Failed to generate query embedding")
-
-            results = await self.es_client.search_hybrid(
-                query=query,
-                query_vector=embeddings[0],
-                top_k=top_k,
-                video_ids=video_ids,
-                user_id=user_id,
-                highlight=True,
-            )
-            return self._store_result("search_ocr_semantic", kwargs, results)
-        except Exception as e:
-            logger.error(f"[OCRSearchToolkit] search_ocr_semantic failed: {e}")
-            return ToolResult(content=f"Error: Semantic search failed - {str(e)}")
-
-    # =========================================================================
-    # Hybrid Search (BM25 + kNN)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Search for text in video frames using hybrid search. "
-            "Combines keyword matching (BM25) with semantic similarity (kNN) "
-            "using RRF fusion for best retrieval quality."
-        ),
-        instructions=(
-            "Use when you want both keyword relevance and semantic understanding. "
-            "Combines the strengths of both approaches. "
-            "Best for: general-purpose text search with highest quality results."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def search_ocr_hybrid(
-        self,
-        query: str,
-        top_k: int = 10,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-    ) -> ToolResult:
-        """Search OCR text using hybrid BM25 + kNN with RRF fusion.
-
-        Best for general-purpose text search, combining keyword relevance
-        with semantic understanding.
-
-        Args:
-            query: Text query to search for
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-
-        Returns:
-            ToolResult with OCR search results
-        """
-        kwargs = {
-            "query": query,
-            "top_k": top_k,
-            "video_ids": video_ids,
-            "user_id": user_id,
-        }
-
-        try:
-            results = await self.es_client.search_with_embedding(
-                query=query,
-                top_k=top_k,
-                video_ids=video_ids,
-                user_id=user_id,
-                use_hybrid=True,
-                highlight=True,
-            )
-            return self._store_result("search_ocr_hybrid", kwargs, results)
-        except Exception as e:
-            logger.error(f"[OCRSearchToolkit] search_ocr_hybrid failed: {e}")
-            return ToolResult(content=f"Error: Hybrid search failed - {str(e)}")
-
-    # =========================================================================
-    # Video OCR Retrieval
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Get all OCR text extracted from a specific video. "
-            "Returns all text found in video frames, sorted by frame order."
-        ),
-        instructions=(
-            "Use when you need all text from a specific video. "
-            "Useful for reviewing all OCR content or finding text within a known video."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
+    # @tool(
+    #     description=(
+    #         "Get all OCR text extracted from a specific video. "
+    #         "Returns all text found in video frames, sorted by frame order."
+    #     ),
+    #     instructions=(
+    #         "Use when you need all text from a specific video. "
+    #         "Useful for reviewing all OCR content or finding text within a known video."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
     async def get_ocr_by_video(
         self,
         video_id: str,
@@ -361,15 +224,11 @@ class OCRSearchToolkit(Toolkit):
         except Exception as e:
             logger.error(f"[OCRSearchToolkit] get_ocr_by_video failed: {e}")
             return ToolResult(content=f"Error: Failed to get OCR for video - {str(e)}")
-
-    # =========================================================================
-    # Result Viewer
-    # =========================================================================
-
-    @tool(
-        description="View cached OCR search results with different view modes.",
-        cache_results=False,
-    )
+        r
+    # @tool(
+    #     description="View cached OCR search results with different view modes.",
+    #     cache_results=False,
+    # )
     def view_ocr_result(
         self,
         handle_id: str,

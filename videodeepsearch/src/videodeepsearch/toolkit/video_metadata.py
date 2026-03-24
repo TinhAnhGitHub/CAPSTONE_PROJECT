@@ -14,53 +14,18 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
-from urllib.parse import urlparse
 
 from agno.tools import Toolkit, tool
 from agno.tools.function import ToolResult
+from flask import json
 from loguru import logger
 
 from videodeepsearch.clients.storage.postgre import PostgresClient
 from videodeepsearch.clients.storage.minio import MinioStorageClient
+from videodeepsearch.toolkit.common import extract_s3_minio_url, format_duration
 
-
-def extract_s3_minio_url(s3_link: str) -> tuple[str, str]:
-    """Parse S3/MinIO URL to extract bucket and object name.
-
-    Args:
-        s3_link: S3 URL (e.g., "http://host/bucket/object" or "bucket/object")
-
-    Returns:
-        Tuple of (bucket_name, object_name)
-    """
-    parsed = urlparse(s3_link)
-    bucket = parsed.netloc
-    key = parsed.path.lstrip("/")
-    return bucket, key
-
-
-def format_duration(seconds: float) -> str:
-    """Format seconds to HH:MM:SS format.
-
-    Args:
-        seconds: Duration in seconds
-
-    Returns:
-        Formatted duration string
-    """
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-
-# =============================================================================
-# Response Models
-# =============================================================================
 
 class VideoInfo:
-    """Simple video info container."""
-
     def __init__(
         self,
         video_id: str,
@@ -98,7 +63,7 @@ class VideoInfo:
 
     def brief_repr(self) -> str:
         return (
-            f"[{self.video_id[:8]}...] {self.filename} | "
+            f"[{self.video_id}] {self.filename} | "
             f"Duration: {self.duration} | FPS: {self.fps:.2f} | "
             f"Resolution: {self.resolution}"
         )
@@ -116,8 +81,6 @@ class VideoInfo:
 
 
 class ProcessingStatus:
-    """Processing status for a video."""
-
     def __init__(self, video_id: str):
         self.video_id = video_id
         self.stages: dict[str, bool] = {}
@@ -149,58 +112,7 @@ class ProcessingStatus:
         lines.append(f"\nCompletion: {self.completion_percentage():.1f}%")
         return "\n".join(lines)
 
-
-# =============================================================================
-# Video Metadata Toolkit
-# =============================================================================
-
 class VideoMetadataToolkit(Toolkit):
-    """Toolkit for video-level metadata and overview operations.
-
-    Provides tools for:
-    - Listing user videos with basic info
-    - Getting detailed video metadata
-    - Retrieving aggregated video summaries
-    - Generating visual timelines
-    - Checking processing pipeline status
-
-    All tools return ToolResult for unified interface.
-    """
-
-    # Processing stages in order (for status checking)
-    PROCESSING_STAGES = [
-        "video_registration",
-        "autoshot",
-        "asr",
-        "audio_segment",
-        "image_extraction",
-        "image_caption",
-        "image_embedding",
-        "image_ocr",
-        "ocr_indexing",
-        "segment_caption",
-        "segment_embedding",
-        "kg_graph",
-        "arango_indexing",
-    ]
-
-    # Artifact types mapping for stage detection
-    STAGE_ARTIFACT_TYPES = {
-        "video_registration": "VideoArtifact",
-        "autoshot": "AutoshotArtifact",
-        "asr": "ASRArtifact",
-        "audio_segment": "AudioSegmentArtifact",
-        "image_extraction": "ImageArtifact",
-        "image_caption": "ImageCaptionArtifact",
-        "image_embedding": "ImageEmbeddingArtifact",
-        "image_ocr": "ImageOCRArtifact",
-        "ocr_indexing": "OCRElasticsearchArtifact",
-        "segment_caption": "SegmentCaptionArtifact",
-        "segment_embedding": "SegmentEmbeddingArtifact",
-        "kg_graph": "KGGraphArtifact",
-        "arango_indexing": "ArangoIndexingArtifact",
-    }
-
     def __init__(
         self,
         postgres_client: PostgresClient,
@@ -284,24 +196,21 @@ class VideoMetadataToolkit(Toolkit):
         children = await self.postgres.get_children_artifact(video_id)
         return {child.artifact_type for child in children}
 
-    # =========================================================================
-    # List User Videos
-    # =========================================================================
 
-    @tool(
-        description=(
-            "List all videos for a user with basic metadata. "
-            "Returns video IDs, filenames, duration, fps, and resolution. "
-            "Use this to discover what videos are available for search."
-        ),
-        instructions=(
-            "Use when: user wants to see available videos, "
-            "need to find video IDs for further operations, "
-            "starting a new search session."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
+    # @tool(
+    #     description=(
+    #         "List all videos for a user with basic metadata. "
+    #         "Returns video IDs, filenames, duration, fps, and resolution. "
+    #         "Use this to discover what videos are available for search."
+    #     ),
+    #     instructions=(
+    #         "Use when: user wants to see available videos, "
+    #         "need to find video IDs for further operations, "
+    #         "starting a new search session."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
     async def list_user_videos(
         self,
         user_id: str,
@@ -347,24 +256,20 @@ class VideoMetadataToolkit(Toolkit):
             logger.error(f"[VideoMetadataToolkit] list_user_videos failed: {e}")
             return ToolResult(content=f"Error: Failed to list videos - {str(e)}")
 
-    # =========================================================================
-    # Get Video Metadata
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Get detailed metadata for a specific video. "
-            "Returns comprehensive information including duration, fps, resolution, "
-            "file location, and creation timestamp."
-        ),
-        instructions=(
-            "Use when: need detailed info about a specific video, "
-            "want to verify video properties before processing, "
-            "checking video existence."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
+    # @tool(
+    #     description=(
+    #         "Get detailed metadata for a specific video. "
+    #         "Returns comprehensive information including duration, fps, resolution, "
+    #         "file location, and creation timestamp."
+    #     ),
+    #     instructions=(
+    #         "Use when: need detailed info about a specific video, "
+    #         "want to verify video properties before processing, "
+    #         "checking video existence."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
     async def get_video_metadata(
         self,
         video_id: str,
@@ -403,7 +308,6 @@ class VideoMetadataToolkit(Toolkit):
                 f"Resolution: {metadata.get('resolution', 'unknown')}",
                 f"Extension: {metadata.get('extension', 'unknown')}",
                 f"Created: {artifact.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
-                f"MinIO URL: {artifact.minio_url}",
                 "",
                 "=== Full Metadata ===",
             ]
@@ -417,133 +321,20 @@ class VideoMetadataToolkit(Toolkit):
             logger.error(f"[VideoMetadataToolkit] get_video_metadata failed: {e}")
             return ToolResult(content=f"Error: Failed to get video metadata - {str(e)}")
 
-    # =========================================================================
-    # Get Video Summary
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Get an aggregated summary of a video from all segment captions. "
-            "Combines all segment-level captions into a coherent overview. "
-            "Use this to understand what a video is about without watching it."
-        ),
-        instructions=(
-            "Use when: user asks 'what is this video about', "
-            "need a quick overview of video content, "
-            "want to understand video theme before detailed search."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def get_video_summary(
-        self,
-        video_id: str,
-        max_segments: int = 20,
-    ) -> ToolResult:
-        """Get an aggregated summary of a video from segment captions.
-
-        Args:
-            video_id: Video ID to summarize
-            max_segments: Maximum number of segments to include (default 20)
-
-        Returns:
-            ToolResult with aggregated video summary
-        """
-        try:
-            # Verify video exists
-            video_artifact = await self.postgres.get_artifact(video_id)
-            if video_artifact is None:
-                return ToolResult(
-                    content=f"Error: Video '{video_id}' not found."
-                )
-
-            # Get segment caption artifacts
-            segment_artifacts = await self.postgres.get_children_artifact(
-                artifact_id=video_id,
-                filter_artifact_type=["SegmentCaptionArtifact"],
-            )
-
-            if not segment_artifacts:
-                return ToolResult(
-                    content=f"No segment captions found for video '{video_id}'. "
-                    f"The video may still be processing or no captions were generated."
-                )
-
-            # Sort by created_at to maintain temporal order
-            segment_artifacts.sort(key=lambda x: x.created_at)
-
-            # Limit segments
-            segment_artifacts = segment_artifacts[:max_segments]
-
-            lines = [
-                f"=== Video Summary for {video_id} ===",
-                f"Total segments: {len(segment_artifacts)}",
-                "",
-            ]
-
-            # Collect captions
-            captions = []
-            for i, artifact in enumerate(segment_artifacts):
-                if artifact.minio_url:
-                    bucket, object_name = extract_s3_minio_url(artifact.minio_url)
-                    data = self.storage.read_json(bucket, object_name)
-
-                    if data:
-                        caption = data.get("caption", "")
-                        summary = data.get("summary_caption", "")
-                        audio_text = data.get("audio_text", "")
-                        start_time = data.get("start_timestamp", "00:00:00.000")
-                        end_time = data.get("end_timestamp", "00:00:00.000")
-
-                        segment_text = caption or summary or audio_text
-
-                        if segment_text:
-                            captions.append({
-                                "index": i + 1,
-                                "start": start_time,
-                                "end": end_time,
-                                "text": segment_text[:500],  # Limit text length
-                            })
-
-                            lines.append(
-                                f"[{i + 1}] {start_time} - {end_time}"
-                            )
-                            lines.append(f"    {segment_text[:200]}...")
-                            lines.append("")
-
-            if not captions:
-                return ToolResult(
-                    content=f"No caption content could be loaded for video '{video_id}'."
-                )
-
-            # Add summary statistics
-            lines.append("---")
-            lines.append(f"Segments shown: {len(captions)}")
-
-            return ToolResult(content="\n".join(lines))
-
-        except Exception as e:
-            logger.error(f"[VideoMetadataToolkit] get_video_summary failed: {e}")
-            return ToolResult(content=f"Error: Failed to get video summary - {str(e)}")
-
-    # =========================================================================
-    # Get Video Timeline
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Get a visual timeline of video segments with timestamps and captions. "
-            "Shows the temporal structure of the video with segment boundaries. "
-            "Use this to navigate through video content chronologically."
-        ),
-        instructions=(
-            "Use when: user wants to see video structure, "
-            "need to find specific time ranges, "
-            "planning temporal navigation."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
+    # @tool(
+    #     description=(
+    #         "Get a visual timeline of video segments with timestamps and captions. "
+    #         "Shows the temporal structure of the video with segment boundaries. "
+    #         "Use this to navigate through video content chronologically."
+    #     ),
+    #     instructions=(
+    #         "Use when: user wants to see video structure, "
+    #         "need to find specific time ranges, "
+    #         "planning temporal navigation."
+    #     ),
+    #     cache_results=True,
+    #     cache_ttl=1800,
+    # )
     async def get_video_timeline(
         self,
         video_id: str,
@@ -559,7 +350,6 @@ class VideoMetadataToolkit(Toolkit):
             ToolResult with visual timeline
         """
         try:
-            # Verify video exists
             video_artifact = await self.postgres.get_artifact(video_id)
             if video_artifact is None:
                 return ToolResult(
@@ -577,7 +367,6 @@ class VideoMetadataToolkit(Toolkit):
             ]
 
             if granularity == "segment":
-                # Get segment caption artifacts
                 segment_artifacts = await self.postgres.get_children_artifact(
                     artifact_id=video_id,
                     filter_artifact_type=["SegmentCaptionArtifact"],
@@ -587,32 +376,27 @@ class VideoMetadataToolkit(Toolkit):
                     lines.append("No segments found. Video may still be processing.")
                     return ToolResult(content="\n".join(lines))
 
-                # Sort by start time
                 segments_data = []
                 for artifact in segment_artifacts:
-                    if artifact.minio_url:
-                        bucket, object_name = extract_s3_minio_url(artifact.minio_url)
-                        data = self.storage.read_json(bucket, object_name)
+                    metadata: dict = artifact.artifact_metadata or {}
 
-                        if data:
-                            segments_data.append({
-                                "start_frame": data.get("start_frame", 0),
-                                "end_frame": data.get("end_frame", 0),
-                                "start_time": data.get("start_timestamp", "00:00:00.000"),
-                                "end_time": data.get("end_timestamp", "00:00:00.000"),
-                                "caption": data.get("caption", "")[:100],
-                            })
+                    segments_data.append({
+                        "start_frame": metadata.get("start_frame", 0),
+                        "end_frame": metadata.get("end_frame", 0),
+                        "start_time": metadata.get("start_timestamp", "00:00:00.000"),
+                        "end_time": metadata.get("end_timestamp", "00:00:00.000"),
+                        "summary_caption": metadata.get("summary_caption", "")[:100],
+                    })
 
                 segments_data.sort(key=lambda x: x["start_frame"])
 
-                # Build timeline
                 lines.append(f"{'Time Range':<25} | {'Frames':<15} | Caption")
                 lines.append("-" * 80)
 
                 for seg in segments_data:
                     time_range = f"{seg['start_time']} - {seg['end_time']}"
                     frame_range = f"{seg['start_frame']} - {seg['end_frame']}"
-                    caption = seg['caption'][:40] + "..." if len(seg['caption']) > 40 else seg['caption']
+                    caption = seg['summary_caption'][:40] + "..." if len(seg['summary_caption']) > 40 else seg['summary_caption']
 
                     lines.append(f"{time_range:<25} | {frame_range:<15} | {caption}")
 
@@ -620,42 +404,38 @@ class VideoMetadataToolkit(Toolkit):
                 lines.append(f"Total segments: {len(segments_data)}")
 
             elif granularity == "shot":
-                # Get autoshot artifacts
                 autoshot_artifacts = await self.postgres.get_children_artifact(
                     artifact_id=video_id,
                     filter_artifact_type=["AutoshotArtifact"],
                 )
-
+                
                 if not autoshot_artifacts:
                     lines.append("No shot boundaries found. Video may still be processing.")
                     return ToolResult(content="\n".join(lines))
 
-                # Load shot data
                 for artifact in autoshot_artifacts:
-                    if artifact.minio_url:
-                        bucket, object_name = extract_s3_minio_url(artifact.minio_url)
-                        data = self.storage.read_json(bucket, object_name)
+                    metadata: dict = artifact.artifact_metadata or {}
+                    shots = metadata.get("segments", [])
 
-                        if data:
-                            shots = data.get("shots", [])
-                            lines.append(f"Total shots detected: {len(shots)}")
-                            lines.append("")
-                            lines.append(f"{'Shot #':<8} | {'Start Frame':<12} | {'End Frame':<12}")
-                            lines.append("-" * 40)
+                    if shots:
+                        lines.append(f"Total shots detected: {len(shots)}")
+                        lines.append("")
+                        lines.append(f"{'Shot #':<8} | {'Start Frame':<12} | {'End Frame':<12}")
+                        lines.append("-" * 40)
 
-                            for i, shot in enumerate(shots[:50]):  # Limit to 50 shots
-                                lines.append(
-                                    f"{i + 1:<8} | {shot.get('start_frame', 0):<12} | "
-                                    f"{shot.get('end_frame', 0):<12}"
-                                )
+                        for i, shot in enumerate(shots[:50]):  
+                            start_frame, end_frame = shot
+                            lines.append(
+                                f"{i + 1:<8} | {start_frame:<12} | "
+                                f"{end_frame:<12}"
+                            )
 
-                            if len(shots) > 50:
-                                lines.append(f"... and {len(shots) - 50} more shots")
+                        if len(shots) > 50:
+                            lines.append(f"... and {len(shots) - 50} more shots")
 
-                            break
+                        break
 
             elif granularity == "minute":
-                # Get segments and group by minute
                 segment_artifacts = await self.postgres.get_children_artifact(
                     artifact_id=video_id,
                     filter_artifact_type=["SegmentCaptionArtifact"],
@@ -665,33 +445,29 @@ class VideoMetadataToolkit(Toolkit):
                     lines.append("No segments found. Video may still be processing.")
                     return ToolResult(content="\n".join(lines))
 
-                # Collect segments
                 segments_data = []
                 for artifact in segment_artifacts:
-                    if artifact.minio_url:
-                        bucket, object_name = extract_s3_minio_url(artifact.minio_url)
-                        data = self.storage.read_json(bucket, object_name)
+                    metadata: dict = artifact.artifact_metadata or {}
 
-                        if data:
-                            start_sec = data.get("start_sec", 0)
-                            segments_data.append({
-                                "start_sec": start_sec,
-                                "minute": int(start_sec // 60),
-                                "caption": data.get("caption", "")[:100],
-                            })
+                    start_sec = metadata.get("start_sec", 0)
+                    segments_data.append({
+                        "start_sec": start_sec,
+                        "minute": int(start_sec // 60),
+                        "summary_caption": metadata.get("summary_caption", "")[:100],
+                    })
 
-                # Group by minute
+                
                 from collections import defaultdict
                 minute_groups = defaultdict(list)
                 for seg in segments_data:
                     minute_groups[seg["minute"]].append(seg)
 
-                lines.append(f"{'Minute':<8} | {'Segments':<10} | Sample Caption")
+                lines.append(f"{'Minute':<8} | {'Num of Segments':<10} | Sample Caption")
                 lines.append("-" * 60)
 
                 for minute in sorted(minute_groups.keys()):
                     segments = minute_groups[minute]
-                    sample = segments[0]["caption"][:40] + "..." if segments[0]["caption"] else "N/A"
+                    sample = segments[0]["summary_caption"][:100] + "..." if segments[0]["summary_caption"] else "N/A"
                     lines.append(f"{minute:<8} | {len(segments):<10} | {sample}")
 
                 lines.append("")
@@ -702,199 +478,5 @@ class VideoMetadataToolkit(Toolkit):
         except Exception as e:
             logger.error(f"[VideoMetadataToolkit] get_video_timeline failed: {e}")
             return ToolResult(content=f"Error: Failed to get video timeline - {str(e)}")
-
-    # =========================================================================
-    # Get Processing Status
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Check which processing stages are complete for a video. "
-            "Shows the status of each pipeline stage: autoshot, ASR, captioning, "
-            "embedding, OCR, knowledge graph, etc."
-        ),
-        instructions=(
-            "Use when: video was recently uploaded and may still be processing, "
-            "search returns no results, "
-            "verifying that specific processing stages completed."
-        ),
-        cache_results=False,
-    )
-    async def get_processing_status(
-        self,
-        video_id: str,
-    ) -> ToolResult:
-        """Check processing pipeline status for a video.
-
-        Args:
-            video_id: Video ID to check status for
-
-        Returns:
-            ToolResult with processing status for each stage
-        """
-        try:
-            # Verify video exists
-            video_artifact = await self.postgres.get_artifact(video_id)
-            if video_artifact is None:
-                return ToolResult(
-                    content=f"Error: Video '{video_id}' not found."
-                )
-
-            # Get all children artifact types
-            artifact_types = await self._get_all_children_artifact_types(video_id)
-
-            # Build status
-            status = ProcessingStatus(video_id)
-
-            for stage, artifact_type in self.STAGE_ARTIFACT_TYPES.items():
-                completed = artifact_type in artifact_types
-                status.set_stage(stage, completed)
-
-            return ToolResult(content=status.repr())
-
-        except Exception as e:
-            logger.error(f"[VideoMetadataToolkit] get_processing_status failed: {e}")
-            return ToolResult(content=f"Error: Failed to get processing status - {str(e)}")
-
-    # =========================================================================
-    # List All Videos (Admin)
-    # =========================================================================
-
-    @tool(
-        description=(
-            "List all videos in the system (admin operation). "
-            "Returns all videos regardless of user. "
-            "Use with caution in production environments."
-        ),
-        instructions=(
-            "Use when: need to see all videos across users, "
-            "admin/debug operations."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def list_all_videos(
-        self,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> ToolResult:
-        """List all videos in the system.
-
-        Args:
-            limit: Maximum number of videos to return (default 50)
-            offset: Offset for pagination (default 0)
-
-        Returns:
-            ToolResult with list of all videos
-        """
-        try:
-            videos = await self._get_video_artifacts(
-                user_id=None,
-                limit=limit,
-                offset=offset,
-            )
-
-            if not videos:
-                return ToolResult(content="No videos found in the system.")
-
-            lines = [
-                f"Found {len(videos)} video(s) in the system:",
-                "",
-            ]
-
-            for i, video in enumerate(videos):
-                lines.append(f"{i + 1}. {video.brief_repr()} (user: {video.user_id[:8]}...)")
-
-            lines.append("")
-            lines.append(f"Showing {len(videos)} results (offset: {offset}, limit: {limit})")
-
-            return ToolResult(content="\n".join(lines))
-
-        except Exception as e:
-            logger.error(f"[VideoMetadataToolkit] list_all_videos failed: {e}")
-            return ToolResult(content=f"Error: Failed to list videos - {str(e)}")
-
-    # =========================================================================
-    # Get Video Statistics
-    # =========================================================================
-
-    @tool(
-        description=(
-            "Get statistics about a video's processed content. "
-            "Returns counts of images, segments, OCR results, and other artifacts. "
-            "Use this to understand the depth of processing for a video."
-        ),
-        instructions=(
-            "Use when: need to know how much content was extracted, "
-            "comparing processing results across videos."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    async def get_video_statistics(
-        self,
-        video_id: str,
-    ) -> ToolResult:
-        """Get statistics about a video's processed content.
-
-        Args:
-            video_id: Video ID to get statistics for
-
-        Returns:
-            ToolResult with content statistics
-        """
-        try:
-            # Verify video exists
-            video_artifact = await self.postgres.get_artifact(video_id)
-            if video_artifact is None:
-                return ToolResult(
-                    content=f"Error: Video '{video_id}' not found."
-                )
-
-            # Get all children
-            children = await self.postgres.get_children_artifact(video_id)
-
-            # Count by type
-            from collections import Counter
-            type_counts = Counter(child.artifact_type for child in children)
-
-            lines = [
-                f"=== Video Statistics for {video_id} ===",
-                "",
-            ]
-
-            # Group by category
-            categories = {
-                "Video Processing": ["AutoshotArtifact"],
-                "Audio": ["ASRArtifact", "AudioSegmentArtifact"],
-                "Images": ["ImageArtifact", "ImageCaptionArtifact", "ImageEmbeddingArtifact", "ImageOCRArtifact"],
-                "Segments": ["SegmentCaptionArtifact", "SegmentEmbeddingArtifact"],
-                "Knowledge Graph": ["KGGraphArtifact", "ArangoIndexingArtifact"],
-                "Indexing": ["OCRElasticsearchArtifact"],
-            }
-
-            for category, types in categories.items():
-                total = sum(type_counts.get(t, 0) for t in types)
-                lines.append(f"📁 {category}: {total} artifact(s)")
-
-                for artifact_type in types:
-                    count = type_counts.get(artifact_type, 0)
-                    if count > 0:
-                        # Clean up name
-                        name = artifact_type.replace("Artifact", "")
-                        lines.append(f"   └─ {name}: {count}")
-
-                lines.append("")
-
-            # Total
-            total_artifacts = len(children)
-            lines.append(f"Total Artifacts: {total_artifacts}")
-
-            return ToolResult(content="\n".join(lines))
-
-        except Exception as e:
-            logger.error(f"[VideoMetadataToolkit] get_video_statistics failed: {e}")
-            return ToolResult(content=f"Error: Failed to get video statistics - {str(e)}")
-
 
 __all__ = ["VideoMetadataToolkit"]
