@@ -158,7 +158,7 @@ class ElasticsearchOCRClient:
         }
 
         if highlight:
-            body["highlight"] = {
+            body["highlight"] = { #type:ignore
                 "pre_tags": ["<mark>"],
                 "post_tags": ["</mark>"],
                 "fields": {
@@ -169,151 +169,10 @@ class ElasticsearchOCRClient:
 
         try:
             resp = await self._client.search(index=self.config.index_name, body=body)
-            return self._parse_response(resp, highlight)
+            return self._parse_response(resp, highlight) #type:ignore   
         except Exception as e:
             logger.error(f"[ElasticsearchOCRClient] Search failed: {e}")
             raise
-
-    async def search_hybrid(
-        self,
-        query: str,
-        query_vector: list[float],
-        top_k: int = 10,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-        highlight: bool = True,
-    ) -> list[OCRSearchResult]:
-        """Search OCR text using hybrid BM25 + kNN with RRF fusion.
-
-        Requires Elasticsearch 8.14+ for RRF support.
-
-        Args:
-            query: Text query for BM25 search
-            query_vector: Embedding vector for kNN search
-            top_k: Number of results to return
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-            highlight: Enable text highlighting in results
-
-        Returns:
-            List of OCRSearchResult objects
-        """
-        if not self._client:
-            raise RuntimeError("Elasticsearch client not connected")
-
-        # Build filters
-        filters = []
-        if video_ids:
-            filters.append({"terms": {"video_id": video_ids}})
-        if user_id:
-            filters.append({"term": {"user_id": user_id}})
-
-        filter_clause = {"filter": filters} if filters else {}
-
-        body = {
-            "size": top_k,
-            "retriever": {
-                "rrf": {
-                    "window_size": 50,
-                    "rank_constant": 60,
-                    "retrievers": [
-                        # BM25 retriever
-                        {
-                            "standard": {
-                                "query": {
-                                    "bool": {
-                                        "should": [
-                                            {
-                                                "multi_match": {
-                                                    "query": query,
-                                                    "fields": ["cleaned_text^1.5", "raw_text"],
-                                                    "type": "best_fields",
-                                                    "fuzziness": "AUTO",
-                                                    "operator": "or",
-                                                }
-                                            }
-                                        ],
-                                        **filter_clause,
-                                    }
-                                }
-                            }
-                        },
-                        # kNN retriever
-                        {
-                            "knn": {
-                                "field": "content_vector",
-                                "query_vector": query_vector,
-                                "k": top_k,
-                                "num_candidates": 100,
-                                **filter_clause,
-                            }
-                        },
-                    ],
-                }
-            },
-        }
-
-        if highlight:
-            body["highlight"] = {
-                "pre_tags": ["<mark>"],
-                "post_tags": ["</mark>"],
-                "fields": {
-                    "cleaned_text": {"fragment_size": 200, "number_of_fragments": 3},
-                },
-            }
-
-        try:
-            resp = await self._client.search(index=self.config.index_name, body=body)
-            return self._parse_response(resp, highlight)
-        except Exception as e:
-            logger.error(f"[ElasticsearchOCRClient] Hybrid search failed: {e}")
-            raise
-
-    async def search_with_embedding(
-        self,
-        query: str,
-        top_k: int = 10,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-        use_hybrid: bool = True,
-        highlight: bool = True,
-    ) -> list[OCRSearchResult]:
-        """Search OCR text with automatic embedding generation.
-
-        If embedding_client is configured and use_hybrid is True,
-        performs hybrid search. Otherwise falls back to BM25 only.
-
-        Args:
-            query: Text query to search for
-            top_k: Number of results to return
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-            use_hybrid: Enable hybrid search if embedding client is available
-            highlight: Enable text highlighting in results
-
-        Returns:
-            List of OCRSearchResult objects
-        """
-        if use_hybrid and self._embedding_client:
-            embeddings = await self._embedding_client.ainfer([query])
-            if embeddings:
-                return await self.search_hybrid(
-                    query=query,
-                    query_vector=embeddings[0],
-                    top_k=top_k,
-                    video_ids=video_ids,
-                    user_id=user_id,
-                    highlight=highlight,
-                )
-
-        # Fallback to BM25 only
-        return await self.search_text(
-            query=query,
-            top_k=top_k,
-            video_ids=video_ids,
-            user_id=user_id,
-            highlight=highlight,
-        )
 
     async def get_ocr_by_video_id(
         self,
@@ -346,7 +205,7 @@ class ElasticsearchOCRClient:
 
         try:
             resp = await self._client.search(index=self.config.index_name, body=body)
-            return self._parse_response(resp, highlight=False)
+            return self._parse_response(resp, highlight=False) #type:ignore
         except Exception as e:
             logger.error(f"[ElasticsearchOCRClient] Get OCR by video failed: {e}")
             raise
@@ -364,6 +223,8 @@ class ElasticsearchOCRClient:
             if highlight and "highlight" in hit:
                 highlights = hit["highlight"].get("cleaned_text", [])
 
+            score = hit.get("_score") or 0.0
+
             result = OCRSearchResult(
                 artifact_id=src.get("artifact_id", ""),
                 video_id=src.get("video_id", ""),
@@ -375,7 +236,7 @@ class ElasticsearchOCRClient:
                 cleaned_text=src.get("cleaned_text", ""),
                 image_minio_url=src.get("image_minio_url", ""),
                 image_id=src.get("image_id", ""),
-                score=hit.get("_score", 0.0),
+                score=score,
                 highlights=highlights,
                 related_video_fps=src.get("related_video_fps"),
             )

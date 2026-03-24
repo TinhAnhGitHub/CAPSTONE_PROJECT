@@ -32,9 +32,8 @@ class ArangoIndexManager:
     GRAPH_NAME = "video_knowledge_graph"
     VIEW_NAME = "video_kg_search_view"
 
-    # Vector index re-indexing thresholds
-    REINDEX_THRESHOLD_RATIO = 2.0  # Re-index if nLists ratio exceeds this
-    MIN_DOCS_FOR_REINDEX = 100     # Minimum docs before considering re-index
+    REINDEX_THRESHOLD_RATIO = 2.0  
+    MIN_DOCS_FOR_REINDEX = 100     
 
     def __init__(self, db: Any):
         """Initialize the index manager.
@@ -92,7 +91,11 @@ class ArangoIndexManager:
                         properties=analyzer["properties"],
                     )
                 else:
-                    self.db.create_analyzer(analyzer)
+                    self.db.create_analyzer(
+                        name=analyzer["name"],
+                        analyzer_type=analyzer["type"],
+                        properties=analyzer["properties"],
+                    )
                 logger.info(f"[analyzer] Created: {analyzer['name']}")
             except Exception as e:
                 if "already exists" in str(e).lower():
@@ -176,26 +179,21 @@ class ArangoIndexManager:
         Returns:
             Tuple of (should_reindex, reason)
         """
-        # Get existing index info
         index_info = await self._get_index_info(collection_name, index_name)
 
         if index_info is None:
             return True, "Index does not exist"
 
-        # Check if it's a vector index
         if index_info.get("type") != "vector":
             return False, "Not a vector index"
 
-        # Get current nLists from params
         params = index_info.get("params", {})
         current_nlists = params.get("nLists", 1)
 
-        # Don't re-index for very small collections
         n_docs = await self._get_collection_count(collection_name)
         if n_docs < self.MIN_DOCS_FOR_REINDEX:
             return False, f"Collection too small ({n_docs} docs)"
 
-        # Check if nLists differs significantly
         if current_nlists <= 0:
             return True, "Invalid nLists value"
 
@@ -719,6 +717,8 @@ class ArangoIndexManager:
         try:
             await self._ensure_analyzers()
             results["analyzers"] = True
+            
+            
         except Exception as e:
             logger.error(f"Failed to create analyzers: {e}")
             results["analyzers"] = False

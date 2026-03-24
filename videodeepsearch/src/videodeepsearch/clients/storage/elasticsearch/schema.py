@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field
 
+from typing import Any
 
 class ElasticsearchConfig(BaseModel):
     """Elasticsearch configuration for OCR text search."""
@@ -13,7 +14,7 @@ class ElasticsearchConfig(BaseModel):
     use_ssl: bool = Field(default=False)
     verify_certs: bool = Field(default=True)
     index_name: str = Field(default="video_ocr_docs")
-    timeout: int = Field(default=30)
+    request_timeout: int = Field(default=30)
 
     @property
     def url(self) -> str:
@@ -21,11 +22,11 @@ class ElasticsearchConfig(BaseModel):
         scheme = "https" if self.use_ssl else "http"
         return f"{scheme}://{self.host}:{self.port}"
 
-    def get_client_kwargs(self) -> dict:
+    def get_client_kwargs(self) -> dict[str, Any]:
         """Get kwargs for AsyncElasticsearch."""
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "hosts": [self.url],
-            "timeout": self.timeout,
+            "request_timeout": self.request_timeout,
         }
         if self.user and self.password:
             kwargs["basic_auth"] = (self.user, self.password)
