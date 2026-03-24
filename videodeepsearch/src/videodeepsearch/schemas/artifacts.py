@@ -25,7 +25,6 @@ class BaseInterface(BaseModel, ABC):
 
     id: str
     related_video_id: str
-    minio_path: str
     user_bucket: str
 
     @abstractmethod
@@ -91,14 +90,13 @@ class ImageInterface(BaseInterface):
         return (
             f"score={score_str} | {self.related_video_id} "
             f"@ Timestamp/FrameIndex: {self.timestamp}/{self.frame_index} "
-            f"| minio_path: {self.minio_path}"
         )
 
     def detailed_representation(self) -> str:
         return (
             f"score={self.score:.3f} | {self.related_video_id} "
             f"@ Timestamp/FrameIndex: {self.timestamp}/{self.frame_index} "
-            f"| minio_path: {self.minio_path} | image caption: {self.image_caption}"
+            f"| image caption: {self.image_caption}"
         )
 
     @staticmethod
@@ -208,7 +206,6 @@ class AudioInterface(BaseInterface):
             f"- Time: {self.start_time} → {self.end_time}\n"
             f"- Score: {self.score:.3f}\n"
             f"- Transcript: {self.audio_text}\n"
-            f"- MinIO URL: {self.minio_path}"
         )
 
     @staticmethod
@@ -295,7 +292,6 @@ class SegmentInterface(BaseInterface):
     score: float
     start_sec: float | None = Field(default=None)
     end_sec: float | None = Field(default=None)
-    frame_indices: list[int] | None = Field(default=None)
 
     def accept_filter(self, filter_fn: Callable[[SegmentInterface], bool]) -> bool:
         return filter_fn(self)
@@ -306,7 +302,6 @@ class SegmentInterface(BaseInterface):
             f"Frames {self.start_frame}-{self.end_frame} "
             f"({self.start_time} → {self.end_time}) | "
             f"score={self.score:.3f} | "
-            f"Minio path: {self.minio_path}"
         )
 
     def detailed_representation(self) -> str:
@@ -316,7 +311,6 @@ class SegmentInterface(BaseInterface):
             f"- Time: {self.start_time} → {self.end_time}\n"
             f"- Score: {self.score:.3f}\n"
             f"- Caption: {self.segment_caption}\n"
-            f"- Caption MinIO URL: {self.minio_path}"
         )
 
     @staticmethod
