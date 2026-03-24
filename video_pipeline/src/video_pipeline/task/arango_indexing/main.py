@@ -30,18 +30,10 @@ ARANGO_INDEXING_CONFIG = TaskConfig.from_yaml("arango_indexing")
 
 
 def _ns(video_id: str, local_key: str) -> str:
-    """Namespace a local key with video_id."""
     return f"{video_id}::{local_key}"
 
 
 def _strip_collection(arango_id: str) -> str:
-    """Strip collection prefix from ArangoDB ID.
-
-    events/event_0001 -> event_0001
-
-    Raises:
-        ValueError: If arango_id is empty or doesn't contain '/'
-    """
     if not arango_id:
         raise ValueError("arango_id is empty - check that the edge data has the correct key (_from/_to)")
     if "/" not in arango_id:
@@ -51,7 +43,6 @@ def _strip_collection(arango_id: str) -> str:
 
 @StageRegistry.register
 class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
-    """Index KG data into ArangoDB."""
 
     config = ARANGO_INDEXING_CONFIG
 
@@ -75,6 +66,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
         dense_client: MMBertClient = client["dense"]
 
         video_id = preprocessed.related_video_id
+        user_id = preprocessed.user_id
         stats: dict[str, int] = {}
 
         db = arango_client.setup_database()
@@ -83,6 +75,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             {
                 "_key": video_id,
                 "video_id": video_id,
+                "user_id": user_id,
                 "entity_count": len(preprocessed.entities),
                 "event_count": len(preprocessed.events),
                 "micro_event_count": len(preprocessed.micro_event_nodes),
@@ -115,6 +108,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 entity_docs.append({
                     "_key": _ns(video_id, gid),
                     "video_id": video_id,
+                    "user_id": user_id,
                     "global_entity_id": gid,
                     "entity_name": entity.get("entity_name", ""),
                     "entity_type": entity.get("entity_type", ""),
@@ -143,10 +137,11 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 ekey = event.get("_key", event.get("key", ""))
                 n2v_node = nodes.get(ekey, {})
                 sem_emb = event_embeddings[idx] if idx < len(event_embeddings) else []
-
+video_pipeline/src/video_pipeline/task/image_extraction
                 event_docs.append({
                     "_key": _ns(video_id, ekey),
                     "video_id": video_id,
+                    "user_id": user_id,
                     "segment_index": event.get("segment_index"),
                     "start_time": event.get("start_time"),
                     "end_time": event.get("end_time"),
@@ -180,6 +175,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 micro_docs.append({
                     "_key": _ns(video_id, mkey),
                     "video_id": video_id,
+                    "user_id": user_id,
                     "parent_event_key": _strip_collection(mn.get("parent_event_key", "")),
                     "segment_index": mn.get("segment_index"),
                     "micro_index": mn.get("micro_index"),
@@ -209,6 +205,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             comm_docs.append({
                 "_key": _ns(video_id, ckey),
                 "video_id": video_id,
+                "user_id": user_id,
                 "comm_idx": comm.get("comm_idx"),
                 "title": comm.get("title", ""),
                 "summary": comm.get("summary", ""),
@@ -235,6 +232,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "_from": f"entities/{_ns(video_id, subj)}",
                 "_to": f"entities/{_ns(video_id, obj)}",
                 "video_id": video_id,
+                "user_id": user_id,
                 "relation_type": rel.get("relation_desc", ""),
                 "weight": rel.get("weight", 1),
                 "seen_in_segments": rel.get("seen_in_segments", []),
@@ -256,6 +254,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "_from": f"events/{_ns(video_id, fk)}",
                 "_to": f"entities/{_ns(video_id, tk)}",
                 "video_id": video_id,
+                "user_id": user_id,
             })
 
         if ee_docs:
@@ -274,6 +273,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "_from": f"events/{_ns(video_id, from_key)}",
                 "_to": f"events/{_ns(video_id, to_key)}",
                 "video_id": video_id,
+                "user_id": user_id,
                 "edge_type": edge.get("edge_type", ""),
                 "similarity": edge.get("similarity"),
                 "temporal_gap_s": edge.get("temporal_gap_s"),
@@ -297,6 +297,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "_from": f"micro_events/{_ns(video_id, from_key)}",
                 "_to": f"micro_events/{_ns(video_id, to_key)}",
                 "video_id": video_id,
+                "user_id": user_id,
                 "edge_type": edge.get("edge_type", ""),
                 "similarity": edge.get("similarity"),
                 "temporal_gap_s": edge.get("temporal_gap_s"),
@@ -320,6 +321,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "_from": f"micro_events/{_ns(video_id, mkey)}",
                 "_to": f"events/{_ns(video_id, parent)}",
                 "video_id": video_id,
+                "user_id": user_id,
             })
 
         if mp_docs:
@@ -335,6 +337,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                     "_from": f"micro_events/{_ns(video_id, mkey)}",
                     "_to": f"entities/{_ns(video_id, gid)}",
                     "video_id": video_id,
+                    "user_id": user_id,
                 })
 
         if mee_docs:
@@ -353,6 +356,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "_from": f"entities/{_ns(video_id, from_key)}",
                 "_to": f"communities/{_ns(video_id, to_key)}",
                 "video_id": video_id,
+                "user_id": user_id,
             })
 
         if cm_docs:
@@ -371,6 +375,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "_from": f"events/{_ns(video_id, from_key)}",
                 "_to": f"communities/{_ns(video_id, to_key)}",
                 "video_id": video_id,
+                "user_id": user_id,
                 "shared_entities": edge.get("shared_entities", 0),
                 "assignment": edge.get("assignment", ""),
             })
