@@ -94,18 +94,44 @@ class UtilityToolkit(Toolkit):
         """
         self.postgres = postgres_client
         self.storage = minio_client
-        super().__init__(name="Utility Tools")
+        super().__init__(
+            name="Utility Tools",
+            tools=[
+                self.get_related_asr_from_segment,
+                self.get_related_asr_from_image,
+                self.get_adjacent_segments,
+                self.get_adjacent_images,
+                self.extract_frames_by_time_window,
+                self.extract_frame_at_time,
+            ],
+        )
         
     @tool(
         description=(
             "Retrieve spoken words (ASR transcript) around a video segment for context. "
             "Extracts the audio transcript within a time window surrounding a segment, "
-            "providing spoken context to verify or enrich visual findings."
+            "providing spoken context to verify or enrich visual findings.\n\n"
+            "Typical workflow - Use AFTER any videosearch tool that finds a segment:\n"
+            "  1. search.get_segments_from_event_query_mmbert - find matching segments\n"
+            "  2. Or search.get_segments_from_qwenvl_query - find matching segments\n"
+            "  3. This tool - get spoken context around found segment\n"
+            "  4. utility.extract_frames_by_time_window - extract frames for visual verification\n\n"
+            "Related tools:\n"
+            "  - get_related_asr_from_image: For ASR context around a specific image/frame\n"
+            "  - get_adjacent_segments: For temporal navigation to neighboring segments\n"
+            "  - extract_frames_by_time_window: For extracting raw frames\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID (REQUIRED)\n"
+            "  segment_start_time (str): Segment start time in HH:MM:SS.sss format (REQUIRED)\n"
+            "  segment_end_time (str): Segment end time in HH:MM:SS.sss format (REQUIRED)\n"
+            "  window_seconds (float): Time window around segment in ±seconds (default 10.0)"
         ),
         instructions=(
             "Use when: found a promising segment but need verbal context, "
             "user query mentioned dialogue/speech/audio events, "
-            "want to verify if visual match aligns with spoken content."
+            "want to verify if visual match aligns with spoken content.\n\n"
+            "Best paired with: search.get_segments_from_event_query_mmbert, search.get_segments_from_qwenvl_query (find segments first). "
+            "Follow up with: extract_frames_by_time_window for visual verification."
         ),
     )
     async def get_related_asr_from_segment(
@@ -196,11 +222,26 @@ class UtilityToolkit(Toolkit):
     @tool(
         description=(
             "Retrieve spoken words (ASR transcript) around a specific image/frame. "
-            "Extracts audio transcript within a time window surrounding an image's timestamp."
+            "Extracts audio transcript within a time window surrounding an image's timestamp.\n\n"
+            "Typical workflow - Use AFTER any image search tool:\n"
+            "  1. search.get_images_from_caption_query_mmbert - find matching images\n"
+            "  2. Or search.get_images_from_qwenvl_query - find matching images\n"
+            "  3. This tool - get ASR context around the found image/frame\n"
+            "  4. utility.extract_frame_at_time - extract exact frame for visual verification\n\n"
+            "Related tools:\n"
+            "  - get_related_asr_from_segment: For ASR context around a video segment\n"
+            "  - get_adjacent_images: For temporal navigation to neighboring frames\n"
+            "  - extract_frame_at_time: For extracting a single frame image\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID (REQUIRED)\n"
+            "  image_timestamp (str): Image timestamp in HH:MM:SS.sss format (REQUIRED)\n"
+            "  window_seconds (float): Time window around image in ±seconds (default 10.0)"
         ),
         instructions=(
             "Use when: found a promising image but need verbal context around that moment, "
-            "user query mentioned dialogue at specific frames."
+            "user query mentioned dialogue at specific frames.\n\n"
+            "Best paired with: search.get_images_from_caption_query_mmbert, search.get_images_from_qwenvl_query (find images first). "
+            "Follow up with: extract_frame_at_time for precise visual verification."
         ),
     )
     async def get_related_asr_from_image(
@@ -277,12 +318,35 @@ class UtilityToolkit(Toolkit):
         description=(
             "Navigate to adjacent segments before/after a reference segment. "
             "Retrieves surrounding video segments relative to a known segment, "
-            "enabling temporal exploration of video content. Like 'turning pages' in a video book."
+            "enabling temporal exploration of video content. Like 'turning pages' in a video book.\n\n"
+            "Typical workflow - Use for temporal exploration:\n"
+            "  1. search.get_segments_from_event_query_mmbert - find initial matching segment\n"
+            "  2. Or search.get_segments_from_qwenvl_query - find initial matching segment\n"
+            "  3. This tool - explore adjacent segments (forward or backward)\n"
+            "  4. utility.get_related_asr_from_segment - get context for each adjacent segment\n\n"
+            "Temporal navigation patterns:\n"
+            "  - 'forward' + hop=1: Next segment after current (like turning page forward)\n"
+            "  - 'backward' + hop=3: Previous 3 segments (likerewinding for context)\n"
+            "  - include_range=True: Returns all segments within hop range\n"
+            "  - include_range=False: Returns only the segment exactly at hop distance\n\n"
+            "Related tools:\n"
+            "  - get_adjacent_images: For frame-by-frame navigation (finer granularity)\n"
+            "  - get_related_asr_from_segment: Get spoken context for any segment\n"
+            "  - video.get_video_timeline: Get overview of all segment boundaries\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID (REQUIRED)\n"
+            "  pivot_start_frame (int): Reference segment start frame (REQUIRED)\n"
+            "  pivot_end_frame (int): Reference segment end frame (REQUIRED)\n"
+            "  hop (int): Number of segments to hop (default 1)\n"
+            "  direction (str): 'forward' or 'backward' navigation (default 'forward')\n"
+            "  include_range (bool): If True, include all segments within hop range (default True)"
         ),
         instructions=(
             "Use when: found a promising segment and want to see what happens before/after, "
             "need temporal context around a matching segment, "
-            "verifying if an event continues across multiple segments."
+            "verifying if an event continues across multiple segments.\n\n"
+            "Best paired with: search.get_segments_from_event_query_mmbert, search.get_segments_from_qwenvl_query (find base segment first). "
+            "Follow up with: get_related_asr_from_segment for context on each adjacent segment."
         ),
     )
     async def get_adjacent_segments(
@@ -356,12 +420,34 @@ class UtilityToolkit(Toolkit):
         description=(
             "Navigate to adjacent frames before/after a reference image. "
             "Retrieves surrounding frames relative to a known image, enabling frame-by-frame "
-            "exploration. Like stepping through video one frame at a time."
+            "exploration. Like stepping through video one frame at a time.\n\n"
+            "Typical workflow - Use for frame-level temporal exploration:\n"
+            "  1. search.get_images_from_caption_query_mmbert - find initial matching image\n"
+            "  2. Or search.get_images_from_qwenvl_query - find initial matching image\n"
+            "  3. This tool - explore adjacent frames (forward or backward)\n"
+            "  4. utility.get_related_asr_from_image - get ASR context for each frame\n\n"
+            "Temporal navigation patterns:\n"
+            "  - 'forward' + hop=1: Next frame after current (for frame-by-frame progression)\n"
+            "  - 'backward' + hop=5: Previous 5 frames (for quick context回顾)\n"
+            "  - include_range=True: Returns all frames within hop range\n"
+            "  - include_range=False: Returns only the frame exactly at hop distance\n\n"
+            "Related tools:\n"
+            "  - get_adjacent_segments: For segment-level navigation (coarser granularity)\n"
+            "  - get_related_asr_from_image: Get ASR context for any image/frame\n"
+            "  - extract_frame_at_time: Extract single frame image for inspection\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID (REQUIRED)\n"
+            "  image_frame_index (int): Reference image frame index (REQUIRED)\n"
+            "  hop (int): Number of images to hop (default 1)\n"
+            "  direction (str): 'forward' or 'backward' navigation (default 'forward')\n"
+            "  include_range (bool): If True, include all images within hop range (default True)"
         ),
         instructions=(
             "Use when: found a good frame and want to see adjacent frames, "
             "checking for motion/action across consecutive frames, "
-            "verifying object persistence across time."
+            "verifying object persistence across time.\n\n"
+            "Best paired with: search.get_images_from_caption_query_mmbert, search.get_images_from_qwenvl_query (find base image first). "
+            "Follow up with: get_related_asr_from_image for ASR context on each adjacent frame."
         ),
     )
     async def get_adjacent_images(
@@ -432,12 +518,33 @@ class UtilityToolkit(Toolkit):
         description=(
             "Extract raw frames from a video time window at specified frame rate. "
             "Retrieves actual frame images from a video between two timestamps, "
-            "sampled at a custom frame rate. Returns images that can be viewed directly."
+            "sampled at a custom frame rate. Returns images that can be viewed directly.\n\n"
+            "Typical workflow - Use for visual verification:\n"
+            "  1. search.get_images_* - find matching images first\n"
+            "  2. Or search.get_segments_* - find matching segments first\n"
+            "  3. Or utility.get_related_asr_from_* - identify time range from ASR context\n"
+            "  4. This tool - extract frames for visual inspection or shown to user\n\n"
+            "Common use cases:\n"
+            "  - fps_sample_rate=1: One frame per second (good for timeline overview)\n"
+            "  - fps_sample_rate=2: Two frames per second (moderate detail)\n"
+            "  - fps_sample_rate=5-10: Higher detail for motion analysis\n"
+            "  - fps_sample_rate=30: Maximum detail (equivalent to original video)\n\n"
+            "Related tools:\n"
+            "  - extract_frame_at_time: Extract single frame at a specific timestamp\n"
+            "  - get_adjacent_images: Navigate frame-by-frame relative to a reference\n"
+            "  - view_cache_result: Use handle_id for cached search results\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID (REQUIRED)\n"
+            "  start_time (str): Start time in HH:MM:SS.sss format (REQUIRED)\n"
+            "  end_time (str): End time in HH:MM:SS.sss format (REQUIRED)\n"
+            "  fps_sample_rate (int): How many frames per second to sample (default 1)"
         ),
         instructions=(
             "Use when: need to visually inspect specific time range in detail, "
             "want to show frames directly for analysis, "
-            "verifying visual content in precise time window."
+            "verifying visual content in precise time window.\n\n"
+            "Best paired with: search tools (find what you want), utility.extract_frame_at_time (single frame). "
+            "Follow up with: view_cache_result for Cached results inspection."
         ),
     )
     async def extract_frames_by_time_window(
@@ -510,11 +617,26 @@ class UtilityToolkit(Toolkit):
     @tool(
         description=(
             "Extract a single frame from a video at a specific timestamp. "
-            "Retrieves the exact frame at the given time for visual inspection."
+            "Retrieves the exact frame at the given time for visual inspection.\n\n"
+            "Typical workflow - Use for precise visual verification:\n"
+            "  1. search.get_images_* - find matching image with timestamp\n"
+            "  2. Or utility.get_related_asr_from_image - identify precise moment from ASR\n"
+            "  3. This tool - extract single frame for detailed inspection\n"
+            "  4. Compare with adjacent frames using get_adjacent_images if needed\n\n"
+            "Related tools:\n"
+            "  - extract_frames_by_time_window: Extract multiple frames in a time range\n"
+            "  - get_adjacent_images: Navigate to neighboring frames\n"
+            "  - get_related_asr_from_image: Get ASR context for the frame\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID (REQUIRED)\n"
+            "  timestamp (str): Timestamp in HH:MM:SS.sss format (REQUIRED)"
         ),
         instructions=(
             "Use when: need to see exactly what's in a frame at a specific moment, "
-            "want to visually verify content at a precise timestamp."
+            "want to visually verify content at a precise timestamp.\n\n"
+            "Best paired with: search.get_images_from_qwenvl_query, get_related_asr_from_image (find timestamp first). "
+            "Follow up with: get_adjacent_images for frame-by-frame exploration. "
+            "Alternative: extract_frames_by_time_window for extracting multiple frames at once."
         ),
     )
     async def extract_frame_at_time(

@@ -1,11 +1,9 @@
 from __future__ import annotations
-
 import inspect
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
-from agno.tools import Toolkit
-
+from agno.tools import Toolkit, Function
 
 @dataclass
 class ToolDocumentation:
@@ -48,7 +46,7 @@ class ToolRegistry:
         """
         toolkit_name = alias or toolkit.__class__.__name__
         self._toolkits[toolkit_name] = toolkit
-        self._extract_tools_from_toolkit(toolkit=toolkit, toolkit_name)
+        self._extract_tools_from_toolkit(toolkit=toolkit, toolkit_name=toolkit_name)
 
     def _extract_tools_from_toolkit(self, toolkit: Toolkit, toolkit_name: str) -> None:
         """Extract tool documentation from a toolkit instance.
@@ -56,15 +54,18 @@ class ToolRegistry:
         Uses agno's internal functions dict for registered tools.
         """
         if hasattr(toolkit, 'functions') and toolkit.functions:
-            for func_name, func in toolkit.functions.items():
-                self._register_function(func, toolkit_name, func_name)
+            
+            for func in toolkit.tools:
+                func = cast(Function, func)
+                self._register_function(func, toolkit_name)
         else:
             self._extract_via_introspection(toolkit, toolkit_name)
 
-    def _register_function(self, func: Any, toolkit_name: str, func_name: str) -> None:
+    def _register_function(self, func: Function, toolkit_name: str) -> None:
         """Register a tool function from agno's internal registry."""
-        description = getattr(func, 'description', '') or ''
-        instructions = getattr(func, 'instructions', '') or ''
+        func_name = func.name
+        description = func.description or ""
+        instructions = func.instructions or ""
         parameters = self._extract_parameters_from_func(func)
 
         tool_doc = ToolDocumentation(

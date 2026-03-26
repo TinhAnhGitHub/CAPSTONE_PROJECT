@@ -1,15 +1,3 @@
-"""Video Metadata Toolkit for video-level operations.
-
-This toolkit provides tools for:
-- Listing user videos
-- Retrieving video metadata
-- Getting video summaries
-- Generating video timelines
-- Checking processing status
-
-All tools return ToolResult for unified interface.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -17,12 +5,10 @@ from typing import Any, Literal
 
 from agno.tools import Toolkit, tool
 from agno.tools.function import ToolResult
-from flask import json
 from loguru import logger
 
 from videodeepsearch.clients.storage.postgre import PostgresClient
 from videodeepsearch.clients.storage.minio import MinioStorageClient
-from videodeepsearch.toolkit.common import extract_s3_minio_url, format_duration
 
 
 class VideoInfo:
@@ -79,39 +65,6 @@ class VideoInfo:
             f"  MinIO URL: {self.minio_url}"
         )
 
-
-class ProcessingStatus:
-    def __init__(self, video_id: str):
-        self.video_id = video_id
-        self.stages: dict[str, bool] = {}
-
-    def set_stage(self, stage: str, completed: bool) -> None:
-        self.stages[stage] = completed
-
-    def is_complete(self, stage: str) -> bool:
-        return self.stages.get(stage, False)
-
-    def completion_percentage(self) -> float:
-        if not self.stages:
-            return 0.0
-        completed = sum(1 for v in self.stages.values() if v)
-        return (completed / len(self.stages)) * 100
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "video_id": self.video_id,
-            "stages": self.stages,
-            "completion_percentage": self.completion_percentage(),
-        }
-
-    def repr(self) -> str:
-        lines = [f"Processing Status for Video: {self.video_id}", "-" * 50]
-        for stage, completed in sorted(self.stages.items()):
-            status = "✅" if completed else "❌"
-            lines.append(f"  {status} {stage}")
-        lines.append(f"\nCompletion: {self.completion_percentage():.1f}%")
-        return "\n".join(lines)
-
 class VideoMetadataToolkit(Toolkit):
     def __init__(
         self,
@@ -126,7 +79,14 @@ class VideoMetadataToolkit(Toolkit):
         """
         self.postgres = postgres_client
         self.storage = minio_client
-        super().__init__(name="Video Metadata Tools")
+        super().__init__(
+            name="Video Metadata Tools",
+            tools=[
+                self.list_user_videos,
+                self.get_video_metadata,
+                self.get_video_timeline,
+            ],
+        )
 
     async def _get_video_artifacts(
         self,
@@ -201,12 +161,32 @@ class VideoMetadataToolkit(Toolkit):
         description=(
             "List all videos for a user with basic metadata. "
             "Returns video IDs, filenames, duration, fps, and resolution. "
-            "Use this to discover what videos are available for search."
+            "Use this to discover what videos are available for search.\n\n"
+            "Typical workflow - Discovery phase (START HERE):\n"
+            "  1. This tool - find available videos for the user\n"
+            "  2. get_video_metadata - get details on a specific video\n"
+            "  3. get_video_timeline - understand video structure\n"
+            "  4. search.get_* tools - search for content in the videos\n\n"
+            "When to use:\n"
+            "  - Starting a new search session (find video IDs)\n"
+            "  - User wants to see what videos they have\n"
+            "  - Need to identify which videos to search\n\n"
+            "Related tools:\n"
+            "  - get_video_metadata: Get detailed info on a specific video\n"
+            "  - get_video_timeline: See temporal structure of a video\n"
+            "  - search.get_images_from_qwenvl_query: Search for visual content\n"
+            "  - search.get_segments_from_event_query_mmbert: Search for events\n\n"
+            "Args:\n"
+            "  user_id (str): User ID to list videos for (REQUIRED)\n"
+            "  limit (int): Maximum number of videos to return (default 50)\n"
+            "  offset (int): Offset for pagination (default 0)"
         ),
         instructions=(
             "Use when: user wants to see available videos, "
             "need to find video IDs for further operations, "
-            "starting a new search session."
+            "starting a new search session.\n\n"
+            "Best paired with: get_video_metadata, get_video_timeline (drill down into specific videos). "
+            "Follow up with: search tools to find content within the videos."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -260,12 +240,30 @@ class VideoMetadataToolkit(Toolkit):
         description=(
             "Get detailed metadata for a specific video. "
             "Returns comprehensive information including duration, fps, resolution, "
-            "file location, and creation timestamp."
+            "file location, and creation timestamp.\n\n"
+            "Typical workflow - Video inspection:\n"
+            "  1. list_user_videos - find video ID\n"
+            "  2. This tool - get detailed metadata\n"
+            "  3. get_video_timeline - see temporal structure\n"
+            "  4. search tools - find content in the video\n\n"
+            "When to use:\n"
+            "  - Need detailed info about a specific video\n"
+            "  - Verify video properties before processing\n"
+            "  - Check video existence\n\n"
+            "Related tools:\n"
+            "  - list_user_videos: List all videos for a user\n"
+            "  - get_video_timeline: Get temporal structure\n"
+            "  - search.get_images_from_qwenvl_query: Search for visual content\n"
+            "  - utility.extract_frames_by_time_window: Extract frames from video\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID to get metadata for (REQUIRED)"
         ),
         instructions=(
             "Use when: need detailed info about a specific video, "
             "want to verify video properties before processing, "
-            "checking video existence."
+            "checking video existence.\n\n"
+            "Best paired with: list_user_videos (find videos), get_video_timeline (see structure). "
+            "Follow up with: search tools to find content within this video."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -325,12 +323,37 @@ class VideoMetadataToolkit(Toolkit):
         description=(
             "Get a visual timeline of video segments with timestamps and captions. "
             "Shows the temporal structure of the video with segment boundaries. "
-            "Use this to navigate through video content chronologically."
+            "Use this to navigate through video content chronologically.\n\n"
+            "Typical workflow - Video structure exploration:\n"
+            "  1. list_user_videos - find video ID\n"
+            "  2. get_video_metadata - get video details\n"
+            "  3. This tool - see temporal structure and segment boundaries\n"
+            "  4. search tools or utility tools - find specific content\n\n"
+            "Granularity options:\n"
+            "  - 'segment': Multi-frame sequences with captions (default, most detailed)\n"
+            "  - 'shot': Shot boundaries detected by scene changes\n"
+            "  - 'minute': Content grouped by minute (for long videos)\n\n"
+            "When to use:\n"
+            "  - User wants to see video structure\n"
+            "  - Need to find specific time ranges\n"
+            "  - Planning temporal navigation\n"
+            "  - Understanding video content distribution\n\n"
+            "Related tools:\n"
+            "  - list_user_videos: Find videos\n"
+            "  - get_video_metadata: Get video details\n"
+            "  - utility.get_adjacent_segments: Navigate between segments\n"
+            "  - utility.extract_frames_by_time_window: Extract frames in a time range\n"
+            "  - search.get_segments_from_event_query_mmbert: Search for events\n\n"
+            "Args:\n"
+            "  video_id (str): Video ID to generate timeline for (REQUIRED)\n"
+            "  granularity (str): Timeline granularity - 'segment', 'shot', or 'minute' (default 'segment')"
         ),
         instructions=(
             "Use when: user wants to see video structure, "
             "need to find specific time ranges, "
-            "planning temporal navigation."
+            "planning temporal navigation.\n\n"
+            "Best paired with: list_user_videos, get_video_metadata (find and inspect video first). "
+            "Follow up with: search tools or utility.get_adjacent_segments for navigation."
         ),
         cache_results=True,
         cache_ttl=1800,
