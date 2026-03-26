@@ -8,7 +8,8 @@ from arango.client import ArangoClient
 from fastapi import FastAPI
 from loguru import logger
 from sqlalchemy import text
-from agno.models.openrouter import OpenRouter
+from agno.db.postgres import AsyncPostgresDb
+from agno.models.openrouter import OpenRouter, OpenRouterResponses
 
 from videodeepsearch.agent.member.worker.spawn_toolkit import WorkerModel
 from videodeepsearch.clients.inference import (
@@ -26,11 +27,26 @@ from videodeepsearch.clients.storage.qdrant import AudioQdrantClient, ImageQdran
 from videodeepsearch.core.settings import settings
 
 
+def _init_mlflow():
+    if not settings.mlflow.enabled:
+        logger.info("MLflow tracing disabled")
+        return
+
+    import mlflow
+
+    mlflow.set_tracking_uri(settings.mlflow.tracking_uri)
+    mlflow.set_experiment(settings.mlflow.experiment_name)
+    mlflow.agno.autolog() #type:ignore
+    logger.info(f"MLflow tracing enabled: {settings.mlflow.tracking_uri}, experiment: {settings.mlflow.experiment_name}")
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize all clients and models into app.state."""
     logger.info("Initializing VideoDeepSearch...")
+
+    _init_mlflow()
 
     app.state.postgres_client = PostgresClient(
         database_url=settings.storage.postgres.connection_url
@@ -39,6 +55,13 @@ async def lifespan(app: FastAPI):
         result = await session.execute(text("SELECT version();"))
         version = result.scalar_one()
         logger.info(f"PostgreSQL connected: {version}")
+
+    # Initialize agno AsyncPostgresDb for Team session storage
+    app.state.agno_db = AsyncPostgresDb(
+        db_url=settings.storage.postgres.connection_url,
+        create_schema=True,
+    )
+    logger.info("Agno AsyncPostgresDb initialized for session storage")
 
     app.state.minio_client = MinioStorageClient(
         host=settings.storage.minio.host,
@@ -129,25 +152,51 @@ async def lifespan(app: FastAPI):
     api_key = llm_cfg.api_key
 
     app.state.models = {}
-    for name, agent_cfg in [
-        ("greeter", llm_cfg.agents.greeter),
-        ("orchestrator", llm_cfg.agents.orchestrator),
-        ("planning", llm_cfg.agents.planning),
-    ]:
-        app.state.models[name] = OpenRouter(
-            id=agent_cfg.model_id,
+    
+    greeter_cfg = llm_cfg.agents.greeter
+    app.state.models["greeter"] = OpenRouterResponses(
+        id=greeter_cfg.model_id,
+        api_key=api_key,
+        base_url=llm_cfg.base_url,
+    )
+    
+    orchestrator_cfg = llm_cfg.agents.orchestrator
+    app.state.models["orchestrator"] = OpenRouterResponses(
+        id=orchestrator_cfg.model_id,
+        api_key=api_key,
+        base_url=llm_cfg.base_url,
+        parallel_tool_calls=True, 
+    )
+    
+    planning_cfg = llm_cfg.agents.planning
+    app.state.models["planning"] = OpenRouterResponses(
+        id=planning_cfg.model_id,
+        api_key=api_key,
+        base_url=llm_cfg.base_url,
+        parallel_tool_calls=True, 
+    )
+    
+    llm_tool_cfg = llm_cfg.agents.llm_tool
+    if llm_tool_cfg:
+        app.state.models["llm_tool"] = OpenRouterResponses(
+            id=llm_tool_cfg.model_id,
             api_key=api_key,
             base_url=llm_cfg.base_url,
         )
+    else:
+        app.state.models["llm_tool"] = app.state.models["planning"]
+        logger.info("llm_tool model not configured, using planning model as fallback")
+    
     logger.info(f"Agent models initialized: {list(app.state.models.keys())}")
 
     app.state.worker_models = {}
     for worker_cfg in llm_cfg.workers:
         app.state.worker_models[worker_cfg.name] = WorkerModel(
-            model=OpenRouter(
+            model=OpenRouterResponses(
                 id=worker_cfg.model_id,
                 api_key=api_key,
                 base_url=llm_cfg.base_url,
+                parallel_tool_calls=True, 
             ),
             description=worker_cfg.description,
             strengths=worker_cfg.strengths,
