@@ -26,6 +26,7 @@ class AgentsConfig(BaseModel):
     greeter: AgentModelConfig
     orchestrator: AgentModelConfig
     planning: AgentModelConfig
+    llm_tool: AgentModelConfig | None = None  # Separate model for LLM toolkit operations
 
 
 class LLMProviderConfig(BaseModel):
@@ -135,7 +136,7 @@ class MMBertInfConfig(BaseModel):
 
 
 class SpladeConfig(BaseModel):
-    url: str = "localhost:8001"
+    url: str = "http://localhost:8001"
     model_name: str = "splade"
     timeout: int = 30
     verbose: bool = False
@@ -154,6 +155,13 @@ class CacheConfig(BaseModel):
     dir: str | None = None
 
 
+class MLflowConfig(BaseModel):
+    """MLflow tracing configuration."""
+    enabled: bool = False
+    tracking_uri: str = "http://localhost:5000"
+    experiment_name: str = "VideoDeepSearch"
+
+
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8080
@@ -167,6 +175,7 @@ class Settings(BaseModel):
     inference: InferenceConfig = Field(default_factory=InferenceConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
+    mlflow: MLflowConfig = Field(default_factory=MLflowConfig)
 
 
 def load_settings(config_path: str | Path | None = None) -> Settings:
