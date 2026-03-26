@@ -1,8 +1,8 @@
 """Toolkit factories for the VideoDeepSearch agent system.
 
 This module provides factory functions that create toolkit instances on demand.
-Each factory is a zero-argument callable that returns a fresh toolkit instance,
-ensuring worker isolation (each worker gets its own toolkit with its own state).
+Each factory accepts optional user_id and video_ids for context binding,
+ensuring tools automatically use these values without explicit parameters.
 
 Usage:
     from videodeepsearch.toolkit.factories import (
@@ -11,8 +11,8 @@ Usage:
         ...
     )
 
-    factory = make_search_factory(...)
-    toolkit = factory()  # Fresh instance
+    factory = make_search_factory(..., user_id="user123", video_ids=["vid1", "vid2"])
+    toolkit = factory()  # Fresh instance with bound context
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ from videodeepsearch.toolkit.video_metadata import VideoMetadataToolkit
 
 ToolkitFactory = Callable[[], Any]
 
+
 def make_search_factory(
     image_qdrant_client,
     segment_qdrant_client,
@@ -42,8 +43,15 @@ def make_search_factory(
     qwenvl_client,
     mmbert_client,
     splade_client,
+    user_id: str | None = None,
+    video_ids: list[str] | None = None,
 ) -> ToolkitFactory:
-    """Factory for VideoSearchToolkit - image, segment, and audio search."""
+    """Factory for VideoSearchToolkit - image, segment, and audio search.
+
+    Args:
+        user_id: Default user ID for all searches (bound at creation)
+        video_ids: Default video IDs for all searches (bound at creation)
+    """
     def factory() -> VideoSearchToolkit:
         return VideoSearchToolkit(
             image_qdrant_client=image_qdrant_client,
@@ -52,8 +60,11 @@ def make_search_factory(
             qwenvl_client=qwenvl_client,
             mmbert_client=mmbert_client,
             splade_client=splade_client,
+            user_id=user_id,
+            video_ids=video_ids,
         )
     return factory
+
 
 def make_utility_factory(
     postgres_client: PostgresClient,
@@ -67,6 +78,7 @@ def make_utility_factory(
         )
     return factory
 
+
 def make_video_metadata_factory(
     postgres_client: PostgresClient,
     minio_client: MinioStorageClient,
@@ -79,33 +91,57 @@ def make_video_metadata_factory(
         )
     return factory
 
+
 def make_ocr_factory(
     es_ocr_client: ElasticsearchOCRClient,
     mmbert_client,
+    user_id: str | None = None,
+    video_ids: list[str] | None = None,
 ) -> ToolkitFactory:
-    """Factory for OCRSearchToolkit - OCR text search."""
+    """Factory for OCRSearchToolkit - OCR text search.
+
+    Args:
+        user_id: Default user ID for OCR searches (bound at creation)
+        video_ids: Default video IDs for OCR searches (bound at creation)
+    """
     def factory() -> OCRSearchToolkit:
         return OCRSearchToolkit(
             es_ocr_client=es_ocr_client,
             mmbert_client=mmbert_client,
+            user_id=user_id,
+            video_ids=video_ids,
         )
     return factory
 
+
 def make_llm_factory(llm_client) -> ToolkitFactory:
-    """Factory for LLMToolkit - query enhancement."""
+    """Factory for LLMToolkit - query enhancement.
+
+    Note: LLMToolkit doesn't use user_id or video_ids.
+    """
     def factory() -> LLMToolkit:
         return LLMToolkit(llm_client=llm_client)
     return factory
 
+
 def make_kg_factory(
     arango_db: StandardDatabase,
     mmbert_client,
+    user_id: str | None = None,
+    video_ids: list[str] | None = None,
 ) -> ToolkitFactory:
-    """Factory for KGSearchToolkit - knowledge graph retrieval."""
+    """Factory for KGSearchToolkit - knowledge graph retrieval.
+
+    Args:
+        user_id: Default user ID for KG searches (bound at creation)
+        video_ids: Default video IDs for KG searches (bound at creation)
+    """
     def factory() -> KGSearchToolkit:
         return KGSearchToolkit(
             arango_db=arango_db,
             mmbert_client=mmbert_client,
+            user_id=user_id,
+            video_ids=video_ids,
         )
     return factory
 

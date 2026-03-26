@@ -1,12 +1,7 @@
-from fastapi import APIRouter, WebSocket, Depends, WebSocketDisconnect, WebSocketException
-from typing import Annotated, Iterable
-import traceback
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import logging
-from llama_index.core.llms import ChatMessage
-from llama_index.core.agent.workflow import AgentOutput
 from typing import Any
-from videodeepsearch.agent.orc_service import ignite_workflow
-
+from videodeepsearch.agent.team import ignite_workflow
 
 
 logger = logging.getLogger(__name__)
@@ -15,15 +10,6 @@ router = APIRouter(
     prefix='/ws', tags=['workflow']
 )
 
-
-def _parse_chat_history(raw_history: list[dict]) -> list[ChatMessage]:
-    print(raw_history)
-    res = []
-    for his in raw_history:
-        message = ChatMessage.model_validate(his)
-        res.append(message)
-    return res
-   
 
 @router.websocket("/start_workflow")
 async def start_workflow_ws(
@@ -47,19 +33,42 @@ async def start_workflow_ws(
     try:
         while True:
             data = await websocket.receive_json()
+
+            # Input validation
+            required_fields = ['user_id', 'video_ids', 'user_demand', 'session_id']
+            missing = [f for f in required_fields if f not in data]
+            if missing:
+                await websocket.send_json({
+                    'type': 'error',
+                    'error': f'Missing required fields: {missing}'
+                })
+                return
+
             user_id = data['user_id']
             list_video_ids = data['video_ids']
             user_demand = data['user_demand']
-            chat_history_payload = data['chat_history']
             session_id = data['session_id']
-            chat_history = _parse_chat_history(chat_history_payload)
+
+            state = websocket.app.state
 
             async_generator = ignite_workflow(
                 user_id=user_id,
                 list_video_ids=list_video_ids,
                 user_demand=user_demand,
-                chat_history=chat_history,
-                session_id=session_id
+                session_id=session_id,
+                models=state.models,
+                worker_models=state.worker_models,
+                db=state.agno_db,
+                image_qdrant_client=state.image_qdrant_client,
+                segment_qdrant_client=state.segment_qdrant_client,
+                audio_qdrant_client=state.audio_qdrant_client,
+                qwenvl_client=state.qwenvl_client,
+                mmbert_client=state.mmbert_client,
+                splade_client=state.splade_client,
+                postgres_client=state.postgres_client,
+                minio_client=state.minio_client,
+                es_ocr_client=state.es_ocr_client,
+                arango_db=state.arango_db,
             )
             async for output in async_generator:
                 await websocket.send_json(
@@ -84,15 +93,12 @@ async def start_workflow_ws(
 
     except Exception as e:
         # Log full traceback to server logs for debugging visibility
-        print(f"Output: {output}") #type:ignore
         logger.exception("Unhandled error in start_workflow_ws")
-        tb = traceback.format_exc()
-        
+
         try:
             await websocket.send_json({
                 'type': "error",
-                'error': str(e),
-                'traceback': tb,
+                'error': "An internal error occurred. Please try again.",
             })
         except Exception:
             pass
@@ -101,6 +107,3 @@ async def start_workflow_ws(
         except Exception:
             pass
         return
-            
-    
-        

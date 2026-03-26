@@ -14,19 +14,34 @@ from videodeepsearch.toolkit.common import CacheManager
 
 
 class KGSearchToolkit(Toolkit):
-    
+    """Knowledge Graph search toolkit with context binding.
+
+    Supports binding user_id at initialization time for consistent filtering.
+    """
+
     def __init__(
         self,
         arango_db: StandardDatabase,
         mmbert_client: MMBertClient | None = None,
+        user_id: str | None = None,
+        video_ids: list[str] | None = None,
         graph_name: str = "video_knowledge_graph",
         search_view: str = "video_kg_search_view",
         cache_ttl: int = 1800,
         cache_dir: str | None = None,
     ):
-        super().__init__(name="Knowledge Graph Search Tools")
-        
-        
+        """Initialize KGSearchToolkit with optional context binding.
+
+        Args:
+            arango_db: ArangoDB database instance
+            mmbert_client: MMBert client for embeddings
+            user_id: Default user ID for all searches (bound at creation)
+            video_ids: Default video IDs for all searches (bound at creation)
+            graph_name: Name of the knowledge graph
+            search_view: Name of the search view
+            cache_ttl: Cache TTL in seconds
+            cache_dir: Optional cache directory
+        """
         self.db = arango_db
         self.mmbert = mmbert_client
         self.graph_name = graph_name
@@ -34,23 +49,29 @@ class KGSearchToolkit(Toolkit):
         self.cache_ttl = cache_ttl
         self.cache_manager = CacheManager(cache_dir)
         self._result_store: dict[str, list[dict[str, Any]]] = {}
+
+        # Context binding
+        self._user_id = user_id
+        self._video_ids = video_ids
+
+        super().__init__(
+            name="Knowledge Graph Search Tools",
+            tools=[
+                self.search_entities_semantic,
+                self.search_events,
+                self.search_micro_events,
+                self.search_communities,
+                self.traverse_from_entity,
+                self.multi_granularity_search,
+                self.search_bm25,
+                self.triple_hybrid_search,
+                self.retrieve_for_rag,
+                self.view_kg_result,
+            ],
+        )
         
 
 
-    def _encode_query(self, query: str) -> list[float] | None:
-        """Encode query text to embedding vector."""
-        if not self.mmbert:
-            return None
-        try:
-            import asyncio
-            result = asyncio.get_event_loop().run_until_complete(
-                self.mmbert.ainfer([query])
-            )
-            if result:
-                return result[0]
-        except Exception as e:
-            logger.warning(f"Failed to encode query: {e}")
-        return None
 
     async def _encode_query_async(self, query: str) -> list[float] | None:
         """Async encode query text to embedding vector."""
@@ -83,7 +104,7 @@ class KGSearchToolkit(Toolkit):
         return ""
 
     def _user_bind(self, user_id: str | None) -> dict[str, Any]:
-        """Build user bind variables for AQL."""
+        """Build user bind variables dfor AQL."""
         if user_id:
             return {"user_id": user_id}
         return {}
@@ -91,6 +112,24 @@ class KGSearchToolkit(Toolkit):
     def _execute_aql(self, aql: str, bind_vars: dict[str, Any]) -> list[dict[str, Any]]:
         """Execute AQL query and return results."""
         return list(self.db.aql.execute(aql, bind_vars=bind_vars)) #type:ignore
+
+    def _get_effective_context(
+        self,
+        user_id: str | None,
+        video_ids: list[str] | None,
+    ) -> tuple[str | None, list[str] | None]:
+        """Get effective user_id and video_ids using bound context as defaults.
+
+        Args:
+            user_id: Explicitly passed user_id (takes precedence)
+            video_ids: Explicitly passed video_ids (takes precedence)
+
+        Returns:
+            Tuple of (effective_user_id, effective_video_ids)
+        """
+        effective_user_id = user_id or self._user_id
+        effective_video_ids = video_ids or self._video_ids
+        return effective_user_id, effective_video_ids
 
     def _store_result(
         self,
@@ -154,16 +193,34 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Search for entities (people, objects, locations, concepts) in the knowledge graph using semantic similarity.
-            Returns entities ranked by cosine similarity to the query embedding.
-            """
+            "Search for entities (people, objects, locations, concepts) in the knowledge graph using semantic similarity. "
+            "Returns entities ranked by cosine similarity to the query embedding.\n\n"
+            "Typical workflow - Entity discovery and exploration:\n"
+            "  1. This tool - find entities matching your query\n"
+            "  2. view_kg_result - inspect detailed results with handle_id\n"
+            "  3. traverse_from_entity - explore relationships from found entities\n"
+            "  4. utility.extract_frames_by_time_window - verify entity appearances visually\n\n"
+            "When to use:\n"
+            "  - Finding specific people, objects, or locations in videos\n"
+            "  - Discovering entities related to a concept or theme\n"
+            "  - Starting point for graph exploration\n\n"
+            "Related tools:\n"
+            "  - traverse_from_entity: Explore relationships from found entities\n"
+            "  - view_kg_result: Inspect cached results\n"
+            "  - search_events: Find events/entities in entities\n"
+            "  - triple_hybrid_search: More powerful multi-method search\n\n"
+            "Args:\n"
+            "  query (str): Search query text (REQUIRED)\n"
+            "  top_k (int): Number of results to return (default 10)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  min_score (float): Minimum similarity score threshold (default 0.5)"
         ),
         instructions=(
-            "Use this when you need to find specific people, objects, or locations mentioned in videos. "
-            "Supports filtering by entity_type (e.g., 'person', 'object', 'location'). "
-            "Use min_score to filter out low-quality matches (default 0.5). "
-            "Combine with traverse_from_entity to explore relationships."
+            "Use this when you need to find specific people, objects, or locations mentioned in videos.\n\n"
+            "Best paired with: traverse_from_entity (explore relationships), view_kg_result (inspect results). "
+            "Follow up with: view_kg_result using handle_id, then traverse_from_entity with entity_key. "
+            "Use min_score to filter out low-quality matches (default 0.5)."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -174,7 +231,6 @@ class KGSearchToolkit(Toolkit):
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
-        entity_type: str | None = None,
         min_score: float = 0.5,
     ) -> ToolResult:
         """Search entities using semantic similarity.
@@ -182,20 +238,21 @@ class KGSearchToolkit(Toolkit):
         Args:
             query: Search query text
             top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-            entity_type: Optional entity type filter (e.g., 'person', 'object', 'location')
+            video_ids: Optional list of video IDs to filter (uses bound context if not provided)
+            user_id: Optional user ID to filter (uses bound context if not provided)
             min_score: Minimum similarity score threshold (default 0.5)
 
         Returns:
             ToolResult with matching entities
         """
+        # Use bound context as defaults
+        effective_user_id, effective_video_ids = self._get_effective_context(user_id, video_ids)
+
         kwargs = {
             "query": query,
             "top_k": top_k,
-            "video_ids": video_ids,
-            "user_id": user_id,
-            "entity_type": entity_type,
+            "video_ids": effective_video_ids,
+            "user_id": effective_user_id,
             "min_score": min_score,
         }
 
@@ -204,15 +261,13 @@ class KGSearchToolkit(Toolkit):
             if query_emb is None:
                 return ToolResult(content="Error: MMBert client required for semantic search")
 
-            vf = self._video_filter("e", video_ids)
-            uf = self._user_filter("e", user_id)
-            tf = "FILTER e.entity_type == @etype" if entity_type else ""
+            vf = self._video_filter("e", effective_video_ids)
+            uf = self._user_filter("e", effective_user_id)
 
             aql = f"""
             FOR e IN entities
                 {uf}
                 {vf}
-                {tf}
                 LET score = COSINE_SIMILARITY(e.semantic_embedding, @query)
                 FILTER score > @min_score
                 SORT score DESC
@@ -234,11 +289,10 @@ class KGSearchToolkit(Toolkit):
                 "query": query_emb,
                 "top_k": top_k,
                 "min_score": min_score,
-                **self._video_bind(video_ids),
-                **self._user_bind(user_id),
+                **self._video_bind(effective_video_ids),
+                **self._user_bind(effective_user_id),
             }
-            if entity_type:
-                bind["etype"] = entity_type
+           
 
             results = self._execute_aql(aql, bind)
             return self._store_result("search_entities_semantic", kwargs, results)
@@ -249,16 +303,35 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Search for events (segment-level actions/scenes) in the knowledge graph using semantic similarity.
-            Events represent meaningful segments of video content with temporal bounds.
-            """
+            "Search for events (segment-level actions/scenes) in the knowledge graph using semantic similarity. "
+            "Events represent meaningful segments of video content with temporal bounds.\n\n"
+            "Typical workflow - Event discovery:\n"
+            "  1. This tool - find events matching your query\n"
+            "  2. view_kg_result - inspect detailed results with handle_id\n"
+            "  3. search_entities_semantic - find entities involved in events\n"
+            "  4. utility.get_related_asr_from_segment - get spoken context\n\n"
+            "When to use:\n"
+            "  - Finding specific scenes or actions that occurred in videos\n"
+            "  - Need time-bounded information about what happened\n"
+            "  - Looking for events with temporal information (start_time, end_time)\n\n"
+            "Related tools:\n"
+            "  - search_entities_semantic: Find entities involved in events\n"
+            "  - search_micro_events: For more granular frame-level details\n"
+            "  - view_kg_result: Inspect cached results\n"
+            "  - utility.get_related_asr_from_segment: Get ASR context\n\n"
+            "Args:\n"
+            "  query (str): Search query text (REQUIRED)\n"
+            "  top_k (int): Number of results to return (default 10)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  min_score (float): Minimum similarity score threshold (default 0.5)"
         ),
         instructions=(
-            "Use this to find specific scenes or actions that occurred in videos. "
+            "Use this to find specific scenes or actions that occurred in videos.\n\n"
             "Events include temporal information (start_time, end_time) and captions describing the action. "
-            "Use when you need time-bounded information about what happened in a video. "
-            "Combine with search_micro_events for more granular frame-level details."
+            "Best paired with: search_entities_semantic (find involved entities), view_kg_result (inspect results). "
+            "Follow up with: view_kg_result using handle_id. "
+            "Use search_micro_events for more granular frame-level details."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -276,18 +349,21 @@ class KGSearchToolkit(Toolkit):
         Args:
             query: Search query text
             top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
+            video_ids: Optional list of video IDs to filter (uses bound context if not provided)
+            user_id: Optional user ID to filter (uses bound context if not provided)
             min_score: Minimum similarity score threshold (default 0.5)
 
         Returns:
             ToolResult with matching events
         """
+        # Use bound context as defaults
+        effective_user_id, effective_video_ids = self._get_effective_context(user_id, video_ids)
+
         kwargs = {
             "query": query,
             "top_k": top_k,
-            "video_ids": video_ids,
-            "user_id": user_id,
+            "video_ids": effective_video_ids,
+            "user_id": effective_user_id,
             "min_score": min_score,
         }
 
@@ -296,8 +372,8 @@ class KGSearchToolkit(Toolkit):
             if query_emb is None:
                 return ToolResult(content="Error: MMBert client required for semantic search")
 
-            vf = self._video_filter("ev", video_ids)
-            uf = self._user_filter("ev", user_id)
+            vf = self._video_filter("ev", effective_video_ids)
+            uf = self._user_filter("ev", effective_user_id)
 
             aql = f"""
             FOR ev IN events
@@ -326,8 +402,8 @@ class KGSearchToolkit(Toolkit):
                     "query": query_emb,
                     "top_k": top_k,
                     "min_score": min_score,
-                    **self._video_bind(video_ids),
-                    **self._user_bind(user_id),
+                    **self._video_bind(effective_video_ids),
+                    **self._user_bind(effective_user_id),
                 },
             )
             return self._store_result("search_events", kwargs, results)
@@ -338,16 +414,34 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Search for micro-events (frame-level granular actions) in the knowledge graph using semantic similarity.
-            Micro-events are fine-grained descriptions of individual moments within larger events.
-            """
+            "Search for micro-events (frame-level granular actions) in the knowledge graph using semantic similarity. "
+            "Micro-events are fine-grained descriptions of individual moments within larger events.\n\n"
+            "Typical workflow - Fine-grained event search:\n"
+            "  1. search_events - find broader events first\n"
+            "  2. This tool - get frame-level details within events\n"
+            "  3. view_kg_result - inspect detailed results\n"
+            "  4. utility.extract_frame_at_time - verify specific moments visually\n\n"
+            "When to use:\n"
+            "  - Need precise, frame-level video content retrieval\n"
+            "  - Micro-events contain detailed text descriptions of specific moments\n"
+            "  - Each micro-event has a parent_event and can be linked to entities\n\n"
+            "Related tools:\n"
+            "  - search_events: Coarser event-level search (start here)\n"
+            "  - view_kg_result: Inspect cached results\n"
+            "  - utility.extract_frame_at_time: Extract frame at specific moment\n"
+            "  - search_entities_semantic: Find entities in micro-events\n\n"
+            "Args:\n"
+            "  query (str): Search query text (REQUIRED)\n"
+            "  top_k (int): Number of results to return (default 10)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  min_score (float): Minimum similarity score threshold (default 0.5)"
         ),
         instructions=(
-            "Use this for precise, frame-level video content retrieval. "
+            "Use this for precise, frame-level video content retrieval.\n\n"
             "Micro-events contain detailed text descriptions of specific moments. "
-            "Each micro-event has a parent_event and can be linked to entities. "
-            "Use when you need granular, moment-by-moment information about video content."
+            "Best paired with: search_events (start broader), view_kg_result (inspect results). "
+            "Follow up with: view_kg_result using handle_id, then utility.extract_frame_at_time for visual verification."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -428,16 +522,33 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Search for communities (clusters of related entities) in the knowledge graph using semantic similarity.
-            Communities represent thematic groupings of entities that share common context.
-            """
+            "Search for communities (clusters of related entities) in the knowledge graph using semantic similarity. "
+            "Communities represent thematic groupings of entities that share common context.\n\n"
+            "Typical workflow - High-level theme discovery:\n"
+            "  1. This tool - find thematic communities\n"
+            "  2. view_kg_result - inspect community summaries\n"
+            "  3. search_entities_semantic - drill down into entities in communities\n"
+            "  4. traverse_from_entity - explore entity relationships\n\n"
+            "When to use:\n"
+            "  - Understanding overarching themes in video content\n"
+            "  - High-level understanding of what topics a video covers\n"
+            "  - Finding thematic summaries and groupings of related entities\n\n"
+            "Related tools:\n"
+            "  - search_entities_semantic: Drill down into entities\n"
+            "  - view_kg_result: Inspect cached results\n"
+            "  - search_events: Find events in communities\n\n"
+            "Args:\n"
+            "  query (str): Search query text (REQUIRED)\n"
+            "  top_k (int): Number of results to return (default 5)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  min_score (float): Minimum similarity score threshold (default 0.4)"
         ),
         instructions=(
-            "Use this to find thematic summaries and groupings of related entities. "
+            "Use this to find thematic summaries and groupings of related entities.\n\n"
             "Each community has a title, summary, and member entities. "
-            "Useful for understanding overarching themes in video content. "
-            "Good for high-level understanding of what topics a video covers."
+            "Best paired with: search_entities_semantic (drill down), view_kg_result (inspect results). "
+            "Follow up with: view_kg_result using handle_id, then search_entities_semantic to find entities in the community."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -515,16 +626,36 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Traverse the knowledge graph from a seed entity to discover connected nodes (entities, events, micro-events, communities).
-            Explores relationships and finds related content through graph edges.
-            """
+            "Traverse the knowledge graph from a seed entity to discover connected nodes (entities, events, micro-events, communities). "
+            "Explores relationships and finds related content through graph edges.\n\n"
+            "Typical workflow - Graph exploration:\n"
+            "  1. search_entities_semantic - find a seed entity of interest\n"
+            "  2. This tool - traverse from the entity to discover relationships\n"
+            "  3. view_kg_result - inspect connected nodes\n"
+            "  4. utility.extract_frames_by_time_window - verify related content visually\n\n"
+            "When to use:\n"
+            "  - After finding an entity of interest, discover related content\n"
+            "  - Understanding how entities relate to events and other entities\n"
+            "  - Exploring the knowledge graph structure\n\n"
+            "Traversal depth:\n"
+            "  - depth=1: Direct connections (immediate neighbors)\n"
+            "  - depth=2: Two hops (extended network)\n"
+            "  - Higher depths may return many results\n\n"
+            "Related tools:\n"
+            "  - search_entities_semantic: Find seed entities (use before this)\n"
+            "  - view_kg_result: Inspect traversal results\n"
+            "  - triple_hybrid_search: Alternative multi-method search\n\n"
+            "Args:\n"
+            "  entity_key (str): The _key of the seed entity (REQUIRED)\n"
+            "  max_depth (int): Maximum traversal depth (default 2)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter results\n"
+            "  user_id (str | None): Optional user ID to filter results"
         ),
         instructions=(
-            "Use this after finding an entity of interest to discover related content. "
-            "Set max_depth to control how far to traverse (default 2 hops). "
-            "Results show connected nodes with edge types and relationship weights. "
-            "Useful for understanding how entities relate to events and other entities."
+            "Use this after finding an entity of interest to discover related content.\n\n"
+            "Best paired with: search_entities_semantic (find seed entity first), view_kg_result (inspect results). "
+            "Follow up with: view_kg_result using handle_id. "
+            "Set max_depth to control how far to traverse (default 2 hops)."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -595,14 +726,35 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            A "Broad Discovery" tool. It performs a parallel semantic (vector) search across three distinct layers of the video graph: Entities (people/objects), Events (long-term actions), and Micro-events (frame-level actions). It is optimized for speed and diversity of context.
-            """
+            "A 'Broad Discovery' tool. Performs parallel semantic (vector) search across three distinct layers: "
+            "Entities (people/objects), Events (long-term actions), and Micro-events (frame-level actions). "
+            "Optimized for speed and diversity of context.\n\n"
+            "Typical workflow - Broad discovery:\n"
+            "  1. This tool - broad search across all layers (FIRST PASS)\n"
+            "  2. view_kg_result - inspect results using handle_id\n"
+            "  3. search_entities_semantic/search_events - drill down into specific layers\n"
+            "  4. traverse_from_entity - explore relationships from found entities\n\n"
+            "When to use:\n"
+            "  - User's intent is broad or exploratory (e.g., What's happening in this video?)\n"
+            "  - First pass to identify relevant content before diving deeper\n"
+            "  - General questions about video content\n\n"
+            "Related tools:\n"
+            "  - search_entities_semantic: Entity-only search\n"
+            "  - search_events: Event-only search\n"
+            "  - search_micro_events: Micro-event-only search\n"
+            "  - view_kg_result: Inspect cached results\n\n"
+            "Args:\n"
+            "  query (str): Search query text (REQUIRED)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  min_score (float): Minimum similarity score threshold (default 0.4)\n"
+            "  top_k (int): Number of results per collection (default 5)"
         ),
         instructions=(
-            "Use this when the user's intent is broad or exploratory (e.g., What's happening in this video?)"
-            "Use this as the 'First Pass' tool to identify which video segments or objects are relevant before diving deeper."
-            "When the user asks a general question about video content, start with multi_granularity_search. It returns a snapshot of relevant entities and actions. If the results are too broad, use the returned Handle ID with view_kg_result to inspect the details."
+            "Use this when the user's intent is broad or exploratory.\n\n"
+            "Use this as the 'First Pass' tool to identify which video segments or objects are relevant before diving deeper. "
+            "Best paired with: view_kg_result (inspect results), search_entities_semantic/search_events (drill down). "
+            "Follow up with: view_kg_result using handle_id, then specific layer search tools."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -681,16 +833,36 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Keyword-based BM25 full-text search across knowledge graph collections.
-            Uses ArangoSearch with inverted indexes for fast keyword and phrase matching.
-            """
+            "Keyword-based BM25 full-text search across knowledge graph collections. "
+            "Uses ArangoSearch with inverted indexes for fast keyword and phrase matching.\n\n"
+            "Typical workflow - Keyword search:\n"
+            "  1. This tool - find exact keyword matches\n"
+            "  2. view_kg_result - inspect results using handle_id\n"
+            "  3. traverse_from_entity - explore relationships from found entities\n"
+            "  4. Or triple_hybrid_search - for more comprehensive search\n\n"
+            "When to use:\n"
+            "  - Exact keyword matching when semantic search is not needed\n"
+            "  - Finding specific names, technical terms, or exact phrases\n"
+            "  - Fast keyword search across all KG collections\n\n"
+            "Related tools:\n"
+            "  - triple_hybrid_search: More powerful search combining BM25 + semantic + graph\n"
+            "  - search_entities_semantic: Semantic entity search\n"
+            "  - view_kg_result: Inspect cached results\n"
+            "  - ocr.search_ocr_text: For text visible in frames\n\n"
+            "Args:\n"
+            "  query (str): Search query text - keywords/phrases (REQUIRED)\n"
+            "  collections (list[str] | None): Optional list of collections to search. "
+            "Valid values: ['entities', 'events', 'micro_events', 'communities']. Default: all\n"
+            "  top_k (int): Number of results per collection (default 10)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  min_score (float): Minimum BM25 score threshold (default 0.1)"
         ),
         instructions=(
-            "Use this for exact keyword matching when semantic search is not needed. "
-            "Supports searching across entities, events, micro_events, and communities. "
-            "Use the 'collections' parameter to limit which collections to search. "
-            "Good for finding specific names, technical terms, or exact phrases."
+            "Use this for exact keyword matching when semantic search is not needed.\n\n"
+            "Best paired with: view_kg_result (inspect results), triple_hybrid_search (more powerful alternative). "
+            "Follow up with: view_kg_result using handle_id. "
+            "Use the 'collections' parameter to limit which collections to search."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -1125,18 +1297,41 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Triple hybrid search combining BM25 keyword search, semantic vector search, and graph-based retrieval.
-            Uses Reciprocal Rank Fusion (RRF) to merge and rank results from all three methods.
-            The most powerful retrieval method for finding relevant content.
-            """
+            "Triple hybrid search combining BM25 keyword search, semantic vector search, and graph-based retrieval. "
+            "Uses Reciprocal Rank Fusion (RRF) to merge and rank results from all three methods. "
+            "The most powerful retrieval method for finding relevant content.\n\n"
+            "Typical workflow - Comprehensive search:\n"
+            "  1. This tool - multi-method search (most powerful)\n"
+            "  2. view_kg_result - inspect ranked results\n"
+            "  3. traverse_from_entity - explore relationships from top entities\n"
+            "  4. utility.extract_frames_by_time_window - verify findings visually\n\n"
+            "When to use:\n"
+            "  - Primary retrieval tool for complex queries\n"
+            "  - Need comprehensive search combining multiple methods\n"
+            "  - Best results for difficult queries\n\n"
+            "Methods combined:\n"
+            "  1. BM25: Keyword matching for exact terms\n"
+            "  2. Vector: Semantic similarity for meaning\n"
+            "  3. Graph: Relationship-based expansion from seed entities\n\n"
+            "Related tools:\n"
+            "  - search_entities_semantic: Simpler semantic-only search\n"
+            "  - search_bm25: Simpler keyword-only search\n"
+            "  - view_kg_result: Inspect cached results\n"
+            "  - retrieve_for_rag: Comprehensive RAG retrieval\n\n"
+            "Args:\n"
+            "  query (str): Search query text (REQUIRED)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  top_k (int): Number of results to return (default 10)\n"
+            "  seed_entities (list[str] | None): Optional entity keys for graph-based expansion\n"
+            "  search_all_collections (bool): Search across all collections if True (default False)"
         ),
         instructions=(
-            "Use this as the primary retrieval tool for complex queries. "
+            "Use this as the primary retrieval tool for complex queries.\n\n"
             "Combines keyword matching (BM25), semantic understanding (vectors), and graph relationships. "
-            "Set search_all_collections=True to search across entities, events, micro_events, and communities. "
-            "Provide seed_entities for graph-based expansion from known entities. "
-            "RRF score combines all signals for optimal ranking."
+            "Best paired with: view_kg_result (inspect results), traverse_from_entity (explore relationships). "
+            "Follow up with: view_kg_result using handle_id. "
+            "Set search_all_collections=True to search across entities, events, micro_events, and communities."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -1177,17 +1372,45 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            Comprehensive RAG retrieval from the knowledge graph combining all retrieval methods.
-            Retrieves entities, events, micro-events, communities, and graph context for RAG pipelines.
-            """
+            "Comprehensive RAG retrieval from the knowledge graph combining all retrieval methods. "
+            "Retrieves entities, events, micro-events, communities, and graph context for RAG pipelines.\n\n"
+            "Typical workflow - RAG context building:\n"
+            "  1. This tool - comprehensive retrieval for RAG\n"
+            "  2. view_kg_result - inspect retrieved context\n"
+            "  3. traverse_from_entity - get additional relationship context\n"
+            "  4. utility.get_related_asr_from_segment - supplement with ASR context\n\n"
+            "When to use:\n"
+            "  - Building context for LLM-based question answering\n"
+            "  - Comprehensive retrieval across all graph element types\n"
+            "  - Preparing structured context for RAG applications\n\n"
+            "Retrieval includes:\n"
+            "  - Entities (via triple-hybrid or semantic search)\n"
+            "  - Events (semantic search)\n"
+            "  - Micro-events (semantic search)\n"
+            "  - Communities (semantic search)\n"
+            "  - Graph context via traversal\n\n"
+            "Related tools:\n"
+            "  - triple_hybrid_search: Entity-focused hybrid search\n"
+            "  - view_kg_result: Inspect retrieved context\n"
+            "  - search_entities_semantic: Entity-only search\n"
+            "  - utility.get_related_asr_from_segment: Supplement with ASR\n\n"
+            "Args:\n"
+            "  query (str): Search query text (REQUIRED)\n"
+            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
+            "  user_id (str | None): Optional user ID to filter\n"
+            "  top_k_entities (int): Number of entities to retrieve (default 10)\n"
+            "  top_k_events (int): Number of events to retrieve (default 5)\n"
+            "  top_k_micro (int): Number of micro-events to retrieve (default 5)\n"
+            "  top_k_communities (int): Number of communities to retrieve (default 3)\n"
+            "  enable_traversal (bool): Enable graph traversal from top entities (default True)\n"
+            "  traversal_depth (int): Graph traversal depth (default 1)\n"
+            "  use_triple_hybrid (bool): Use triple-hybrid for entity search (default True)"
         ),
         instructions=(
-            "Use this when building context for LLM-based question answering. "
+            "Use this when building context for LLM-based question answering.\n\n"
             "Performs comprehensive retrieval across all graph element types. "
-            "Optionally uses triple-hybrid search for entity retrieval. "
-            "Includes graph traversal to add relationship context. "
-            "Returns structured context ready for RAG applications. "
+            "Best paired with: view_kg_result (inspect context), utility.get_related_asr_from_segment (supplement with ASR). "
+            "Follow up with: view_kg_result using handle_id. "
             "Adjust top_k_* parameters to control context size."
         ),
         cache_results=True,
@@ -1444,16 +1667,42 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            """
-            View cached knowledge graph search results from previous tool calls.
-            Retrieve detailed information using the handle_id returned by search tools.
-            """
+            "View cached knowledge graph search results from previous tool calls. "
+            "Retrieve detailed information using the handle_id returned by search tools.\n\n"
+            "This tool is the companion to all KG search tools:\n"
+            "  - search_entities_semantic\n"
+            "  - search_events\n"
+            "  - search_micro_events\n"
+            "  - search_communities\n"
+            "  - traverse_from_entity\n"
+            "  - multi_granularity_search\n"
+            "  - search_bm25\n"
+            "  - triple_hybrid_search\n"
+            "  - retrieve_for_rag\n\n"
+            "Typical workflow:\n"
+            "  1. Call any KG search tool (results are automatically cached)\n"
+            "  2. This tool - inspect cached results with different verbosity levels\n"
+            "  3. Use entity_key or event details for further exploration\n\n"
+            "View modes:\n"
+            "  - 'brief': Top N results with essential info (default)\n"
+            "  - 'detailed': Top N results with full details\n"
+            "  - 'full': All results with full details\n\n"
+            "Related tools:\n"
+            "  - All KG search tools (they populate this cache)\n"
+            "  - traverse_from_entity: Use entity_key from results for exploration\n"
+            "  - view_cache_result (Search toolkit): For video/image/audio results\n"
+            "  - view_ocr_result (OCR toolkit): For OCR results\n\n"
+            "Args:\n"
+            "  handle_id (str): Handle ID from previous search (REQUIRED)\n"
+            "  view_mode (str): 'brief' (top N summary), 'detailed' (full details), 'full' (all results). Default: 'brief'\n"
+            "  top_n (int): Number of results to show in brief/detailed mode. Default: 5\n\n"
+            "Note: This tool does NOT accept user_id or video_ids parameters."
         ),
         instructions=(
-            "Use this to inspect results from previous searches using the handle_id. "
-            "view_mode options: 'brief' (top N summary), 'detailed' (full details for top N), 'full' (all results). "
-            "Useful for drilling down into results after an initial search. "
-            "Handle IDs are returned by all search tools (search_entities_semantic, triple_hybrid_search, etc.)."
+            "Use this to inspect results from previous searches using the handle_id.\n\n"
+            "Best paired with: all KG search tools (they populate this cache). "
+            "Follow up with: traverse_from_entity using entity_key from results. "
+            "Alternative view tools: view_cache_result (Search), view_ocr_result (OCR)."
         ),
     )
     def view_kg_result(
