@@ -1,9 +1,10 @@
 from loguru import logger
-from typing import Annotated
+from typing import Annotated, AsyncIterator, Union
 from dataclasses import dataclass
 
 from agno.agent import Agent
 from agno.models.base import Model
+from agno.run.agent import RunOutput, RunOutputEvent
 from agno.tools import tool, Toolkit
 
 from videodeepsearch.agent.member.worker.agent import get_worker_agent
@@ -44,7 +45,14 @@ class SpawnWorkerToolkit(Toolkit):
         self.worker_instructions = worker_instructions
         self.tool_selector = tool_selector
 
-        super().__init__(name="spawn_worker_toolkit")
+        super().__init__(
+            name="spawn_worker_toolkit",
+            tools=[
+                self.get_available_worker_tools,
+                self.get_available_models,
+                self.spawn_and_run_worker,
+            ],
+        )
 
     @tool(
         description=(
@@ -150,12 +158,17 @@ class SpawnWorkerToolkit(Toolkit):
                 "Pass [] for ALL tools."
             ),
         ] = [],
-    ) -> str:
-        """Spawn a Worker Agent, run it on a specific task, and return its result."""
+    ) -> AsyncIterator[Union[RunOutputEvent, str]]:
+        """Spawn a Worker Agent, run it on a specific task, and return its result.
+
+        Events from the worker agent are yielded directly and propagate up
+        to the parent team's stream. The final result is yielded as a string.
+        """
         worker_model = self.worker_models.get(model_name)
         if worker_model is None:
             available = list(self.worker_models.keys())
-            return f"Error: Model '{model_name}' not found. Available: {available}"
+            yield f"Error: Model '{model_name}' not found. Available: {available}"
+            return
 
         logger.info(
             f"[SpawnWorkerToolkit] Spawning {agent_name!r} | "
@@ -175,15 +188,42 @@ class SpawnWorkerToolkit(Toolkit):
             functions=resolved_tools,
         )
 
-        try:
-            run_output = await worker.arun(input=task)
-            result = run_output.content or "Worker completed but returned no content."
-            logger.info(f"[SpawnWorkerToolkit] Worker {agent_name!r} finished.")
-            return result
-        except Exception as e:
-            error_msg = f"Worker '{agent_name}' failed: {e}"
-            logger.error(error_msg, exc_info=True)
-            return error_msg
+        # Get parent run_id from the Function's _run_context
+        # This links worker events to the parent team's run
+        parent_run_id = None
+        func = self.async_functions.get("spawn_and_run_worker")
+        if func and func._run_context:
+            parent_run_id = func._run_context.run_id
+
+        stream = worker.arun(input=task, stream_events=True, stream=True)
+
+        final_result = ""
+        worker_run_output: RunOutput | None = None
+
+        async for chunk in stream:
+            # chunk can be RunOutputEvent or RunOutput
+            # RunOutput is the final result object, skip it for now
+            if isinstance(chunk, RunOutput):
+                worker_run_output = chunk
+                continue
+
+            
+            if parent_run_id and hasattr(chunk, "parent_run_id"):
+                chunk.parent_run_id = chunk.parent_run_id or parent_run_id
+
+            yield chunk
+
+            if hasattr(chunk, "content") and chunk.content:
+                final_result += str(chunk.content)
+
+        if worker_run_output and worker_run_output.content:
+            result = str(worker_run_output.content)
+        elif final_result:
+            result = final_result
+        else:
+            result = "Worker completed but returned no content."
+
+        yield result
 
     def _resolve_tools(self, tool_names: list[str]):
         """Resolve tool_names to Function objects, falling back to ALL if empty."""

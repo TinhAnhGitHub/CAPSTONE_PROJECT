@@ -57,30 +57,6 @@ A detailed, ordered execution plan where each step specifies:
 - Define success criteria for each step
 </planning_methodology>
 
-<tool_matching_guide>
-**Search Tasks (VideoSearchToolkit):**
-- Visual similarity queries: search.get_images_from_qwenvl_query
-- Segment search: search.get_segments_from_qwenvl_query
-- Audio search: search.get_audio_from_query
-
-**Metadata Tasks (VideoMetadataToolkit):**
-- Video information: video.get_video_info
-- Frame extraction: video.extract_frames
-- Temporal navigation: video.get_segment_info
-
-**Text Search Tasks (OCRSearchToolkit):**
-- Text in frames: ocr.search_ocr_text
-
-**Reasoning Tasks (LLMToolkit):**
-- Complex analysis: llm.analyze_with_llm
-- Summarization: llm.summarize_content
-
-**Knowledge Graph Tasks (KGSearchToolkit):**
-- Entity relationships: kg.query_knowledge_graph
-
-**Utility Tasks (UtilityToolkit):**
-- General utilities: utility.format_results
-</tool_matching_guide>
 
 <output_format>
 Return your plan as a structured JSON object with:

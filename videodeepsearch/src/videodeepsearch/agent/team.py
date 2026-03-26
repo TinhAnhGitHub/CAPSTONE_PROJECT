@@ -1,5 +1,6 @@
 import logging
-from typing import Any, AsyncGenerator
+from typing import Any
+from collections.abc import AsyncGenerator
 
 from agno.db.base import AsyncBaseDb, BaseDb
 from agno.learn.config import LearningMode, SessionContextConfig
@@ -30,6 +31,7 @@ from videodeepsearch.agent.member.orchestrator.agent import get_orchestrator_age
 from videodeepsearch.agent.member.orchestrator.prompt import (
     ORCHESTRATOR_DESCRIPTION,
     ORCHESTRATOR_INSTRUCTIONS,
+    ORCHESTRATOR_SYSTEM_PROMPT,
 )
 
 from videodeepsearch.agent.member.planning.agent import get_planning_agent
@@ -101,6 +103,7 @@ def _get_model(models: dict[str, Model], key: str) -> Model:
 def build_video_search_team(
     session_id: str,
     user_id: str,
+    list_video_ids: list[str],
     models: dict[str, Model],
     worker_models: dict[str, WorkerModel],
     db: AsyncBaseDb | BaseDb,
@@ -125,6 +128,9 @@ def build_video_search_team(
                 └── Workers (spawned dynamically)
 
     Args:
+        session_id: Session identifier
+        user_id: User ID for context binding to tools
+        list_video_ids: List of video IDs to search within
         models: Dict mapping model names to Model instances:
             - "greeter": Lead agent - coordinates team, talks to user
             - "orchestrator": Coordinates workers, executes plans
@@ -136,17 +142,29 @@ def build_video_search_team(
     greeter_model = _get_model(models, "greeter")
     orchestrator_model = _get_model(models, "orchestrator")
     planning_model = _get_model(models, "planning")
+    
+    llm_tool_model = _get_model(models, "llm_tool")
 
     factories = dict(
-        search=make_search_factory(
+        search_factory=make_search_factory(
             image_qdrant_client, segment_qdrant_client, audio_qdrant_client,
-            qwenvl_client, mmbert_client, splade_client,
+            qwenvl_client, mmbert_client, splade_client=splade_client,
+            user_id=user_id,
+            video_ids=list_video_ids,
         ),
-        utility=make_utility_factory(postgres_client, minio_client),
-        video=make_video_metadata_factory(postgres_client, minio_client),
-        ocr=make_ocr_factory(es_ocr_client, mmbert_client),
-        llm=make_llm_factory(orchestrator_model),
-        kg=make_kg_factory(arango_db, mmbert_client),
+        utility_factory=make_utility_factory(postgres_client, minio_client),
+        video_metadata_factory=make_video_metadata_factory(postgres_client, minio_client),
+        ocr_factory=make_ocr_factory(
+            es_ocr_client, mmbert_client,
+            user_id=user_id,
+            video_ids=list_video_ids,
+        ),
+        llm_factory=make_llm_factory(llm_tool_model),
+        kg_factory=make_kg_factory(
+            arango_db, mmbert_client,
+            user_id=user_id,
+            video_ids=list_video_ids,
+        ),
     )
 
     tool_selector = _build_tool_selector(**factories)
@@ -170,7 +188,7 @@ def build_video_search_team(
         session_id=session_id, user_id=user_id, model=orchestrator_model, db=db,
         spawn_agent_toolkit=spawn_worker_toolkit,
         description=ORCHESTRATOR_DESCRIPTION,
-        system_prompt="",
+        system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
         instructions=[ORCHESTRATOR_INSTRUCTIONS],
     )
 
@@ -276,6 +294,7 @@ async def ignite_workflow(
     team = build_video_search_team(
         session_id=session_id,
         user_id=user_id,
+        list_video_ids=list_video_ids,
         models=models,
         worker_models=worker_models,
         db=db,

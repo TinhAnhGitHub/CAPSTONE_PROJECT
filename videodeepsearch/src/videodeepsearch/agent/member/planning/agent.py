@@ -39,14 +39,11 @@ def get_planning_agent(
         ),
     )
 
-    # Handle both Toolkit and ToolRegistry
     if isinstance(planning_toolkit, ToolRegistry):
-        # ToolRegistry provides context about available tools
         tool_context = planning_toolkit.generate_planning_context()
         enhanced_instructions = instructions + [tool_context]
         tools_list = []
     else:
-        # Toolkit provides actual tools
         enhanced_instructions = instructions
         tools_list = [planning_toolkit]
 

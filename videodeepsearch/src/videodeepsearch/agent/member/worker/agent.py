@@ -1,6 +1,7 @@
 from agno.agent import Agent
 from agno.models.base import Model
 from agno.tools import Toolkit, Function
+from agno.models.openrouter import OpenRouter
 
 from .prompt import WORKER_SYSTEM_PROMPT
 

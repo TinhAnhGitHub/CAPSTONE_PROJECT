@@ -13,10 +13,11 @@ ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_INSTRUCTIONS = """
     - Review plan for feasibility before execution
 
 3. **Spawn Workers**
-    - For each step in the plan, call spawn_and_run_worker()
+    - Identify independent steps that can run in parallel
+    - Spawn MULTIPLE workers at once for parallel execution
+    - Each worker MUST have at least 5-6 tools assigned
     - Match model_name to task type (vision tasks → qwenvl/mmbert)
-    - Pass only necessary tool_names to each worker
-    - Workers with no dependencies can run in parallel
+    - Pass complementary tools to each worker (search + utility + metadata)
     - Store each worker result in session_state
 
 4. **Handle Worker Results**
@@ -40,10 +41,14 @@ ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_INSTRUCTIONS = """
 
 **Tool Selection Quick Reference:**
 - Visual search → search.get_images_from_qwenvl_query
-- Caption search → ocr.search_vietnamese_captions
+- Caption search → search.get_images_from_caption_query_mmbert
+- Segment search → search.get_segments_from_qwenvl_query or search.get_segments_from_event_query_mmbert
+- Audio search → search.get_audio_from_query_dense or search.get_audio_from_query_hybrid
 - Text in frames → ocr.search_ocr_text
-- Video info → video.get_video_info
-- Frame extraction → video.extract_frames
+- Video metadata → video.get_video_metadata, video.list_user_videos, video.get_video_timeline
+- Frame extraction → utility.extract_frames_by_time_window, utility.extract_frame_at_time
+- Query enhancement → llm.enhance_visual_query, llm.enhance_textual_query
+- Knowledge graph → kg.search_entities_semantic, kg.search_events, kg.triple_hybrid_search
 
 **Session State Keys to Maintain:**
 - current_step: Which plan step is executing
@@ -101,10 +106,11 @@ A synthesized, coherent response that:
 3. Receive plan with: steps, tools, models, expected outputs, dependencies
 
 **Phase 3: Execute Plan**
-1. Spawn workers for each step using spawn_and_run_worker()
-2. Workers execute in parallel when dependencies allow
-3. Store each worker's result in session_state
-4. Handle worker failures gracefully (retry once, then report)
+1. Identify which steps can run in parallel (no dependencies)
+2. Spawn MULTIPLE workers at once for parallel steps using spawn_and_run_worker()
+3. Ensure each worker has AT LEAST 5-6 tools assigned
+4. Store each worker's result in session_state
+5. Handle worker failures gracefully (retry once, then report)
 
 **Phase 4: Synthesize Results**
 1. Combine results from all workers
@@ -122,6 +128,19 @@ A synthesized, coherent response that:
 - user_demand: The original user query
 - model_name: Model matching the task type (vision → qwenvl/mmbert, text → language model)
 - tool_names: List of tools the worker needs (format: 'toolkit.function_name')
+
+**CRITICAL: Minimum Tools Per Worker**
+- Each worker MUST be assigned AT LEAST 5-6 tools
+- This ensures workers have sufficient capabilities to handle complex tasks
+- Include complementary tools (e.g., search + utility + metadata tools together)
+- Example for visual search worker: ['search.get_images_from_qwenvl_query', 'search.get_segments_from_qwenvl_query', 'video.get_video_metadata', 'utility.extract_frames_by_time_window', 'llm.enhance_visual_query', 'kg.search_entities_semantic']
+
+**Parallel Worker Spawning**
+- Spawn MULTIPLE workers at once when tasks are independent
+- Workers with no dependencies can and should run in parallel
+- Call spawn_and_run_worker() multiple times in a single response for parallel execution
+- Example: Spawn 3-4 workers simultaneously for different aspects of the same query
+- Parallel spawning reduces total execution time significantly
 
 **Worker Execution:**
 - Workers are isolated with their own toolkit instances
@@ -161,7 +180,8 @@ A synthesized, coherent response that:
 
 <constraints>
 - ALWAYS consult Planning Agent FIRST before spawning workers
-- Never spawn more than 5 workers per request
+- Each worker MUST have at least 5-6 tools assigned (never send workers with fewer tools)
+- Spawn MULTIPLE workers in parallel when tasks are independent
 - Store ALL intermediate results in session_state
 - Handle failures gracefully — never crash the workflow
 - Synthesize results into user-friendly format
