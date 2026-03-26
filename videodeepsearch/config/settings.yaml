@@ -1,134 +1,119 @@
-# VideoDeepSearch Configuration
-# Override via env vars: VDS_<SECTION>_<KEY> (e.g., VDS_STORAGE_POSTGRES_HOST)
-
-# -----------------------------------------------------------------------------
-# LLM Provider Configuration
-# -----------------------------------------------------------------------------
 llm_provider:
-  provider: "openrouter"
-  base_url: "https://openrouter.ai/api/v1"
-
+  provider: openrouter
+  base_url: https://openrouter.ai/api/v1
   agents:
     greeter:
-      model_id: "openai/gpt-4o-mini"
+      model_id: openai/gpt-4o-mini
       temperature: 0.7
       max_tokens: 1024
     orchestrator:
-      model_id: "openai/gpt-4o"
+      model_id: openai/gpt-4o
       temperature: 0.3
       max_tokens: 2048
     planning:
-      model_id: "openai/gpt-4o"
+      model_id: openai/gpt-4o
       temperature: 0.2
       max_tokens: 4096
-
-  workers:
-    - name: "default"
-      model_id: "openai/gpt-4o-mini"
-      description: "General-purpose worker for most tasks"
-      strengths: ["fast", "cheap", "general"]
+    llm_tool:
+      model_id: openai/gpt-4o-mini
       temperature: 0.3
       max_tokens: 2048
-    - name: "vision"
-      model_id: "openai/gpt-4o"
-      description: "Vision-capable model for multimodal tasks"
-      strengths: ["vision", "multimodal", "image-analysis"]
-      temperature: 0.3
-      max_tokens: 4096
-    - name: "reasoning"
-      model_id: "openai/o1-mini"
-      description: "Reasoning model for complex analysis"
-      strengths: ["reasoning", "analysis", "complex-tasks"]
-      max_tokens: 8192
-
-# -----------------------------------------------------------------------------
-# Storage
-# -----------------------------------------------------------------------------
+  workers:
+  - name: default
+    model_id: openai/gpt-4o-mini
+    description: General-purpose worker for most tasks
+    strengths:
+    - fast
+    - cheap
+    - general
+    temperature: 0.3
+    max_tokens: 2048
+  - name: vision
+    model_id: openai/gpt-4o
+    description: Vision-capable model for multimodal tasks
+    strengths:
+    - vision
+    - multimodal
+    - image-analysis
+    temperature: 0.3
+    max_tokens: 4096
+  - name: reasoning
+    model_id: openai/o1-mini
+    description: Reasoning model for complex analysis
+    strengths:
+    - reasoning
+    - analysis
+    - complex-tasks
+    max_tokens: 8192
 storage:
   postgres:
-    host: "localhost"
+    host: localhost
     port: 5432
-    database: "video-pipeline"
-    username: "admin123"
-    password: "admin123"
+    database: video-pipeline
+    username: admin123
+    password: admin123
     url: null
-
   minio:
-    host: "localhost"
-    port: "9000"
-    access_key: "minioadmin"
-    secret_key: "minioadmin"
+    host: localhost
+    port: '9000'
+    access_key: minioadmin
+    secret_key: minioadmin
     secure: false
     buckets:
-      videos: "videos"
-      artifacts: "video-artifacts"
-      asr: "asr-data"
-
+      videos: videos
+      artifacts: video-artifacts
+      asr: asr-data
   qdrant:
-    host: "localhost"
+    host: localhost
     port: 6333
     grpc_port: 6334
     prefer_grpc: true
-    collection_name: "video_embeddings"
-
+    collection_name: video_embeddings
   elasticsearch:
-    host: "localhost"
+    host: localhost
     port: 9200
     user: null
     password: null
     use_ssl: false
     verify_certs: true
     request_timeout: 30
-    index_name: "video_ocr_docs"
-
+    index_name: video_ocr_docs
   arangodb:
-    host: "http://localhost:8529"
-    database: "video_kg"
-    username: "root"
-    password: ""
-    graph_name: "video_knowledge_graph"
-    view_name: "video_kg_search_view"
+    host: http://localhost:8529
+    database: video_kg
+    username: root
+    password: ''
+    graph_name: video_knowledge_graph
+    view_name: video_kg_search_view
     collections:
-      entities: "entities"
-      events: "events"
-      micro_events: "micro_events"
-      communities: "communities"
-      relations: "relations"
+      entities: entities
+      events: events
+      micro_events: micro_events
+      communities: communities
+      relations: relations
     indexes:
       semantic_dim: 768
       structural_dim: 128
-
-# -----------------------------------------------------------------------------
-# Inference Services
-# -----------------------------------------------------------------------------
 inference:
   qwenvl:
-    base_url: "http://localhost:8000"
+    base_url: http://localhost:8000
   mmbert:
-    base_url: "http://localhost:8009"
-    model_name: "mmbert"
+    base_url: http://localhost:8009
+    model_name: mmbert
   splade:
-    url: "localhost:8001"
-    model_name: "splade"
+    url: http://localhost:8001
+    model_name: splade
     timeout: 30
     verbose: false
     max_batch_size: 32
-
-# -----------------------------------------------------------------------------
-# Cache
-# -----------------------------------------------------------------------------
 cache:
   enabled: true
   ttl: 1800
   dir: null
-
-# -----------------------------------------------------------------------------
-# API Server
-# -----------------------------------------------------------------------------
 server:
-  host: "0.0.0.0"
+  host: 0.0.0.0
   port: 8080
   debug: false
   cors_origins:
-    - "http://localhost:3000"
-    - "http://localhost:5173"
+  - http://localhost:3000
+  - http://localhost:5173
