@@ -19,7 +19,7 @@ CONFIG = {
     ],
     "top_k": 15,
     "queries": {
-        "entities_semantic": "Dunning-Kruger research related to cognitive bias",
+        "entities_semantic": "Singapore International Monetary Exchange SIMEX SGX Singapore Mercantile Exchange",
         "events": "The scene contains SIMEX stock exchange displaying a 40000 dollar  graphic.",
         "micro_events": "Reichelt and Eiffel tower. ",
         "communities": "A community descbibes nick leason and his trading stock market",
@@ -70,10 +70,12 @@ async def test_semantic_entity_search(toolkit: KGSearchToolkit, cfg: dict) -> No
     query = cfg["queries"]["entities_semantic"]
     print(f"Query: '{query}'")
 
-    result = await toolkit.search_entities_semantic(
+    result = await toolkit.search_entities_semantic.entrypoint(
+        toolkit,
         query=query,
         top_k=cfg["top_k"],
-        video_ids=cfg["video_ids"],
+        user_id='tinhanhuser'
+        # video_ids=cfg["video_ids"],
     )
     _print_result(result, "Results")
 
@@ -85,7 +87,8 @@ async def test_event_search(toolkit: KGSearchToolkit, cfg: dict) -> None:
     query = cfg["queries"]["events"]
     print(f"Query: '{query}'")
 
-    result = await toolkit.search_events(
+    result = await toolkit.search_events.entrypoint(
+        toolkit,
         query=query,
         top_k=cfg["top_k"],
         video_ids=cfg["video_ids"],
@@ -100,7 +103,8 @@ async def test_micro_event_search(toolkit: KGSearchToolkit, cfg: dict) -> None:
     query = cfg["queries"]["micro_events"]
     print(f"Query: '{query}'")
 
-    result = await toolkit.search_micro_events(
+    result = await toolkit.search_micro_events.entrypoint(
+        toolkit,
         query=query,
         top_k=cfg["top_k"],
         video_ids=cfg["video_ids"],
@@ -115,7 +119,8 @@ async def test_community_search(toolkit: KGSearchToolkit, cfg: dict) -> None:
     query = cfg["queries"]["communities"]
     print(f"Query: '{query}'")
 
-    result = await toolkit.search_communities(
+    result = await toolkit.search_communities.entrypoint(
+        toolkit,
         query=query,
         top_k=cfg["top_k"],
         video_ids=cfg["video_ids"],
@@ -129,7 +134,8 @@ async def test_multi_granularity_search(toolkit: KGSearchToolkit, cfg: dict) -> 
     query = cfg["queries"]["multi_granularity"]
     print(f"Query: '{query}'")
 
-    result = await toolkit.multi_granularity_search(
+    result = await toolkit.multi_granularity_search.entrypoint(
+        toolkit,
         query=query,
         top_k=cfg["top_k"],
         video_ids=cfg["video_ids"],
@@ -143,7 +149,8 @@ async def test_triple_hybrid_search(toolkit: KGSearchToolkit, cfg: dict) -> None
     query = cfg["queries"]["triple_hybrid"]
     print(f"Query: '{query}'")
 
-    result = await toolkit.triple_hybrid_search(
+    result = await toolkit.triple_hybrid_search.entrypoint(
+        toolkit,
         query=query,
         top_k=15,
         video_ids=cfg["video_ids"],
@@ -159,7 +166,8 @@ async def test_rag_retrieval(toolkit: KGSearchToolkit, cfg: dict) -> None:
     query = cfg["queries"]["rag"]
     print(f"Query: '{query}'")
 
-    result = await toolkit.retrieve_for_rag(
+    result = await toolkit.retrieve_for_rag.entrypoint(
+        toolkit,
         query=query,
         video_ids=cfg["video_ids"],
         top_k_entities=5,
@@ -175,7 +183,8 @@ async def test_graph_traversal(toolkit: KGSearchToolkit, cfg: dict) -> None:
 
     # First, search for an entity to use as seed
     query = cfg["queries"]["entities_semantic"]
-    _ = await toolkit.search_entities_semantic(
+    _ = await toolkit.search_entities_semantic.entrypoint(
+        toolkit,
         query=query,
         top_k=1,
         video_ids=cfg["video_ids"],
@@ -190,7 +199,8 @@ async def test_graph_traversal(toolkit: KGSearchToolkit, cfg: dict) -> None:
             if entity_key:
                 print(f"Starting traversal from entity: {entity_key}")
 
-                result = toolkit.traverse_from_entity(
+                result = toolkit.traverse_from_entity.entrypoint(
+                    toolkit,
                     entity_key=entity_key,
                     max_depth=2,
                 )
@@ -228,7 +238,7 @@ async def main():
         # await test_index_creation(db)
 
         # # 2. Semantic entity search
-        # await test_semantic_entity_search(toolkit, cfg)
+        await test_semantic_entity_search(toolkit, cfg)
 
         # # # 3. Event search
         # await test_event_search(toolkit, cfg)
@@ -243,7 +253,7 @@ async def main():
         # await test_multi_granularity_search(toolkit, cfg)
 
         # # # 7. Triple-hybrid search
-        await test_triple_hybrid_search(toolkit, cfg)
+        # await test_triple_hybrid_search(toolkit, cfg)
 
         # # # 8. RAG retrieval
         # await test_rag_retrieval(toolkit, cfg)
