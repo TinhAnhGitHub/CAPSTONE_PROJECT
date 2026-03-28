@@ -47,6 +47,7 @@ def get_planning_agent(
         enhanced_instructions = instructions
         tools_list = [planning_toolkit]
 
+    print(f"Planning agent: {enhanced_instructions=}")
     return Agent(
         name="Planning_Agent",
         role="Produce a detailed step-by-step execution plan for the given video retrieval demand",
@@ -56,13 +57,18 @@ def get_planning_agent(
         db=db,
         tools=tools_list,
         learning=learning,
+        # Session state inherited from parent teams
         add_learnings_to_context=True,
-        add_session_state_to_context=True,
-        enable_agentic_state=True,
+        # Nested agents must NOT have enable_agentic_state=True
+        add_session_state_to_context=False,
+        enable_agentic_state=False,
         add_datetime_to_context=True,
         markdown=True,
         description=description,
         instructions=enhanced_instructions,
         system_message=system_prompt,
         debug_mode=False,
+        debug_level=1,
+        stream_events=True,
+        stream=False,
     )

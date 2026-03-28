@@ -3,14 +3,12 @@ from typing import Any
 from collections.abc import AsyncGenerator
 
 from agno.db.base import AsyncBaseDb, BaseDb
-from agno.learn.config import LearningMode, SessionContextConfig
-from agno.learn.machine import LearningMachine
 from agno.models.base import Model
 from agno.team import Team
-from agno.team.mode import TeamMode
 from arango.database import StandardDatabase
 
-from videodeepsearch.toolkit.registry import ToolRegistry, get_tool_registry
+from videodeepsearch.toolkit.registry import ToolRegistry
+from videodeepsearch.toolkit.registry import get_tool_registry
 from videodeepsearch.toolkit.factories import (
     make_search_factory,
     make_utility_factory,
@@ -20,30 +18,9 @@ from videodeepsearch.toolkit.factories import (
     make_kg_factory,
 )
 
-from videodeepsearch.agent.member.greeter.agent import get_greeter_agent
-from videodeepsearch.agent.member.greeter.prompt import (
-    GREETER_DESCRIPTION,
-    GREETER_INSTRUCTIONS,
-    GREETER_SYSTEM_PROMPT,
-)
-
-from videodeepsearch.agent.member.orchestrator.agent import get_orchestrator_agent
-from videodeepsearch.agent.member.orchestrator.prompt import (
-    ORCHESTRATOR_DESCRIPTION,
-    ORCHESTRATOR_INSTRUCTIONS,
-    ORCHESTRATOR_SYSTEM_PROMPT,
-)
-
-from videodeepsearch.agent.member.planning.agent import get_planning_agent
-from videodeepsearch.agent.member.planning.prompt import (
-    PLANNING_AGENT_DESCRIPTION,
-    PLANNING_AGENT_INSTRUCTIONS,
-    PLANNING_AGENT_SYSTEM_PROMPT
-)
-
-from videodeepsearch.agent.member.worker.spawn_toolkit import SpawnWorkerToolkit, WorkerModel
+from videodeepsearch.agent.supervisor.greeter import build_videodeepsearch_team
+from videodeepsearch.agent.supervisor.orchestrator import build_orchestrator_team, WorkerModel
 from videodeepsearch.agent.member.worker.tool_selector import ToolSelector
-from videodeepsearch.agent.member.worker.prompt import WORKER_SYSTEM_PROMPT
 
 from videodeepsearch.clients.storage.postgre import PostgresClient
 from videodeepsearch.clients.storage.minio import MinioStorageClient
@@ -79,7 +56,6 @@ def _build_tool_registry(
     llm_factory,
     kg_factory,
 ) -> ToolRegistry:
-    """Populate the ToolRegistry for the PlanningContextToolkit."""
     registry = get_tool_registry()
     registry.register_toolkit(search_factory(), alias="VideoSearchToolkit")
     registry.register_toolkit(utility_factory(), alias="UtilityToolkit")
@@ -121,10 +97,9 @@ def build_video_search_team(
     """Assemble the VideoDeepSearch nested-team hierarchy.
 
     Hierarchy:
-        Greeter (Big Boss)
-        └── Orchestrator Sub-Team
-            ├── Orchestrator Agent
-            └── Planning Agent
+        VideoDeepSearch Team (entry point - supervisor)
+        └── Orchestrator Team (supervisor)
+            └── Planning Agent (member)
                 └── Workers (spawned dynamically)
 
     Args:
@@ -132,17 +107,16 @@ def build_video_search_team(
         user_id: User ID for context binding to tools
         list_video_ids: List of video IDs to search within
         models: Dict mapping model names to Model instances:
-            - "greeter": Lead agent - coordinates team, talks to user
+            - "greeter": Entry point team model
             - "orchestrator": Coordinates workers, executes plans
             - "planning": Generates execution plans
+            - "llm_tool": Model for LLM tools
 
         worker_models: Dict mapping model names to WorkerModel instances.
-            Each WorkerModel includes: model, description, strengths.
     """
     greeter_model = _get_model(models, "greeter")
     orchestrator_model = _get_model(models, "orchestrator")
     planning_model = _get_model(models, "planning")
-    
     llm_tool_model = _get_model(models, "llm_tool")
 
     factories = dict(
@@ -170,94 +144,23 @@ def build_video_search_team(
     tool_selector = _build_tool_selector(**factories)
     tool_registry = _build_tool_registry(**factories)
 
-    spawn_worker_toolkit = SpawnWorkerToolkit(
-        worker_models=worker_models,
-        worker_instructions=[WORKER_SYSTEM_PROMPT],
-        tool_selector=tool_selector,
-    )
-
-    planning_agent = get_planning_agent(
-        session_id=session_id, user_id=user_id, model=planning_model, db=db,
-        description=PLANNING_AGENT_DESCRIPTION,
-        system_prompt=PLANNING_AGENT_SYSTEM_PROMPT,
-        instructions=[PLANNING_AGENT_INSTRUCTIONS],
-        planning_toolkit=tool_registry,
-    )
-
-    orchestrator_agent = get_orchestrator_agent(
-        session_id=session_id, user_id=user_id, model=orchestrator_model, db=db,
-        spawn_agent_toolkit=spawn_worker_toolkit,
-        description=ORCHESTRATOR_DESCRIPTION,
-        system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
-        instructions=[ORCHESTRATOR_INSTRUCTIONS],
-    )
-
-    orchestrator_subteam = Team(
-        name="Orchestrator_SubTeam",
-        role="Handle all video search and retrieval tasks delegated by the Greeter",
-        members=[orchestrator_agent, planning_agent],
+    orchestrator_team = build_orchestrator_team(
+        session_id=session_id,
+        user_id=user_id,
         model=orchestrator_model,
-        mode=TeamMode.coordinate,
+        planning_model=planning_model,
+        worker_models=worker_models,
         db=db,
-        user_id=user_id,
-        session_id=session_id,
-        learning=LearningMachine(
-            db=db,
-            model=orchestrator_model,
-            session_context=SessionContextConfig(
-                mode=LearningMode.ALWAYS,
-                enable_planning=True,
-            ),
-        ),
-        add_learnings_to_context=True,
-        add_session_state_to_context=True,
-        enable_agentic_state=True,
-        add_history_to_context=True,
-        num_history_runs=3,
-        markdown=True,
-        instructions=[
-            "The Orchestrator Agent leads this sub-team.",
-            "Call get_available_models() to see which models you can assign to workers.",
-            "Call get_available_worker_tools() to see all available tool names.",
-            "Always consult the Planning Agent FIRST to get a structured plan.",
-            "In the plan, each step should specify: tool_names, model_name.",
-            "Workers are spawned via spawn_and_run_worker() — NOT as team members.",
-            "Store intermediate results in session_state after each worker completes.",
-            "Synthesise all worker results into a single coherent response.",
-        ],
-        stream=True,
-        stream_events=True,
-        debug_mode=False,
+        tool_selector=tool_selector,
+        tool_registry=tool_registry,
     )
 
-    greeter_agent = get_greeter_agent(
-       session_id=session_id, user_id=user_id, model=greeter_model, db=db,
-       description=GREETER_DESCRIPTION,
-        system_prompt=GREETER_SYSTEM_PROMPT,
-       instructions=[GREETER_INSTRUCTIONS],
-   )
-
-    return Team(
-        name="VideoDeepSearch_Team",
-        role="VideoDeepSearch — AI-powered multi-modal video retrieval system",
-        members=[greeter_agent, orchestrator_subteam],
-        model=greeter_model,  
-        mode=TeamMode.coordinate,
-        db=db,
-        user_id=user_id,
+    return build_videodeepsearch_team(
         session_id=session_id,
-        add_session_state_to_context=True,
-        markdown=True,
-        instructions=[
-            "Greeter is the LEAD agent - it coordinates the entire team.",
-            "Greeter receives user queries and delegates to Orchestrator Sub-Team.",
-            "Greeter is the ONLY agent that communicates directly with the user.",
-            "The Orchestrator Sub-Team handles all technical video retrieval tasks.",
-            "Never expose internal agent names, tool names, or implementation details.",
-        ],
-        stream=True,
-        stream_events=True,
-        debug_mode=False,
+        user_id=user_id,
+        model=greeter_model,
+        members=[orchestrator_team],
+        db=db,
     )
 
 
@@ -280,12 +183,7 @@ async def ignite_workflow(
     es_ocr_client: ElasticsearchOCRClient,
     arango_db: StandardDatabase,
 ) -> AsyncGenerator[dict[str, Any], None]:
-    """Main async entry point for the API layer.
-
-    Args:
-        models: Models for agents (greeter, orchestrator, planning)
-        worker_models: Models for workers with descriptions for planning agent selection
-    """
+    """Main async entry point for the API layer."""
     initial_session_state: dict[str, Any] = {
         "list_video_ids": list_video_ids,
         "user_demand": user_demand,

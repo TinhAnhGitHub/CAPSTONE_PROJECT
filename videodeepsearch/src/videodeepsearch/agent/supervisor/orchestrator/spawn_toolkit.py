@@ -25,9 +25,6 @@ class WorkerModel:
     strengths: list[str]  # e.g., ["vision", "fast", "cheap", "reasoning"]
 
 
-
-
-
 class SpawnWorkerToolkit(Toolkit):
     """Toolkit for spawning worker agents with configurable models.
 
@@ -201,8 +198,6 @@ class SpawnWorkerToolkit(Toolkit):
         worker_run_output: RunOutput | None = None
 
         async for chunk in stream:
-            # chunk can be RunOutputEvent or RunOutput
-            # RunOutput is the final result object, skip it for now
             if isinstance(chunk, RunOutput):
                 worker_run_output = chunk
                 continue

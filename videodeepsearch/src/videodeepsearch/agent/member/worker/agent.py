@@ -68,4 +68,7 @@ def get_worker_agent(
         delay_between_retries=1,
 
         debug_mode=False,
+        debug_level=1,
+        stream_events=True,
+        stream=False,
     )
