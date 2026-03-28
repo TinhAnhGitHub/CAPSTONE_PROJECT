@@ -254,7 +254,6 @@ class VideoMetadataToolkit(Toolkit):
             "  - list_user_videos: List all videos for a user\n"
             "  - get_video_timeline: Get temporal structure\n"
             "  - search.get_images_from_qwenvl_query: Search for visual content\n"
-            "  - utility.extract_frames_by_time_window: Extract frames from video\n\n"
             "Args:\n"
             "  video_id (str): Video ID to get metadata for (REQUIRED)"
         ),
@@ -342,7 +341,6 @@ class VideoMetadataToolkit(Toolkit):
             "  - list_user_videos: Find videos\n"
             "  - get_video_metadata: Get video details\n"
             "  - utility.get_adjacent_segments: Navigate between segments\n"
-            "  - utility.extract_frames_by_time_window: Extract frames in a time range\n"
             "  - search.get_segments_from_event_query_mmbert: Search for events\n\n"
             "Args:\n"
             "  video_id (str): Video ID to generate timeline for (REQUIRED)\n"

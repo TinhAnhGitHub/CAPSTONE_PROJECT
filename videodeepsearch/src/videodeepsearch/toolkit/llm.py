@@ -14,8 +14,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from agno.models.base import Model
 from agno.tools import Toolkit, tool
+from agno.models.message import Message
 from agno.tools.function import ToolResult
+from agno.models.openrouter import OpenRouter
 from pydantic import BaseModel, Field
 
 
@@ -28,9 +31,24 @@ class EnhancedQueryResponse(BaseModel):
     )
 
 
-# =============================================================================
-# Prompt Templates
-# =============================================================================
+VISUAL_ENHANCE_SYSTEM_PROMPT ="""
+You are an expert in multimodal embedding optimization for Qwen-VL models.
+
+Your goal is to generate semantically precise and visually grounded descriptions
+that improve alignment between text and image embeddings.
+
+Guidelines:
+- Focus on clear, concrete descriptions of objects, attributes, and relationships.
+- Describe what is visibly present, not artistic style or abstract interpretation.
+- Include details such as color, shape, position, actions, and environment.
+- Use simple, direct language without poetic or stylistic phrasing.
+- Avoid templates like "a photo of..." unless necessary.
+- Each prompt should represent a distinct semantic perspective of the same concept.
+- Keep each prompt under 25 words.
+- Ensure all outputs are in English.
+"""
+
+
 
 CONTRASTIVE_VISUAL_ENHANCEMENT_PROMPT = """
 You are an expert in CLIP prompt engineering and multimodal retrieval.
@@ -58,7 +76,7 @@ Output: A list of optimized CLIP-style prompts suitable for contrastive retrieva
 Return each prompt on a new line.
 """
 
-CAPTION_ENHANCEMENT_PROMPT = """
+CAPTION_ENHANCEMENT_SYSTEM_PROMPT = """
 You are an expert in image description and semantic query enhancement.
 Create concise but detailed and vivid descriptions for the content described below,
 for the purpose of semantic retrieval or embedding.
@@ -70,14 +88,6 @@ Guidelines:
 - Do not use redundant phrases like "This image shows..." or "This is an image of...".
 - Each description should be concise, under 30 words.
 - Output must be in **English**.
-
-Original query: {raw_query}
-
-Perspective variants to generate:
-{variants}
-
-Output: A list of optimized descriptions for semantic retrieval.
-Each description on a new line.
 """
 
 
@@ -95,13 +105,13 @@ class LLMToolkit(Toolkit):
 
     def __init__(
         self,
-        llm_client: Any,  # agno LLM model instance
+        llm_client: OpenRouter, 
         name: str = "LLM Enhancement Tools",
     ):
         """Initialize the LLMToolkit.
 
         Args:
-            llm_client: agno LLM model instance (e.g., Gemini, Claude, OpenAIChat)
+            llm_client: agno LLM model instance (e.g., Gemini, Claude, OpenRouter)
             name: Toolkit name
         """
         self.llm = llm_client
@@ -112,6 +122,24 @@ class LLMToolkit(Toolkit):
                 self.enhance_textual_query,
             ],
         )
+
+    async def _invoke_llm(self, system_prompt: str, prompt: str) -> str:
+        user_messages = [
+            Message(
+                role='user',
+                content=prompt
+            )
+        ]
+        assistant_message = Message(role='assistant', content=system_prompt)
+        response = await self.llm.ainvoke(messages=user_messages, assistant_message=assistant_message)
+        
+        if hasattr(response, "content"):
+            return response.content #type:ignore
+        if hasattr(response, "messages") and response.messages: #type:ignore
+            for msg in reversed(response.messages): #type:ignore
+                if getattr(msg, "role", None) == "assistant":
+                    return getattr(msg, "content", str(msg))
+        return str(response)
 
     @tool(
         description=(
@@ -171,17 +199,24 @@ class LLMToolkit(Toolkit):
             ToolResult with enhanced query variations (one per line)
         """
         variants_str = "\n".join(f"- {v}" for v in variants)
+        
+        user_prompt = f"""
+        Original query: {raw_query}
 
-        prompt = CONTRASTIVE_VISUAL_ENHANCEMENT_PROMPT.format(
-            raw_query=raw_query,
-            variants=variants_str,
-        )
+        Perspective variants to generate:
+        {variants_str}
+
+        Output:
+        A list of semantically grounded descriptions optimized for Qwen-VL embeddings.
+        Return each prompt on a new line.
+        """
 
         try:
-            response = await self.llm.arun(prompt)
+            content = await self._invoke_llm(
+                system_prompt=VISUAL_ENHANCE_SYSTEM_PROMPT,
+                prompt=user_prompt
+            )
 
-            # Parse response - each line is a query
-            content = response.content if hasattr(response, "content") else str(response)
             enhanced_queries = [
                 line.strip()
                 for line in content.strip().split("\n")
@@ -256,15 +291,18 @@ class LLMToolkit(Toolkit):
         """
         variants_str = "\n".join(f"- {v}" for v in variants)
 
-        prompt = CAPTION_ENHANCEMENT_PROMPT.format(
-            raw_query=raw_query,
-            variants=variants_str,
-        )
+        user_prompt = f"""
+        Original query: {raw_query}
 
+            Perspective variants to generate:
+            {variants_str}
+
+            Output: A list of optimized descriptions for semantic retrieval.
+            Each description on a new line.
+        """
         try:
-            response = await self.llm.arun(prompt)
+            content = await self._invoke_llm(system_prompt=CAPTION_ENHANCEMENT_SYSTEM_PROMPT, prompt=user_prompt)
 
-            content = response.content if hasattr(response, "content") else str(response)
             enhanced_queries = [
                 line.strip()
                 for line in content.strip().split("\n")

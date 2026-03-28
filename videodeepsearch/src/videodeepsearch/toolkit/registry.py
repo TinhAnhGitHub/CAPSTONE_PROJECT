@@ -218,8 +218,8 @@ class ToolRegistry:
         for toolkit_name, tools in sorted(by_toolkit.items()):
             lines.append(f"### {toolkit_name}")
             for tool in sorted(tools, key=lambda t: t.name):
-                short_desc = tool.description.split('.')[0] if tool.description else "No description"
-                lines.append(f"- **{tool.name}**: {short_desc}")
+                desc = tool.description  if tool.description else "No description"
+                lines.append(f"- **{tool.name}**: {desc}")
             lines.append("")
         lines.append("\nUse these tools to execute your plan. Each tool returns a ToolResult with content.")
         return "\n".join(lines)

@@ -146,7 +146,6 @@ class OCRSearchToolkit(Toolkit):
             "Typical workflow - OCR search and verification:\n"
             "  1. This tool - find frames containing specific text\n"
             "  2. view_ocr_result - inspect detailed results with handle_id\n"
-            "  3. utility.extract_frames_by_time_window - extract frames for visual verification\n"
             "  4. utility.get_related_asr_from_image - get spoken context around found text\n\n"
             "When to use:\n"
             "  - Looking for specific words, numbers, or phrases in video frames\n"
@@ -155,8 +154,8 @@ class OCRSearchToolkit(Toolkit):
             "Related tools:\n"
             "  - get_ocr_by_video: Get all OCR text for a specific video\n"
             "  - view_ocr_result: Inspect cached search results\n"
-            "  - utility.extract_frames_by_time_window: Extract frames at found timestamps\n"
-            "  - search.get_images_from_caption_query_mmbert: For image content search (not text)\n\n"
+            "  - search.get_images_from_caption_query_mmbert: For image content search (not text)\n"
+            "  - utility.get_related_asr_from_image: Get spoken context around found text\n\n"
             "Args:\n"
             "  query (str): Text to search for - keywords or phrases (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
@@ -167,7 +166,6 @@ class OCRSearchToolkit(Toolkit):
         instructions=(
             "Use when looking for specific words, numbers, or phrases in video frames. "
             "Supports fuzzy matching to handle OCR recognition errors.\n\n"
-            "Best paired with: view_ocr_result (after), utility.extract_frames_by_time_window (verification). "
             "Follow up with: view_ocr_result using the handle_id from search results."
         ),
         cache_results=True,
@@ -230,7 +228,6 @@ class OCRSearchToolkit(Toolkit):
             "  1. video.list_user_videos - find video ID\n"
             "  2. This tool - get all OCR text for the video\n"
             "  3. view_ocr_result - inspect results with handle_id\n"
-            "  4. utility.extract_frames_by_time_window - extract frames at interesting timestamps\n\n"
             "When to use:\n"
             "  - Need all text from a specific video (documentary, lecture, presentation)\n"
             "  - Reviewing all OCR content for a known video\n"
@@ -306,7 +303,6 @@ class OCRSearchToolkit(Toolkit):
             "Related tools:\n"
             "  - search_ocr_text: Keyword search for text in frames\n"
             "  - get_ocr_by_video: Get all OCR for a video\n"
-            "  - utility.extract_frames_by_time_window: Extract frames at found timestamps\n"
             "  - view_cache_result (Search toolkit): For video/image/audio results\n"
             "  - view_kg_result (KG toolkit): For knowledge graph results\n\n"
             "Args:\n"
@@ -318,7 +314,6 @@ class OCRSearchToolkit(Toolkit):
         instructions=(
             "Use this to inspect cached OCR results without re-running the search.\n\n"
             "Best paired with: search_ocr_text, get_ocr_by_video (they populate this cache). "
-            "Follow up with: utility.extract_frames_by_time_window for visual verification. "
             "Alternative view tools: view_cache_result (Search), view_kg_result (KG)."
         ),
         cache_results=False,

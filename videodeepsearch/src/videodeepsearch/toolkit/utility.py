@@ -101,8 +101,6 @@ class UtilityToolkit(Toolkit):
                 self.get_related_asr_from_image,
                 self.get_adjacent_segments,
                 self.get_adjacent_images,
-                self.extract_frames_by_time_window,
-                self.extract_frame_at_time,
             ],
         )
         
@@ -115,11 +113,9 @@ class UtilityToolkit(Toolkit):
             "  1. search.get_segments_from_event_query_mmbert - find matching segments\n"
             "  2. Or search.get_segments_from_qwenvl_query - find matching segments\n"
             "  3. This tool - get spoken context around found segment\n"
-            "  4. utility.extract_frames_by_time_window - extract frames for visual verification\n\n"
             "Related tools:\n"
             "  - get_related_asr_from_image: For ASR context around a specific image/frame\n"
             "  - get_adjacent_segments: For temporal navigation to neighboring segments\n"
-            "  - extract_frames_by_time_window: For extracting raw frames\n\n"
             "Args:\n"
             "  video_id (str): Video ID (REQUIRED)\n"
             "  segment_start_time (str): Segment start time in HH:MM:SS.sss format (REQUIRED)\n"
@@ -131,7 +127,6 @@ class UtilityToolkit(Toolkit):
             "user query mentioned dialogue/speech/audio events, "
             "want to verify if visual match aligns with spoken content.\n\n"
             "Best paired with: search.get_segments_from_event_query_mmbert, search.get_segments_from_qwenvl_query (find segments first). "
-            "Follow up with: extract_frames_by_time_window for visual verification."
         ),
     )
     async def get_related_asr_from_segment(
@@ -227,11 +222,9 @@ class UtilityToolkit(Toolkit):
             "  1. search.get_images_from_caption_query_mmbert - find matching images\n"
             "  2. Or search.get_images_from_qwenvl_query - find matching images\n"
             "  3. This tool - get ASR context around the found image/frame\n"
-            "  4. utility.extract_frame_at_time - extract exact frame for visual verification\n\n"
             "Related tools:\n"
             "  - get_related_asr_from_segment: For ASR context around a video segment\n"
             "  - get_adjacent_images: For temporal navigation to neighboring frames\n"
-            "  - extract_frame_at_time: For extracting a single frame image\n\n"
             "Args:\n"
             "  video_id (str): Video ID (REQUIRED)\n"
             "  image_timestamp (str): Image timestamp in HH:MM:SS.sss format (REQUIRED)\n"
@@ -241,7 +234,6 @@ class UtilityToolkit(Toolkit):
             "Use when: found a promising image but need verbal context around that moment, "
             "user query mentioned dialogue at specific frames.\n\n"
             "Best paired with: search.get_images_from_caption_query_mmbert, search.get_images_from_qwenvl_query (find images first). "
-            "Follow up with: extract_frame_at_time for precise visual verification."
         ),
     )
     async def get_related_asr_from_image(
@@ -434,7 +426,6 @@ class UtilityToolkit(Toolkit):
             "Related tools:\n"
             "  - get_adjacent_segments: For segment-level navigation (coarser granularity)\n"
             "  - get_related_asr_from_image: Get ASR context for any image/frame\n"
-            "  - extract_frame_at_time: Extract single frame image for inspection\n\n"
             "Args:\n"
             "  video_id (str): Video ID (REQUIRED)\n"
             "  image_frame_index (int): Reference image frame index (REQUIRED)\n"
@@ -514,185 +505,7 @@ class UtilityToolkit(Toolkit):
 
         return ToolResult(content=format_interface_list(result_images, "image"))
 
-    @tool(
-        description=(
-            "Extract raw frames from a video time window at specified frame rate. "
-            "Retrieves actual frame images from a video between two timestamps, "
-            "sampled at a custom frame rate. Returns images that can be viewed directly.\n\n"
-            "Typical workflow - Use for visual verification:\n"
-            "  1. search.get_images_* - find matching images first\n"
-            "  2. Or search.get_segments_* - find matching segments first\n"
-            "  3. Or utility.get_related_asr_from_* - identify time range from ASR context\n"
-            "  4. This tool - extract frames for visual inspection or shown to user\n\n"
-            "Common use cases:\n"
-            "  - fps_sample_rate=1: One frame per second (good for timeline overview)\n"
-            "  - fps_sample_rate=2: Two frames per second (moderate detail)\n"
-            "  - fps_sample_rate=5-10: Higher detail for motion analysis\n"
-            "  - fps_sample_rate=30: Maximum detail (equivalent to original video)\n\n"
-            "Related tools:\n"
-            "  - extract_frame_at_time: Extract single frame at a specific timestamp\n"
-            "  - get_adjacent_images: Navigate frame-by-frame relative to a reference\n"
-            "  - view_cache_result: Use handle_id for cached search results\n\n"
-            "Args:\n"
-            "  video_id (str): Video ID (REQUIRED)\n"
-            "  start_time (str): Start time in HH:MM:SS.sss format (REQUIRED)\n"
-            "  end_time (str): End time in HH:MM:SS.sss format (REQUIRED)\n"
-            "  fps_sample_rate (int): How many frames per second to sample (default 1)"
-        ),
-        instructions=(
-            "Use when: need to visually inspect specific time range in detail, "
-            "want to show frames directly for analysis, "
-            "verifying visual content in precise time window.\n\n"
-            "Best paired with: search tools (find what you want), utility.extract_frame_at_time (single frame). "
-            "Follow up with: view_cache_result for Cached results inspection."
-        ),
-    )
-    async def extract_frames_by_time_window(
-        self,
-        video_id: str,
-        start_time: str,
-        end_time: str,
-        fps_sample_rate: int = 1,
-    ) -> ToolResult:
-        """Extract raw frames from a video time window.
-
-        Args:
-            video_id: Video ID
-            start_time: Start time in HH:MM:SS.sss format
-            end_time: End time in HH:MM:SS.sss format
-            fps_sample_rate: How many frames per second to sample (default 1)
-
-        Returns:
-            ToolResult with extracted frame images
-        """
-        video_artifact = await self.postgres.get_artifact(artifact_id=video_id)
-        if video_artifact is None:
-            return ToolResult(content=f"Error: Video {video_id} not found")
-
-        bucket, object_name = extract_s3_minio_url(video_artifact.minio_url)
-
-        video_bytes = self.storage.get_object(bucket=bucket, object_name=object_name)
-        if video_bytes is None:
-            return ToolResult(content="Error: Could not load video from storage")
-
-        container = av.open(io.BytesIO(video_bytes))
-        fps = video_artifact.artifact_metadata.get("fps", 30.0)
-
-        start_frame = timecode_to_frame(start_time, fps)
-        end_frame = timecode_to_frame(end_time, fps)
-
-        frames_output: list[AgnoImage] = []
-        frame_index = 0
-
-        stream = container.streams.video[0]
-        for frame in tqdm(container.decode(stream), desc="Processing frames"):  # type: ignore
-            if frame_index < start_frame:
-                frame_index += 1
-                continue
-
-            if frame_index > end_frame:
-                break
-
-            if (frame_index - start_frame) % fps_sample_rate != 0:
-                frame_index += 1
-                continue
-
-            img = frame.to_ndarray(format="bgr24")
-            success, encoded = cv2.imencode(".webp", img)
-            if not success:
-                frame_index += 1
-                continue
-
-            frame_b64 = base64.b64encode(encoded.tobytes())
-            frames_output.append(AgnoImage(content=frame_b64))
-            frame_index += 1
-
-        container.close()
-
-        return ToolResult(
-            content=f"Extracted {len(frames_output)} frames from {start_time} to {end_time}",
-            images=frames_output,
-        )
-
-    @tool(
-        description=(
-            "Extract a single frame from a video at a specific timestamp. "
-            "Retrieves the exact frame at the given time for visual inspection.\n\n"
-            "Typical workflow - Use for precise visual verification:\n"
-            "  1. search.get_images_* - find matching image with timestamp\n"
-            "  2. Or utility.get_related_asr_from_image - identify precise moment from ASR\n"
-            "  3. This tool - extract single frame for detailed inspection\n"
-            "  4. Compare with adjacent frames using get_adjacent_images if needed\n\n"
-            "Related tools:\n"
-            "  - extract_frames_by_time_window: Extract multiple frames in a time range\n"
-            "  - get_adjacent_images: Navigate to neighboring frames\n"
-            "  - get_related_asr_from_image: Get ASR context for the frame\n\n"
-            "Args:\n"
-            "  video_id (str): Video ID (REQUIRED)\n"
-            "  timestamp (str): Timestamp in HH:MM:SS.sss format (REQUIRED)"
-        ),
-        instructions=(
-            "Use when: need to see exactly what's in a frame at a specific moment, "
-            "want to visually verify content at a precise timestamp.\n\n"
-            "Best paired with: search.get_images_from_qwenvl_query, get_related_asr_from_image (find timestamp first). "
-            "Follow up with: get_adjacent_images for frame-by-frame exploration. "
-            "Alternative: extract_frames_by_time_window for extracting multiple frames at once."
-        ),
-    )
-    async def extract_frame_at_time(
-        self,
-        video_id: str,
-        timestamp: str,
-    ) -> ToolResult:
-        """Extract a single frame at a specific timestamp.
-
-        Args:
-            video_id: Video ID
-            timestamp: Timestamp in HH:MM:SS.sss format
-
-        Returns:
-            ToolResult with the extracted frame image
-        """
-        video_artifact = await self.postgres.get_artifact(artifact_id=video_id)
-        if video_artifact is None:
-            return ToolResult(content=f"Error: Video {video_id} not found")
-
-        bucket, object_name = extract_s3_minio_url(video_artifact.minio_url)
-
-        video_bytes = self.storage.get_object(bucket=bucket, object_name=object_name)
-        if video_bytes is None:
-            return ToolResult(content="Error: Could not load video from storage")
-
-        container = av.open(video_bytes)
-
-        fps = video_artifact.artifact_metadata.get("fps", 30.0)
-        frame_index = timecode_to_frame(timestamp, fps)
-
-        stream = next(s for s in container.streams if s.type == "video")
-        stream.seek(frame_index)  # type: ignore
-
-        decoded_frame = None
-        for frame in container.decode(stream):  # type: ignore
-            decoded_frame = frame
-            break
-
-        if decoded_frame is None:
-            container.close()
-            return ToolResult(content=f"Error: Failed to decode frame at index={frame_index}")
-
-        rgb_frame = decoded_frame.to_ndarray(format="rgb24")  # type: ignore
-        container.close()
-
-        # Convert to WebP and encode as base64
-        buf = io.BytesIO()
-        PILImage.fromarray(rgb_frame).save(buf, format="WEBP")
-        buf.seek(0)
-        frame_b64 = base64.b64encode(buf.getvalue())
-
-        return ToolResult(
-            content=f"Frame extracted at {timestamp} (frame index: {frame_index})",
-            images=[AgnoImage(content=frame_b64)],
-        )
+    
 
 
 __all__ = ["UtilityToolkit"]

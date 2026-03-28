@@ -14,11 +14,6 @@ from videodeepsearch.toolkit.common import CacheManager
 
 
 class KGSearchToolkit(Toolkit):
-    """Knowledge Graph search toolkit with context binding.
-
-    Supports binding user_id at initialization time for consistent filtering.
-    """
-
     def __init__(
         self,
         arango_db: StandardDatabase,
@@ -30,18 +25,6 @@ class KGSearchToolkit(Toolkit):
         cache_ttl: int = 1800,
         cache_dir: str | None = None,
     ):
-        """Initialize KGSearchToolkit with optional context binding.
-
-        Args:
-            arango_db: ArangoDB database instance
-            mmbert_client: MMBert client for embeddings
-            user_id: Default user ID for all searches (bound at creation)
-            video_ids: Default video IDs for all searches (bound at creation)
-            graph_name: Name of the knowledge graph
-            search_view: Name of the search view
-            cache_ttl: Cache TTL in seconds
-            cache_dir: Optional cache directory
-        """
         self.db = arango_db
         self.mmbert = mmbert_client
         self.graph_name = graph_name
@@ -50,7 +33,6 @@ class KGSearchToolkit(Toolkit):
         self.cache_manager = CacheManager(cache_dir)
         self._result_store: dict[str, list[dict[str, Any]]] = {}
 
-        # Context binding
         self._user_id = user_id
         self._video_ids = video_ids
 
@@ -74,7 +56,6 @@ class KGSearchToolkit(Toolkit):
 
 
     async def _encode_query_async(self, query: str) -> list[float] | None:
-        """Async encode query text to embedding vector."""
         if not self.mmbert:
             return None
         try:
@@ -86,25 +67,21 @@ class KGSearchToolkit(Toolkit):
         return None
 
     def _video_filter(self, alias: str, video_ids: list[str] | None) -> str:
-        """Build video filter clause for AQL."""
         if video_ids:
             return f"FILTER {alias}.video_id IN @video_ids"
         return ""
 
     def _video_bind(self, video_ids: list[str] | None) -> dict[str, Any]:
-        """Build video bind variables for AQL."""
         if video_ids:
             return {"video_ids": video_ids}
         return {}
 
     def _user_filter(self, alias: str, user_id: str | None) -> str:
-        """Build user filter clause for AQL."""
         if user_id:
             return f"FILTER {alias}.user_id == @user_id"
         return ""
 
     def _user_bind(self, user_id: str | None) -> dict[str, Any]:
-        """Build user bind variables dfor AQL."""
         if user_id:
             return {"user_id": user_id}
         return {}
@@ -118,15 +95,6 @@ class KGSearchToolkit(Toolkit):
         user_id: str | None,
         video_ids: list[str] | None,
     ) -> tuple[str | None, list[str] | None]:
-        """Get effective user_id and video_ids using bound context as defaults.
-
-        Args:
-            user_id: Explicitly passed user_id (takes precedence)
-            video_ids: Explicitly passed video_ids (takes precedence)
-
-        Returns:
-            Tuple of (effective_user_id, effective_video_ids)
-        """
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
         return effective_user_id, effective_video_ids
@@ -199,7 +167,6 @@ class KGSearchToolkit(Toolkit):
             "  1. This tool - find entities matching your query\n"
             "  2. view_kg_result - inspect detailed results with handle_id\n"
             "  3. traverse_from_entity - explore relationships from found entities\n"
-            "  4. utility.extract_frames_by_time_window - verify entity appearances visually\n\n"
             "When to use:\n"
             "  - Finding specific people, objects, or locations in videos\n"
             "  - Discovering entities related to a concept or theme\n"
@@ -208,7 +175,8 @@ class KGSearchToolkit(Toolkit):
             "  - traverse_from_entity: Explore relationships from found entities\n"
             "  - view_kg_result: Inspect cached results\n"
             "  - search_events: Find events/entities in entities\n"
-            "  - triple_hybrid_search: More powerful multi-method search\n\n"
+            "  - triple_hybrid_search: More powerful multi-method search\n"
+            "  - search.get_images_from_qwenvl_query: Find visual moments with entity\n\n"
             "Args:\n"
             "  query (str): Search query text (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
@@ -245,9 +213,9 @@ class KGSearchToolkit(Toolkit):
         Returns:
             ToolResult with matching entities
         """
-        # Use bound context as defaults
         effective_user_id, effective_video_ids = self._get_effective_context(user_id, video_ids)
 
+        logger.info(f"{effective_user_id=}, {effective_video_ids=}")
         kwargs = {
             "query": query,
             "top_k": top_k,
@@ -318,7 +286,8 @@ class KGSearchToolkit(Toolkit):
             "  - search_entities_semantic: Find entities involved in events\n"
             "  - search_micro_events: For more granular frame-level details\n"
             "  - view_kg_result: Inspect cached results\n"
-            "  - utility.get_related_asr_from_segment: Get ASR context\n\n"
+            "  - utility.get_related_asr_from_segment: Get ASR context\n"
+            "  - search.get_segments_from_event_query_mmbert: Find segment for event\n\n"
             "Args:\n"
             "  query (str): Search query text (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
@@ -420,7 +389,6 @@ class KGSearchToolkit(Toolkit):
             "  1. search_events - find broader events first\n"
             "  2. This tool - get frame-level details within events\n"
             "  3. view_kg_result - inspect detailed results\n"
-            "  4. utility.extract_frame_at_time - verify specific moments visually\n\n"
             "When to use:\n"
             "  - Need precise, frame-level video content retrieval\n"
             "  - Micro-events contain detailed text descriptions of specific moments\n"
@@ -428,8 +396,8 @@ class KGSearchToolkit(Toolkit):
             "Related tools:\n"
             "  - search_events: Coarser event-level search (start here)\n"
             "  - view_kg_result: Inspect cached results\n"
-            "  - utility.extract_frame_at_time: Extract frame at specific moment\n"
-            "  - search_entities_semantic: Find entities in micro-events\n\n"
+            "  - search_entities_semantic: Find entities in micro-events\n"
+            "  - search.get_images_from_qwenvl_query: Find frame for micro-event\n\n"
             "Args:\n"
             "  query (str): Search query text (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
@@ -441,7 +409,6 @@ class KGSearchToolkit(Toolkit):
             "Use this for precise, frame-level video content retrieval.\n\n"
             "Micro-events contain detailed text descriptions of specific moments. "
             "Best paired with: search_events (start broader), view_kg_result (inspect results). "
-            "Follow up with: view_kg_result using handle_id, then utility.extract_frame_at_time for visual verification."
         ),
         cache_results=True,
         cache_ttl=1800,
@@ -632,7 +599,6 @@ class KGSearchToolkit(Toolkit):
             "  1. search_entities_semantic - find a seed entity of interest\n"
             "  2. This tool - traverse from the entity to discover relationships\n"
             "  3. view_kg_result - inspect connected nodes\n"
-            "  4. utility.extract_frames_by_time_window - verify related content visually\n\n"
             "When to use:\n"
             "  - After finding an entity of interest, discover related content\n"
             "  - Understanding how entities relate to events and other entities\n"
@@ -1304,7 +1270,6 @@ class KGSearchToolkit(Toolkit):
             "  1. This tool - multi-method search (most powerful)\n"
             "  2. view_kg_result - inspect ranked results\n"
             "  3. traverse_from_entity - explore relationships from top entities\n"
-            "  4. utility.extract_frames_by_time_window - verify findings visually\n\n"
             "When to use:\n"
             "  - Primary retrieval tool for complex queries\n"
             "  - Need comprehensive search combining multiple methods\n"
