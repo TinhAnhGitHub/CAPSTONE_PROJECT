@@ -1,0 +1,58 @@
+# Version control
+**/.git
+**/.gitignore
+
+# IDE
+**/.vscode
+**/.idea
+**/*.swp
+**/*.swo
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+**/venv
+**/env
+**/.venv
+**/.env
+
+# Build artifacts
+**/*.egg-info
+**/*.egg
+**/.eggs
+**/dist
+**/build
+
+# Testing
+**/coverage
+**/.coverage
+**/htmlcov
+**/.pytest_cache
+**/.mypy_cache
+
+# Ruff
+**/.ruff_cache
+
+# Documentation
+AGENTS.md
+CLAUDE.md
+
+# Docker (already in docker/)
+docker/
+
+# Scripts (not needed in build context)
+scripts/
+
+# Notebooks
+notebooks/
+
+# Lock files (not needed in container)
+uv.lock
+
+# Local infrastructure
+local/
+local_servers/
+inference/

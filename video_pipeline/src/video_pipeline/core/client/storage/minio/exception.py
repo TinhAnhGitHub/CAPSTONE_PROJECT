@@ -1,0 +1,2 @@
+class MinioStorageError(RuntimeError):
+    pass

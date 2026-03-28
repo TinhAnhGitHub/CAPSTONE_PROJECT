@@ -1,26 +1,22 @@
-import api from '@/api/api';
+import { useCreateGroup } from '@/api/services/hooks/query';
 import { PlusIcon } from '@heroicons/react/16/solid'
 import React from 'react'
-import { useMutation, useQueryClient } from 'react-query'
 
 export default function AddGroupButton() {
-    const queryClient = useQueryClient();
-    const addGroupMutation = useMutation({
-        mutationFn: (groupName) => {
-            return api.post('/api/user/groups/create', { group_name: groupName })
-        },
-        onSettled: () => {
-            queryClient.invalidateQueries('groups');
-        }
-    })
-    const handleAddGroup = () => {
-        // now give current time string
-        const groupName = "New Group " + new Date().toLocaleTimeString();
-        addGroupMutation.mutate(groupName);
-    }
+  const addGroupMutation = useCreateGroup();
+
+  const handleAddGroup = () => {
+    // now give current time string
+    const groupName = "New Group " + new Date().toLocaleTimeString();
+    addGroupMutation.mutate(groupName);
+  }
   return (
-    <div>
-          <PlusIcon className='size-5 text-gray-500 hover:text-gray-700 cursor-pointer' onClick={handleAddGroup} />
-    </div>
+    <button
+      onClick={handleAddGroup}
+      className='flex items-center gap-2 md:w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
+    >
+      <PlusIcon className="w-5 h-5" />
+      <span>Add Group</span>
+    </button>
   )
 }

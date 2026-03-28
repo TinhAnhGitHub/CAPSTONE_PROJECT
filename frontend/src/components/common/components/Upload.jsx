@@ -3,8 +3,8 @@ import { useMutation, useQueryClient } from 'react-query';
 import Dropzone from 'react-dropzone';
 import api from '@/api/api';
 import toast from 'react-hot-toast';
-import { PlusIcon } from '@heroicons/react/24/solid'
 import { useStore } from '@/stores/chat';
+import { ArrowUpTrayIcon } from '@heroicons/react/16/solid';
 
 export default function Upload() {
     const group = useStore((state) => state.currentGroup);
@@ -53,15 +53,19 @@ export default function Upload() {
             <Dropzone
                 accept={{ 'video/*': [] }}
                 onDrop={(files) => uploadMutation.mutate(files)}>
-                {({ getRootProps, getInputProps }) => (
-                    <div {...getRootProps()} className="bg-black text-white rounded-md p-2 cursor-pointer">
+                {({ getRootProps, getInputProps, isDragActive }) => (
+                    <div {...getRootProps()} className={`text-white rounded-md p-2 cursor-pointer transition-colors ${isDragActive ? 'bg-accent/20 outline outline-dashed outline-2 outline-accent' : 'bg-accent hover:bg-accent-hover'}`}>
                         <input {...getInputProps()} />
-                        <div className='flex items-center gap-1'>
+                        <div className='flex items-center justify-center gap-1 font-medium'>
                             {
                                 isUploading ?
                                     `Uploading... ${progress}%`
-                                    :
-                                    <div><PlusIcon className='h-5 w-5 inline-block' /> Upload Video</div>
+                                    : isDragActive ?
+                                        <>
+                                            <ArrowUpTrayIcon className='h-5 w-5' /> Drop to upload</>
+                                        :
+                                        <>
+                                            <ArrowUpTrayIcon className='h-5 w-5' /> Drop Video or Browse Files</>
                             }
                         </div>
                     </div>

@@ -11,11 +11,13 @@ class Video(Document):
     run_id: Optional[PydanticObjectId] = None
 
     name: str = ""
-    length: int = 0
+    length: float = 0 # in seconds
+    fps: float = 30.0
     thumbnail: str = ""
     url: str = ""
 
     ingested_status: float = 0 # 0 -100: not ingested, 100: ingested
+    # failed = -1
     @property 
     def ingested(self) -> bool:
         return self.ingested_status >= 100

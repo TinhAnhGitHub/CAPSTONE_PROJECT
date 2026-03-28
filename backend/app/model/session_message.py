@@ -1,76 +1,127 @@
 from __future__ import annotations
 from pydantic import BaseModel, Field
-from typing import Any, Type, TypeVar, Literal, Annotated, Union
-from beanie import Document, PydanticObjectId
+from typing import Any, Optional, Type, TypeVar, Literal, Annotated, Union
+from beanie import Document, PydanticObjectId, after_event, Insert
 from datetime import datetime
 from abc import abstractmethod, ABC
-from llama_index.core.base.llms.types import MessageRole
+from llama_index.core.base.llms.types import (
+    MessageRole,
+    # ContentBlock,
+    TextBlock,
+    # ImageBlock,
+    AudioBlock,
+    DocumentBlock,
+    CachePoint,
+    CitableBlock,
+    CitationBlock,
+)
+from llama_index.core.bridge.pydantic import (
+    AnyUrl,
+    Field,
+    FilePath,
+)
+
+from llama_index.core.tools import ToolOutput
 
 from app.core.config import settings
 
 
-T = TypeVar("T", bound="ChatBlock")
-class ChatBlock(BaseModel, ABC):
-    """
-    BaseClass for any message block
-    """
+class ToolCallBlock(BaseModel):
+    """All tool calls are surfaced."""
 
-    block_type: Any
-
-    @abstractmethod
-    def __str__(self) -> str:
-        """String representation of the message block"""
-
-    @classmethod
-    @abstractmethod
-    def from_str_cls(cls: Type[T], raw: str) -> T:
-        """
-        Reconstruct object from a string
-        """
+    block_type: Literal["tool_call"] = "tool_call"
+    tool_name: str
+    tool_kwargs: dict
+    tool_call_id: str
 
 
-class TextBlock(ChatBlock):
-    block_type: Literal["text"] = "text"
-    text_content: str = Field(
-        ..., description="The main content of the text message block"
-    )
-
-    def __str__(self) -> str:
-        return self.text_content
-
-    @classmethod
-    def from_str_cls(cls, raw: str) -> TextBlock:
-        return cls(text_content=raw)
+class VideoSegment(BaseModel):
+    start: float
+    end: float
+    preview_images: list[AnyUrl | str] = []  # 5 images
+    caption: Optional[str] = None
 
 
-class ImageBlock(ChatBlock):
-    block_type: Literal["image"] = "image"
-    image_urls: list[str] = Field(..., description="List of image URLs")
-
-    def __str__(self) -> str:
-        return "\n".join(self.image_urls)
-
-    @classmethod
-    def from_str_cls(cls, raw: str) -> ImageBlock:
-        urls = [url.strip() for url in raw.split(",") if url.strip()]
-        return cls(image_urls=urls)
+class ThinkingStep(BaseModel):
+    title: str
+    description: str | None = None
 
 
-class VideoBlock(ChatBlock):
+class ThinkingBlock(BaseModel):
+    """A representation of thinking state as a sequence of steps."""
+
+    block_type: Literal["thinking"] = "thinking"
+    steps: list[ThinkingStep] = []
+
+
+class ToolStep(BaseModel):
+    tool_name: str
+    description: str | None = None
+    status: Literal["pending", "finished", "failed"] = "pending"
+
+
+class ToolsBlock(BaseModel):
+    """A representation of tools state as a sequence of tool usages."""
+
+    block_type: Literal["tools"] = "tools"
+    steps: list[ToolStep] = []
+
+
+class VideoBlock(BaseModel):
+
     block_type: Literal["video"] = "video"
-    video_urls: list[str] = Field(..., description="The URL of the video")
+    video_id: str | None = None
 
-    def __str__(self) -> str:
-        return "\n".join(self.video_urls)
+    name: str | None = None
+    length: float | None = None
+    fps: float | None = None
+    url: AnyUrl | str | None = None
+    thumbnail: AnyUrl | str | None = None
 
-    @classmethod
-    def from_str_cls(cls, raw: str) -> "VideoBlock":
-        urls = [url.strip() for url in raw.split(",") if url.strip()]
-        return cls(video_urls=urls)
+    segments: list[VideoSegment] | None = None
 
 
-CONTENT_BLOCK = Annotated[
-    Union[TextBlock, ImageBlock, VideoBlock], Field(discriminator="block_type")
+class ImageBlock(BaseModel):
+    """A representation of image data to directly pass to/from the LLM."""
+
+    block_type: Literal["image"] = "image"
+    video_id: str | None = None
+    # image: bytes | None = None
+    # path: FilePath | None = None
+    url: list[AnyUrl | str] | None = None
+    # image_mimetype: str | None = None
+    # detail: str | None = None
+
+
+class ToolCallResultBlock(BaseModel):
+    """Tool call result."""
+
+    block_type: Literal["tool_call_result"] = "tool_call_result"
+    tool_name: str
+    tool_kwargs: dict
+    tool_id: str
+    tool_output: ToolOutput
+    return_direct: bool
+
+
+# Extended content block that includes custom types
+ContentBlock = Annotated[
+    Union[
+        TextBlock,
+        # ImageBlock,
+        AudioBlock,
+        DocumentBlock,
+        CachePoint,
+        CitableBlock,
+        CitationBlock,
+        ImageBlock,
+        VideoBlock,
+        ToolCallBlock,
+        ToolCallResultBlock,
+        ThinkingBlock,
+        ToolsBlock,
+    ],
+    Field(discriminator="block_type"),
 ]
 
 
@@ -80,20 +131,29 @@ class SessionMessage(Document):
     user -> AI: 1 session message
     AI -> user: 1 session message
     """
+
     # message_id: auto gen
-    session_id: PydanticObjectId | None # chỉ vào chathistory # r sao ko de chat histỏy la 1 list o day
+    session_id: (
+        PydanticObjectId | None
+    )  # chỉ vào chathistory # r sao ko de chat histỏy la 1 list o day
 
     role: MessageRole = Field(
         ..., description="Message role: Could be USER, SYSTEM, ASSISTANT, ..."
     )
     timestamp: datetime = Field(default_factory=datetime.now)
     additional_kwargs: dict[str, Any] = Field(default_factory=dict)
-    blocks: list[CONTENT_BLOCK] = Field(default_factory=list)
+    blocks: list[ContentBlock] = Field(default_factory=list)
 
     class Settings:
         name = settings.CHAT_MESSAGE_COLLECTION_NAME
-        indexes = [
-            "role",
-            [("timestamp", -1)],
-            [("last_updated", -1)]
-        ]
+        indexes = ["role", [("timestamp", -1)], [("last_updated", -1)]]
+
+    @after_event(Insert)
+    async def update_chat_history_timestamp(self):
+        if self.session_id:
+            from app.model.chat_history import ChatHistory
+
+            chat = await ChatHistory.get(self.session_id)
+            if chat:
+                chat.last_updated = datetime.now()
+                await chat.save()

@@ -1,0 +1,101 @@
+services:
+  mlflow-postgres:
+    image: postgres:15
+    container_name: mlflow-postgres
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+      POSTGRES_DB: mlflow
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME:-./data}/mlflow-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [default]
+
+  mlflow-storage:
+    image: rustfs/rustfs:1.0.0-alpha.83
+    container_name: mlflow-storage
+    user: "0:0"
+    environment:
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_SERVER_DOMAINS: mlflow-storage:9000
+      RUSTFS_REGION: us-east-1
+      RUSTFS_ACCESS_KEY: mlflowadmin
+      RUSTFS_SECRET_KEY: mlflowadmin
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME:-./data}/mlflow-storage:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://127.0.0.1:9000/health | grep -q '\"status\":\"ok\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [default]
+
+  mlflow-create-bucket:
+    image: amazon/aws-cli:2.33.25
+    container_name: mlflow-create-bucket
+    depends_on:
+      mlflow-storage:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        set -e;
+        echo 'Waiting for S3 gateway getting ready...';
+        if aws --endpoint-url=http://mlflow-storage:9000 s3api head-bucket --bucket mlflow-artifacts 2>/dev/null; then
+          echo 'Bucket mlflow-artifacts already exists. Skipping creation.';
+        else
+          echo 'Creating bucket mlflow-artifacts...';
+          aws --endpoint-url=http://mlflow-storage:9000 s3api create-bucket --bucket mlflow-artifacts --region us-east-1;
+        fi
+      "
+    environment:
+      AWS_ACCESS_KEY_ID: mlflowadmin
+      AWS_SECRET_ACCESS_KEY: mlflowadmin
+      AWS_DEFAULT_REGION: us-east-1
+    networks: [default]
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.20.0
+    container_name: mlflow-server
+    depends_on:
+      mlflow-postgres:
+        condition: service_healthy
+      mlflow-storage:
+        condition: service_healthy
+      mlflow-create-bucket:
+        condition: service_completed_successfully
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@mlflow-postgres:5432/mlflow
+      MLFLOW_S3_ENDPOINT_URL: http://mlflow-storage:9000
+      MLFLOW_ARTIFACTS_DESTINATION: s3://mlflow-artifacts/
+      AWS_ACCESS_KEY_ID: mlflowadmin
+      AWS_SECRET_ACCESS_KEY: mlflowadmin
+      AWS_DEFAULT_REGION: us-east-1
+      MLFLOW_S3_IGNORE_TLS: "true"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --no-cache-dir psycopg2-binary boto3
+        mlflow server \
+          --backend-store-uri "postgresql://mlflow:mlflow@mlflow-postgres:5432/mlflow" \
+          --artifacts-destination "s3://mlflow-artifacts/" \
+          --serve-artifacts \
+          --host 0.0.0.0 \
+          --port 5000
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [default]

@@ -4,7 +4,7 @@ from typing import Annotated
 from app.service.agent import Agent
 from app.service.chat import ChatService
 from app.service.user import UserService
-from app.service.minio import Minio as MinioService
+from app.service.minio import MinioService
 
 from app.core.lifespan import app_state
 # from app.core.config import settings

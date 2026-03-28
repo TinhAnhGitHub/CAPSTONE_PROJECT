@@ -15,6 +15,7 @@ async def ingestion_status(video_id: str, data: dict):
     if video.run_id is None:
         video.run_id = PydanticObjectId(run_id)
         
+    print(f"Updating video {video_id} with ingestion status: {ingested_status}% and run_id: {run_id}")
     await video.save()
 
     # gửi socket frontend

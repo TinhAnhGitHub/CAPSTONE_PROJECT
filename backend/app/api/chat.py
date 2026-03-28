@@ -10,7 +10,8 @@ from app.core.dependencies import ChatServiceDep, AgentDep
 from app.model.chat_history import ChatHistory
 from app.schema.chat import ChatRequest, ChatResponse, SessionInfo
 from app.schema.user import ALGORITHM, SECRET_KEY
-from app.model.session_message import SessionMessage, TextBlock 
+from app.model.session_message import SessionMessage
+from llama_index.core.base.llms.types import MessageRole, TextBlock
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -23,26 +24,25 @@ async def send_message(
     try:
         user_message = SessionMessage(
             role=request.role,
-            blocks=[TextBlock(text_content=request.message)]
+            blocks=[TextBlock(text=request.message)]
         )
-        
+
         await chat_service.add_message(request.session_id, user_message)
-        
+
         ai_response = agent.chat(request.message)
-        
+
         ai_message = SessionMessage(
-            role=MessageRole.ASSISTANT,
-            blocks=[TextBlock(text_content=ai_response)]
+            role=MessageRole.ASSISTANT, blocks=[TextBlock(text=ai_response)]
         )
-        
+
         await chat_service.add_message(request.session_id, ai_message)
-        
+
         return ChatResponse(
             session_id=request.session_id,
             response=ai_response,
             timestamp=datetime.now()
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

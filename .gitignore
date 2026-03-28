@@ -1,12 +1,29 @@
+.*
+local_*/
+local/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
-
+agent/__pycache__/
+agent/tools/__pycache__/
+.python-version
+script.sh
+uv.lock
 # C extensions
 *.so
+.env
+# Keyframes
+agent/tools/keyframes/
+agent/keyframes/
+# Extra file
+script.sh
+local/*
 
-# Distribution / packaging
+
+**.spec-workflow/
+
+
 .Python
 build/
 develop-eggs/

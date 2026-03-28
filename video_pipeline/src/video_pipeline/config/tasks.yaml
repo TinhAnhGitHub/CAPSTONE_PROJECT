@@ -1,0 +1,391 @@
+tasks:
+  video_registration:
+    name: "Video Registration"
+    description: "Extract and register video metadata including FPS, duration, and format"
+    stage: "Ingestion"
+    tags:
+      - "video"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 120
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "video_registration_cache_key"
+
+  autoshot_detection:
+    name: "Autoshot Segment Detection"
+    description: "Detect scene boundaries (shots) in video using ML model"
+    stage: "Analysis"
+    tags:
+      - "autoshot-task"
+    retries: 3
+    retry_delay_seconds: 10
+    timeout_seconds: 600
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "autoshot_artifact_cache_key"
+
+    additional_kwargs:
+      model_name: "autoshot"
+      model_version: "01"
+
+  asr_transcription:
+    name: "ASR Transcription"
+    description: "Transcribe audio to text using automatic speech recognition"
+    stage: "Analysis"
+    tags:
+      - "asr-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "asr_batch_cache_key"
+
+    additional_kwargs:
+      model_name: "Qwen/Qwen3-ASR-0.6B"
+      client_url: "http://qwen3-asr:80/v1"
+
+  audio_segmentation:
+    name: "Audio Segmentation"
+    description: "Segment ASR results into semantically meaningful chunks using LLM or rule-based fallback"
+    stage: "Analysis"
+    tags:
+      - "audio-segment-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "audio_segment_cache_key"
+
+    additional_kwargs:
+      model: "google/gemini-2.5-flash-lite"
+      batch_size: 10
+      min_duration_sec: 30
+
+  audio_transcript_embedding:
+    name: "Audio Transcript Embedding"
+    description: "Embed ASR transcript text from audio segments using mmBERT for semantic search over spoken content"
+    stage: "Indexing"
+    tags:
+      - "embedding-task"
+      - "audio-transcript-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 120
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "audio_transcript_embedding_cache_key"
+
+    additional_kwargs:
+      model_name: "mmbert"
+      base_url: "http://mmbert:8000"
+
+  audio_transcript_qdrant_indexing:
+    name: "Audio Transcript Qdrant Indexing"
+    description: "Index audio transcript embeddings into Qdrant for semantic search over spoken content"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+      - "audio-transcript-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "audio_transcript_qdrant_indexing_cache_key"
+
+  segment_embedding:
+    name: "Segment Embedding"
+    description: "Extract 6 frames from audio segments and embed using QwenVL"
+    stage: "Analysis"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "segment_embedding_cache_key"
+
+    additional_kwargs:
+      base_url: "http://qwen_vl_embedding:8080/embedding"
+      n_frames: 4
+
+  segment_caption:
+    name: "Segment Caption"
+    description: "Generate captions for audio segments using VLM with visual frames and audio transcript"
+    stage: "Analysis"
+    tags:
+      - "llm-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "segment_caption_cache_key"
+
+    additional_kwargs:
+      model: "google/gemini-2.5-flash-lite"
+      base_url: "https://openrouter.ai/api/v1"
+      n_frames: 4
+      max_concurrent: 5
+
+  segment_caption_embedding:
+    name: "Segment Caption Embedding"
+    description: "Embed segment caption texts using mmBERT and persist as TextCapSegmentEmbedArtifacts"
+    stage: "Indexing"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 120
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "segment_caption_embedding_cache_key"
+
+    additional_kwargs:
+      model_name: "mmbert"
+      base_url: "http://mmbert:8000"
+
+  video_preprocess:
+    name: "Video Preprocess"
+    description: "Download video once and extract audio segments and frame indices for downstream tasks"
+    stage: "Analysis"
+    tags:
+      - "preprocess"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 600
+    cache_enabled: false
+
+  image_extraction:
+    name: "Image Extraction"
+    description: "Extract representative frames from video segments and persist as ImageArtifacts"
+    stage: "Analysis"
+    tags:
+      - "image-chunk-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "image_extraction_batch_cache_key"
+
+  image_caption_embedding:
+    name: "Image Caption Embedding"
+    description: "Embed caption texts using mmBERT and persist as TextCaptionEmbeddingArtifacts"
+    stage: "Indexing"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 120
+    cache_enabled: true
+    cache_expiration_seconds: 2592000  
+    cache_key_fn: "caption_embedding_batch_cache_key"
+
+    additional_kwargs:
+      model_name: "mmbert"
+      base_url: "http://mmbert:8000"
+
+  image_caption_ocr:
+    name: "Image Caption + OCR"
+    description: "Combined image captioning and OCR extraction using structured output. Outputs both ImageCaptionArtifact and ImageOCRArtifact."
+    stage: "Analysis"
+    tags:
+      - "llm-task"
+      - "structured-output"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_batch_cache_key_caption"
+
+    additional_kwargs:
+      model: "google/gemini-2.5-flash-lite"
+      base_url: "https://openrouter.ai/api/v1"
+      max_concurrent: 10
+
+  ocr_indexing:
+    name: "OCR Indexing"
+    description: "Index OCR text documents into Elasticsearch for text search retrieval"
+    stage: "Indexing"
+    tags:
+      - "elasticsearch-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_batch_cache_key_ocr"
+
+    additional_kwargs:
+      embedding_base_url: "http://mmbert:8000"
+      batch_size: 20
+
+  image_embedding:
+    name: "Image Embedding"
+    description: "Embed extracted video frames using QwenVL and persist as ImageEmbeddingArtifacts"
+    stage: "Analysis"
+    tags:
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 5
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_batch_cache_key_embedding"
+
+    additional_kwargs:
+      base_url: "http://qwen_vl_embedding:8080/embedding"
+
+
+  qdrant_indexing_shared:
+    name: "Qdrant Indexing Shared Config"
+    description: "Shared configuration for all Qdrant indexing tasks"
+    stage: "Indexing"
+    cache_enabled: false
+    additional_kwargs:
+      collection_base: "video_embedding2"
+      image_dim: 2048
+      image_dense_field: "image_dense"
+      caption_dim: 768
+      segment_dense_field: "segment_dense"
+      audio_transcript_dense_field: "audio_transcript_dense"
+      audio_transcript_sparse_field: "audio_transcript_sparse"
+      image_caption_dense_field: "image_caption_dense"
+      image_caption_sparse_field: "image_caption_sparse"
+      segment_caption_dense_field: "segment_caption_dense"
+      segment_caption_sparse_field: "segment_caption_sparse"
+      on_disk: true
+      qdrant_timeout: 30
+
+  image_qdrant_indexing:
+    name: "Image Qdrant Indexing"
+    description: "Upsert image embeddings into Qdrant as dense vectors (multimodal: image + caption)"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_qdrant_indexing_cache_key"
+
+  segment_qdrant_indexing:
+    name: "Segment Qdrant Indexing"
+    description: "Upsert segment embeddings into Qdrant (multimodal: frames + caption)"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "segment_qdrant_indexing_cache_key"
+
+  image_caption_qdrant_indexing:
+    name: "Image Caption Qdrant Indexing"
+    description: "Upsert image caption text embeddings into Qdrant (mmBERT dense)"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "image_caption_qdrant_indexing_cache_key"
+
+  segment_caption_qdrant_indexing:
+    name: "Segment Caption Qdrant Indexing"
+    description: "Upsert segment caption text embeddings into Qdrant (mmBERT dense)"
+    stage: "Indexing"
+    tags:
+      - "qdrant-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 300
+    cache_enabled: true
+    cache_expiration_seconds: 2592000
+    cache_key_fn: "segment_caption_qdrant_indexing_cache_key"
+
+  kg_pipeline:
+    name: "Knowledge Graph Pipeline"
+    description: "Complete KG pipeline: extraction, entity resolution, event linking, community detection, and Node2Vec embeddings"
+    stage: "Analysis"
+    tags:
+      - "kg-task"
+      - "llm-service"
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 1800
+    cache_enabled: true
+    cache_expiration_seconds: 86400
+    cache_key_fn: "kg_pipeline_cache_key"
+
+    additional_kwargs:
+      model: "google/gemini-2.5-flash-lite"
+      base_url: "https://openrouter.ai/api/v1"
+      max_tokens: 50000
+
+      dense_embedding_base_url: "http://mmbert:8000"
+
+      sparse_embedding_url: "triton-server:8001"
+
+      max_concurrent: 5
+
+      hybrid_dense_weight: 0.9
+      hybrid_sparse_weight: 0.1
+      similarity_threshold: 0.75
+      max_concurrent_llm: 5
+
+      # Stage 3: Event Linking
+      semantic_threshold: 0.9
+      llm_confirm_threshold: 0.75
+      jaccard_threshold: 0.30
+      micro_window_size: 2
+      micro_semantic_threshold: 0.85
+      micro_llm_confirm_threshold: 0.65
+      micro_jaccard_threshold: 0.40
+
+      # Stage 4: Community Detection
+      n_iterations: 10
+      seed: 42
+
+      # Stage 5: Node2Vec
+      dim: 128
+      walk_length: 80
+      num_walks: 10
+      p: 1.0
+      q: 1.0
+      window: 10
+      workers: 4
+
+  arango_indexing:
+    name: "ArangoDB Indexing"
+    description: "Index Knowledge Graph data into ArangoDB for graph-based retrieval"
+    stage: "Indexing"
+    tags:
+      - "arango-task"
+      - "indexing-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 600
+    cache_enabled: false
+
+    additional_kwargs:
+      dense_embedding_base_url: "http://mmbert:8000"
+

@@ -1,6 +1,35 @@
-import React from 'react'
+import React, { useState, useCallback } from 'react'
 import { useVideos } from '@/api/services/hooks/query';
 import { useStore } from '@/stores/chat';
+import LibraryModal from '../Library/LibraryModal';
+import { FilmIcon } from '@heroicons/react/24/outline';
+import { formatVideoLength } from '@/utils/format';
+
+function VideoThumbnail({ src }) {
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+
+  return (
+    <div className="relative w-full aspect-video bg-surface rounded overflow-hidden">
+      {!loaded && !error && (
+        <div className="absolute inset-0 animate-pulse bg-surface-hover rounded" />
+      )}
+      {error ? (
+        <div className="absolute inset-0 flex items-center justify-center  text-text-dim">
+          <FilmIcon className="w-8 h-8" />
+        </div>
+      ) : (
+        <img
+          src={src || "/images/testImage.png"}
+          alt="thumbnail"
+          className={`w-full aspect-video object-cover transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function VideosInConversation() {
   const groupId = useStore((state) => state.currentGroup);
@@ -8,24 +37,76 @@ export default function VideosInConversation() {
   const { data: videos = [] } = useVideos(groupId, sessionId);
   const selectedVideos = videos.filter(video => video.selected);
 
+  // Mock data for testing - remove or set to [] in production
+  const mockVideos = [
+    { _id: '692ad412086ada3a309334ff', name: 'Introduction to AI', thumbnail: '/images/testImage.png', length: '12:34', selected: true },
+    { _id: '692ad412086ada3a30933500', name: 'React Tutorial Part 1', thumbnail: '/images/testImage.png', length: '8:22', selected: true },
+    { _id: '692ad412086ada3a30933501', name: 'Building Modern UIs', thumbnail: '/images/testImage.png', length: '15:00', selected: true },
+    { _id: '692ad412086ada3a30933503', name: 'Video Editing Basics', thumbnail: '/images/testImage.png', length: '20:15', selected: true },
+  ];
+
+  // Use mock if selectedVideos is empty
+  const displayVideos = groupId === '65c2f9a4e8b13d7c0a4f92be' ? [...mockVideos] : selectedVideos;
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [focusVideoId, setFocusVideoId] = useState(null);
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setFocusVideoId(null);
+  };
+  const openModal = () => setIsModalOpen(true);
+
+  const handleVideoClick = (videoId) => {
+    setFocusVideoId(videoId);
+    setIsModalOpen(true);
+  };
+
   return (
-    <div className='relative flex flex-col text-sm text-gray-400/60 h-full'>
-      <div className=' flex justify-between items-center bg-black border-b border-gray-800 p-3'>
-        <p className=''>Workspace videos</p>
+    <div className='relative flex flex-col h-full'>
+      {/* Add Videos Button */}
+      <div className='sticky top-0 px-2 py-2 border-b border-surface-light'>
+        <button
+          onClick={openModal}
+          className='flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
+        >
+          <FilmIcon className="w-5 h-5" />
+          <span>Manage Videos</span>
+        </button>
       </div>
-      <div className='columns-2 gap-2 p-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto '>
-        {
-          selectedVideos.map((video, idx) => (
-            <div key={idx} className='pb-1 cursor-pointer break-inside-avoid'>
-              <img src={video.thumbnail || "/images/testImage.png"} alt="thumbnail" className='w-full h-auto rounded-lg' />
-              <div>
-                <h3 className='text-sm font-semibold truncate'>{video.name}</h3>
-                <p className='text-xs text-gray-500'>{video.length || "1:00"}</p>
+
+      {/* Active Videos Section */}
+      <div className='flex flex-col flex-1 overflow-hidden'>
+        <p className='text-xs text-text-muted uppercase tracking-wide px-4 py-2'>
+          Active Videos {displayVideos.length > 0 && `(${displayVideos.length})`}
+        </p>
+        <div className='columns-2 gap-2 px-2 flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto'>
+          {displayVideos.length === 0 ? (
+            <p className='text-sm text-text-dim col-span-2 text-center py-4'>No videos selected</p>
+          ) : (
+            displayVideos.map((video, idx) => (
+              <div
+                key={idx}
+                className='pb-2 break-inside-avoid group cursor-pointer hover:bg-text/10 rounded-lg p-1 transition-colors'
+                onClick={() => handleVideoClick(video._id)}
+              >
+                <div className='relative overflow-hidden rounded-lg border border-white/10  transition-colors'>
+                  <VideoThumbnail src={video.thumbnail} />
+                  {/* Duration badge */}
+                  <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
+                    {formatVideoLength(video.length)}
+                  </span>
+                </div>
+                <h3 className='mt-1.5 text-sm font-medium truncate text-text-muted group-hover:text-text transition-colors'>
+                  {video.name}
+                </h3>
               </div>
-            </div>
-          ))
-        }
+            ))
+          )}
+        </div>
       </div>
+
+      <LibraryModal isModalOpen={isModalOpen} closeModal={closeModal} focusVideoId={focusVideoId} />
     </div>
   )
 }

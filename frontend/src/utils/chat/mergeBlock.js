@@ -1,17 +1,31 @@
 export default function mergeBlock(lastBlock, newBlock) {
-    if (!lastBlock || !newBlock) return false;
-    
+    if (!lastBlock || !newBlock) return null;
+
     if (lastBlock.block_type === 'text' && newBlock.block_type === 'text') {
-        lastBlock.text_content += newBlock.text_content;
-        return true;
+        // Return a NEW object instead of mutating
+        return { ...lastBlock, text: lastBlock.text + newBlock.text };
     }
     if (lastBlock.block_type === 'image' && newBlock.block_type === 'image') {
-        lastBlock.image_urls = lastBlock.image_urls.concat(newBlock.image_urls);
-        return true;
+        return { ...lastBlock, url: lastBlock.url.concat(newBlock.url) };
     }
     if (lastBlock.block_type === 'video' && newBlock.block_type === 'video') {
-        lastBlock.video_urls = lastBlock.video_urls.concat(newBlock.video_urls);
-        return true;
+        // Only merge if same video_id (same video, different segments)
+        if (lastBlock.video_id && newBlock.video_id && lastBlock.video_id !== newBlock.video_id) {
+            return null; // Different videos — don't merge, append as separate block
+        }
+        return { ...lastBlock, segments: [...(lastBlock.segments || []), ...(newBlock.segments || [])] };
     }
-    return false;    
+    if (lastBlock.block_type === 'tool_call' && newBlock.block_type === 'tool_call') {
+        return {
+            ...lastBlock,
+            steps: [...lastBlock.steps, ...newBlock.steps],
+        };
+    }
+    if (lastBlock.block_type === 'thinking' && newBlock.block_type === 'thinking') {
+        return {
+            ...lastBlock,
+            steps: [...lastBlock.steps, ...newBlock.steps],
+        };
+    }
+    return null;
 }

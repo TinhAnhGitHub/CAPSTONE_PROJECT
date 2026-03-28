@@ -1,0 +1,31 @@
+[project]
+name = "videodeepsearch"
+version = "1.0.2"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "agno>=2.5.10",
+    "arize-phoenix>=12.12.0",
+    "asyncpg>=0.30.0",
+    "av>=16.0.1",
+    "elasticsearch>=9.3.0",
+    "fastapi[standard]>=0.121.0",
+    "loguru>=0.7.3",
+    "minio>=7.2.18",
+    "mlflow>=3.10.1",
+    "opencv-python>=4.12.0.88",
+    "pydantic-settings>=2.11.0",
+    "python-arango>=8.3.0",
+    "qdrant-client>=1.17.1",
+]
+
+[build-system]
+requires = ["setuptools>=82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

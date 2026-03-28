@@ -1,3 +1,4 @@
+import socket from "@/api/socket";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -6,8 +7,23 @@ export const useStore = create(
 
         (set, get) => ({
             session_id: null, // new chat
-            setSessionId: (session_id) => set({ session_id }),
+            setSessionId: (session_id) => {
+                socket.emit('join_session', { session_id });
+                set({ session_id })
+            },
             getSessionId: () => get().session_id,
+            ensureSessionId: () => {
+                let session_id = get().session_id;
+                if (session_id) return session_id;
+                // get the first one in chatHistory
+                const chatHistory = get().chatHistory;
+                if (chatHistory.length > 0) {
+                    session_id = chatHistory[0]._id;
+                    set({ session_id });
+                    return session_id;
+                }
+                return null;
+            },
 
             chatMessages: [],
             setChatMessages: (messages) => set({ chatMessages: messages }),
@@ -27,9 +43,21 @@ export const useStore = create(
             removeWorkspaceVideo: (videoId) => set({ workspaceVideos: get().workspaceVideos.filter(v => v.id !== videoId) }),
             addWorkspaceVideo: (video) => set({ workspaceVideos: [...get().workspaceVideos, video] }),
 
+            overrideVideos: [],
+            setOverrideVideos: (videos) => set({ overrideVideos: videos }),
+            clearOverrideVideos: () => set({ overrideVideos: [] }),
+            isOverrideMode: () => get().overrideVideos.length > 0,
 
             currentGroup: null,
             setCurrentGroup: (group) => set({ currentGroup: group }),
+
+            sidebarOpen: false,
+            setSidebarOpen: (open) => set({ sidebarOpen: open }),
+            toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
+
+            targetMessageId: null,
+            setTargetMessageId: (id) => set({ targetMessageId: id }),
+            clearTargetMessageId: () => set({ targetMessageId: null }),
         }),
         {
             name: "chatState", // key in localStorage

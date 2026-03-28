@@ -1,0 +1,51 @@
+# Development environment configuration
+
+environment: dev
+log_level: DEBUG
+debug: true
+
+minio:
+  endpoint: "minio:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  secure: false
+  bucket_name: "video"
+
+postgres:
+  host: "postgres"
+  port: 5432
+  database: "video-pipeline"
+  user: "admin123"
+  password: "admin123"
+
+qdrant:
+  host: "qdrant"
+  port: 6333
+  api_key: null
+  collection_base: "video_embeddings_dev"
+
+elasticsearch:
+  host: "elasticsearch"
+  port: 9200
+  user: null
+  password: null
+  use_ssl: false
+  verify_certs: true
+  index_name: "video_ocr_docs_dev"
+  embedding_dim: 768  # MMBertClient produces 768-dim embeddings
+  request_timeout: 30
+
+dask:
+  n_workers: 4
+  threads_per_worker: 4
+  processes: true
+  scheduler_address: null
+
+tasks:
+  default_retries: 1
+  default_retry_delay: 2
+  default_timeout: 60
+
+triton:
+  url: "triton-server:8001"
+  timeout: 30
