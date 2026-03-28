@@ -12,14 +12,17 @@ CONFIG = {
     "arango_username": "root",
     "arango_password": "",
     "mmbert_url": "http://localhost:8009",
-    "video_ids": [
-        "3636d10a2ad4787733c9700d",
-        "946330031ead69b21354d038",
-        "9b17f473300a5436f0a053be"
-    ],
+    "video_ids":[
+    "0e64f1c0da591ca67f07b7f9",
+    "3636d10a2ad4787733c9700d",
+    "946330031ead69b21354d038",
+    "9b17f473300a5436f0a053be",
+    "c510fac771767405c891bf64",
+    "c98019fd17ff4420ea47eee7"
+],
     "top_k": 15,
     "queries": {
-        "entities_semantic": "Singapore International Monetary Exchange SIMEX SGX Singapore Mercantile Exchange",
+        "entities_semantic": "SIMEX",
         "events": "The scene contains SIMEX stock exchange displaying a 40000 dollar  graphic.",
         "micro_events": "Reichelt and Eiffel tower. ",
         "communities": "A community descbibes nick leason and his trading stock market",
