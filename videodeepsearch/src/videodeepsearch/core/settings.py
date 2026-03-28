@@ -86,7 +86,7 @@ class ElasticsearchConfig(BaseModel):
     use_ssl: bool = False
     verify_certs: bool = True
     request_timeout: int = 30
-    index_name: str = "video_ocr_docs"
+    index_name: str = "video_ocr_docs_dev"
 
     @property
     def url(self) -> str:

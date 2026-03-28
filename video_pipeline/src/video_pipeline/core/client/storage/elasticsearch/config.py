@@ -16,7 +16,7 @@ class ElasticsearchSettings(BaseModel):
     password: str | None = Field(default=None)
     use_ssl: bool = Field(default=False)
     verify_certs: bool = Field(default=True)
-    index_name: str = Field(default="video_ocr_docs")
+    index_name: str = Field(default="video_ocr_docs_dev")
     embedding_dim: int = Field(default=768)  # MMBertClient produces 768-dim embeddings
     request_timeout: int = Field(default=30)
 

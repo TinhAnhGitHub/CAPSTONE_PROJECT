@@ -69,7 +69,7 @@ class ElasticsearchSettings(BaseSettings):
     password: str | None = Field(default=None)
     use_ssl: bool = Field(default=False)
     verify_certs: bool = Field(default=True)
-    index_name: str = Field(default="video_ocr_docs")
+    index_name: str = Field(default="video_ocr_docs_dev")
     embedding_dim: int = Field(default=384)
     request_timeout: int = Field(default=30)
 
