@@ -57,11 +57,11 @@ async def trigger_concurrent(video_paths: list[tuple[str, str]], timeout: int = 
 
 if __name__ == "__main__":
     video_paths = [
-        # ('0e64f1c0da591ca67f07b7f9', 's3://video/veritasium_00.mp4'),
-        # ('c98019fd17ff4420ea47eee7', 's3://video/veritasium_01.mp4'),
+        ('0e64f1c0da591ca67f07b7f9', 's3://video/veritasium_00.mp4'),
+        ('c98019fd17ff4420ea47eee7', 's3://video/veritasium_01.mp4'),
         # ('eee3534844edab3ebb4d6ceb', 's3://video/veritasium_02.mp4'),
         # ('f784df5c6c00eb123f9820dc', 's3://video/veritasium_03.mp4'),
-        ('c510fac771767405c891bf64', 's3://video/veritasium_04.mp4'),
+        # ('c510fac771767405c891bf64', 's3://video/veritasium_04.mp4'),
         # ('4a081d6f16c83d089f67161b', 's3://video/veritasium_05.mp4'),
         # ('92ba4b2e27f460945fded9e5', 's3://video/veritasium_06.mp4'),
         # ('833d951b499a8e12d53803b1', 's3://video/veritasium_07.mp4'),
