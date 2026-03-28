@@ -1,39 +1,55 @@
+from collections import defaultdict
 from email.mime import image
+import json
+import traceback
+
+from app.core.dependencies import UserServiceDep
 from beanie import PydanticObjectId
 from fastapi import HTTPException
 from fastapi.security import HTTPBearer
-import jwt
-import socketio
-
-from app.schema.user import ALGORITHM, SECRET_KEY
-
-sio = socketio.AsyncServer(
-    async_mode="asgi", cors_allowed_origins="*", logger=True, engineio_logger=True
-)
-
+import websockets
+import re
 
 import asyncio
 from app.core.lifespan import app_state
-from app.model.session_message import ImageBlock, SessionMessage, TextBlock, VideoBlock
+from app.model.session_message import (
+    ImageBlock,
+    SessionMessage,
+    TextBlock,
+    ThinkingBlock,
+    ThinkingStep,
+    ToolStep,
+    ToolsBlock,
+    VideoBlock,
+    VideoSegment,
+)
+
 from llama_index.core.base.llms.types import MessageRole
 
+from app.api.socket_handlers.agent_progress_event import handle_agent_progress_event
+from app.api.socket_handlers.utils.session_room import session_room
+from app.api.socket_handlers.agent_stream import handle_agent_stream
+from app.api.socket_handlers.save_thinking_block import save_thinking_block
+from app.api.socket_handlers.save_text_block import save_text_block
+from app.api.socket_handlers.save_tool_block import save_tool_block
+from app.core.lifespan import app_state
+from app.model.video import Video
 
 security = HTTPBearer(auto_error=False)
 
+# AGENT SOCKET USES RAW WS
+sio = app_state.sio
 
-def optional_verify_token(credentials=security):
-    if credentials is None:  # no token provided
-        return None
-    try:
-        payload = jwt.decode(
-            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
-        )
-        return payload
-    except jwt.InvalidTokenError:
-        # You could either return None (treat as guest) or reject
-        raise HTTPException(status_code=401, detail="Invalid token")
+global_session_tasks = {
+    # session_id: {
+    #   "task": asyncio.Task,
+    #   "accum": list,      # ai_message_blocks
+    #   "status": "streaming" | "done" | "cancelled",
+    # }
+}
 
 
+# at agentouput, delete session_id task from global_session_tasks
 @sio.on("stream_chat")
 async def handle_stream_chat(socket_id, data: dict):
     try:
@@ -42,18 +58,26 @@ async def handle_stream_chat(socket_id, data: dict):
         session_id = data.get("sessionId", None)
         user_id = data.get("userId")  # could be None for guest
         message = data.get("text")
+        video_ids = data.get("videos", [])  # list of video ids
 
+        # create user message
         user_message = SessionMessage(
             session_id=None,
             role=MessageRole.USER,
             blocks=[
-                TextBlock(text_content=message),
+                TextBlock(text=message),
             ],
         )
-
+        # update chat history and user message
         session_id = await app_state.chat_service.add_message(
             session_id, user_id, user_message
         )
+
+        global_session_tasks[session_id] = {
+            "task": asyncio.current_task(),
+            "accum": None,
+            "status": "streaming",
+        }
 
         # tell client message received
         await sio.emit(
@@ -61,161 +85,408 @@ async def handle_stream_chat(socket_id, data: dict):
             {
                 "role": "user",
                 "content": message,
-                # "timestamp": user_message.timestamp.isoformat(),
                 "session_id": session_id,
             },
-            to=socket_id,
+            to=session_room(session_id),
         )
         # send data to agent, agent stream back
         try:
             # request agent
-            ai_url = "http://100.113.186.28:4141/api/agent/stream"
+            # lấy history giữa người dùng và bot bằng session_id
+            # [{"role": "user", "content": message}, {"role": "assistant", "content": response}, ...]
+            user_service = app_state.user_service
+            chat_history = await user_service.get_user_chat_detail(session_id)
+            chat_history_dict = []
+            for chat in chat_history:
+                chat_dict = chat.model_dump()
+                del chat_dict["id"]
+                del chat_dict["session_id"]
+                del chat_dict["timestamp"]
+                chat_history_dict.append(chat_dict)
+
+            # ai_url = "ws://100.113.186.28:8050/ws/start_workflow"
+            ai_url = "ws://localhost:8050/ws/start_workflow"
+            # payload = {
+            #     "user_id": user_id,
+            #     "video_ids": video_ids,
+            #     "user_demand": message,
+            #     "chat_history": chat_history_dict,
+            # }
             payload = {
-                "session_id": str(session_id),
-                "text": message,
-                "videos": video_ids,
+                "session_id": session_id,
+                # "session_id": 692ad412086ada3a309334ff,
                 "user_id": user_id,
+                # "user_id": 692ad412086ada3a309334ff,
+                "video_ids": video_ids,
+                # "video_ids": [
+                #     "692ad412086ada3a309334ff",
+                #     "692ad412086ada3a30933500",
+                #     "692ad412086ada3a30933501",
+                #     "692ad412086ada3a30933503",
+                # ],
+                "user_demand": message,
+                # "user_demand": "Can you find me moments about japanese sewer",
+                "chat_history": chat_history_dict,
+                # "chat_history": [
+                #     {
+                #         "role": "user",
+                #         "content": "I want to find a moment related to Tokyo city, where they develop an underground drainage system to cope with climate change. Could you find it for me?????",
+                #     },
+                # {
+                #     "role": "assistant",
+                #     "content": "Sure! I have found a moment in the video that discusses Tokyo's underground drainage system designed to address climate change challenges. Would you like me to provide more details or show you the specific segment?",
+                # }
+                # ],
             }
 
-            full_response = []
-            # HTTP stream 
-            async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("POST", ai_url, json=payload) as response:
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        if line.strip() == "[DONE]":
-                            break
-                        try:
-                            line = line.replace("data:", "").strip()
-                            data = json.loads(line)
-                            # data: {"chunk": "...", "msg_type": "text"/"image"/"video"}
-                            chunk = data.get("chunk", "")
-                            msg_type = data.get("msg_type", "text")
-                            
-                            await sio.emit(
-                                "stream_chunk",
-                                {
-                                    "chunk": chunk,
-                                    "msg_type": msg_type,
-                                    "role": MessageRole.ASSISTANT.value,
-                                },
-                                to=socket_id,
+            class AccumulatedData:
+                def __init__(self):
+                    self.text_accum = ""
+                    self.thinking_accum = []
+                    self.tools_accum = []
+                    self.ai_message_blocks = []
+                    self.prev_msg_type = ""
+
+            # HTTP stream
+            async with websockets.connect(ai_url) as ws:
+                await ws.send(json.dumps(payload))
+
+                accum = AccumulatedData()
+                global_session_tasks[session_id]["accum"] = accum
+                # text_accum = ""
+                # prev_msg_type = ""
+                # tools_accum = []
+                # thinking_accum = []
+                # ai_message_blocks = []
+                async for msg in ws:
+                    try:
+                        data = json.loads(msg)
+                        data = data.get("data", {})
+                        msg_type = data.get("event_type", "")
+
+                        # Save accumulated stream when transitioning away from AgentStream
+                        if (
+                            accum.prev_msg_type == "AgentStream"
+                            and msg_type != "AgentStream"
+                        ):
+                            # Save thinking block first (if any)
+                            if accum.thinking_accum:
+                                save_thinking_block(accum)
+                            # Save text block (if any) - use 'if' not 'elif' to save both
+                            if accum.text_accum:
+                                save_text_block(accum)
+                        # save tool block
+                        if (
+                            accum.prev_msg_type == "ToolCallResult"
+                            or accum.prev_msg_type == "ToolCall"
+                        ) and (msg_type != "ToolCallResult" and msg_type != "ToolCall"):
+                            if accum.tools_accum:
+                                save_tool_block(accum)
+                        # content = data.get("content", "")
+                        # AgentProgressEvent -> ...
+                        # agentinput -> bỏ
+
+                        # agentstream:
+                        #     - thinking_delta -> hiện thinking
+                        #     - thinking_delta == null && (delta = cộng dồn, reponse = all)
+
+                        # agentoutput:
+                        #     - tổng hợp những cái ở trên
+
+                        # toolcall: -> hiện icon tool_name
+                        # toolcallresult -> iserror -> icon thành công
+
+                        # final event -> lưu chat_history
+
+                        if msg_type == "AgentProgressEvent":
+                            # hiện ...
+                            await handle_agent_progress_event(session_id, data)
+                        # elif msg_type == "AgentInput":
+                        #     pass
+                        elif msg_type == "AgentStream":
+                            await handle_agent_stream(session_id, data, accum)
+                        elif msg_type == "ToolCall":
+                            tool_id = data.get("tool_id", "")
+                            description = data.get("description", "")
+                            tool_step = ToolStep(
+                                tool_name=tool_id,
+                                description=description,
+                                status="finished",
                             )
-                            full_response.append({"msg_type": msg_type, "chunk": chunk})
+                            accum.tools_accum.append(tool_step)
 
-                        except Exception as e:
-                            print("⚠️ parse error:", e, line)
-            # update the db
-            blocks = parseFullResponseToBlocks(full_response)
+                            await sio.emit(
+                                "tool_call",
+                                {
+                                    "tool_id": tool_id,
+                                    "tool_name": tool_id,
+                                },
+                                to=session_room(session_id),
+                            )
+                        elif msg_type == "ToolCallResult":
+                            # show toolicon trước
+                            # mốt show list hình ảnh từ s3, video + các timestamp
 
-            ai_message = SessionMessage(
-                session_id=PydanticObjectId(session_id),
-                role=MessageRole.ASSISTANT,
-                blocks=blocks,
-            )
-            await app_state.chat_service.add_message(session_id, "ai", ai_message)
+                            raw_output = data.get("tool_output", {}).get(
+                                "raw_output", {}
+                            )
+
+                            if isinstance(raw_output, dict):
+                                summary = raw_output.get("summary", {})
+                            else:
+                                summary = {}
+                            # check if object
+                            media_type = summary.get("result_type", "")
+
+                            s3_base = "s3://"
+                            http_base = "http://100.113.186.28:9000/"
+
+                            async def format_tool_result(media):
+                                if media_type == "image_search":
+                                    image_groups = defaultdict(list)
+                                    image_results = []
+                                    for item in media:
+                                        image_groups[item["video_id"]].append(item)
+
+                                    for video_id, images in image_groups.items():
+                                        url_list = []
+                                        for item in images:
+                                            url_list.append(
+                                                item["minio_path"].replace(
+                                                    s3_base, http_base
+                                                )
+                                            )
+                                        image_block = ImageBlock(
+                                            video_id=video_id, url=url_list
+                                        )
+                                        accum.ai_message_blocks.append(image_block)
+                                        image_results.append(image_block)
+                                    return {
+                                        "media_type": "image",
+                                        "results": image_results,
+                                    }
+                                elif media_type == "segment_caption_search":
+                                    # video_url = [
+                                    #     item["minio_path"].replace(s3_base, http_base)
+                                    #     for item in media
+                                    # ]
+                                    # group similar video segments into one block
+                                    video_groups = defaultdict(list)
+                                    video_results = []
+                                    for item in media:
+                                        video_groups[item["video_id"]].append(item)
+
+                                    for video_id, segments in video_groups.items():
+                                        segment_list = []
+                                        for item in segments:
+                                            # fire-and-forget: schedule but don't await
+                                            asyncio.create_task(
+                                                app_state.user_service.generate_video_thumbnails(
+                                                    video_id=video_id,
+                                                    frame_index=item["frame_range"][
+                                                        "start"
+                                                    ],
+                                                )
+                                            )
+                                            thumbnail_urls = await app_state.minio_service.generate_thumbnail_links(
+                                                video_id=video_id,
+                                                frame_index=item["frame_range"][
+                                                    "start"
+                                                ],
+                                            )
+
+                                            segment = VideoSegment(
+                                                start=item["frame_range"]["start"],
+                                                end=item["frame_range"]["end"],
+                                                caption=item["caption_preview"],
+                                                preview_images=thumbnail_urls,
+                                            )
+                                            segment_list.append(segment)
+                                        # sort segment_list based on start time
+                                        segment_list.sort(key=lambda x: x.start)
+                                        video = await Video.get(video_id)
+                                        video_block = VideoBlock(
+                                            video_id=video_id,
+                                            # public url
+                                            name=video.name,
+                                            length=video.length,
+                                            fps=(
+                                                video.fps
+                                                if video.fps is not None
+                                                else segments[0].get("fps", 30)
+                                            ),
+                                            url=video.url,
+                                            thumbnail=video.thumbnail,
+                                            segments=segment_list,
+                                        )
+                                        accum.ai_message_blocks.append(video_block)
+                                        video_results.append(video_block)
+
+                                    return {
+                                        "media_type": "video",
+                                        "results": video_results,
+                                    }
+                                else:
+                                    return {"media_type": "unknown", "results": []}
+
+                            media = summary.get("top_matches", [])
+                            formatted_media = await format_tool_result(media)
+                            if formatted_media["media_type"] in [
+                                "image",
+                                "video",
+                            ]:
+                                # Convert Pydantic models to dicts for JSON serialization
+                                emit_data = {
+                                    "media_type": formatted_media["media_type"],
+                                    "results": [
+                                        r.model_dump()
+                                        for r in formatted_media["results"]
+                                    ],
+                                }
+                                await sio.emit(
+                                    "media", emit_data, to=session_room(session_id)
+                                )
+                            else:
+                                tool_id = data.get("tool_id", "unknown_tool")
+                                tool_name = data.get("tool_id", "unknown_tool")
+                                description = data.get("description", "")
+                                # also update tool result in ai message blocks
+                                await sio.emit(
+                                    "tool_result",
+                                    {
+                                        "tool_id": tool_id,
+                                        "tool_name": tool_name,
+                                        "description": description,
+                                    },
+                                    to=session_room(session_id),
+                                )
+                        elif msg_type == "AgentOutput":
+                            # save to database
+                            await save_message(session_id, accum)
+                            global_session_tasks[session_id]["status"] = "done"
+
+                            # Emit stream_end to notify the client
+                            await sio.emit(
+                                "stream_end",
+                                {"session_id": session_id},
+                                to=session_room(session_id),
+                            )
+
+                            # clean up global session task
+                            asyncio.create_task(cleanup_session(session_id))
+
+                        else:
+                            pass
+
+                        # Update prev_msg_type at end of loop
+                        accum.prev_msg_type = msg_type
+
+                    except Exception as e:
+                        print("⚠️ parse error:", e)
+                        traceback.print_exc()  # This will show the exact line number
+
         except Exception as e:
             await sio.emit(
-                "error", {"message": "agent unreachable: " + str(e)}, to=socket_id
+                "error",
+                {"message": "agent unreachable: " + str(e)},
+                to=session_room(session_id),
             )
 
-        # await sio.emit("stream_thinking", {"status": "AI is thinking..."}, to=socket_id)
-        # await asyncio.sleep(1)  # simulate delay for thinking
-        # await sio.emit(
-        #     "stream_thinking", {"status": "AI is getting images..."}, to=socket_id
-        # )
-        # await asyncio.sleep(1)  # simulate delay for getting images
-
-        # # then response
-        # # stream response
-        # full_response = ""
-        # async for chunk in app_state.agent.stream_chat("message"):
-        #     if chunk:
-        #         full_response += chunk
-        #         await sio.emit(
-        #             "stream_chunk",
-        #             {
-        #                 "chunk": chunk,
-        #                 "msg_type": "text",
-        #                 "role": MessageRole.ASSISTANT.value,
-        #             },  # assistant
-        #             to=socket_id,
-        #         )
-        #         await asyncio.sleep(0.05)
-
-        # # stream videos reponse
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
-        #         "msg_type": "video",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
-        #         "msg_type": "video",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await asyncio.sleep(1)
-        # # stream images reponse
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": "Images I found for you:",
-        #         "msg_type": "text",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },  # assistant
-        #     to=socket_id,
-        # )
-
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": ["https://example.com/image1.jpg"],
-        #         "msg_type": "image",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await sio.emit(
-        #     "stream_chunk",
-        #     {
-        #         "chunk": [
-        #             "https://example.com/image2.jpg",
-        #             "https://example.com/image3.jpg",
-        #         ],
-        #         "msg_type": "image",
-        #         "role": MessageRole.ASSISTANT.value,
-        #     },
-        #     to=socket_id,
-        # )
-        # await asyncio.sleep(0.5)
-
-        # # save message
-        # ai_message = SessionMessage(
-        #     session_id=PydanticObjectId(session_id),
-        #     role=MessageRole.ASSISTANT,
-        #     blocks=[
-        #         TextBlock(text_content=full_response),
-        #         # list lấy từ stream ra
-        #         VideoBlock(video_urls=["1.mp4", "2.mp4"]),
-        #         TextBlock(text_content="Images I found for you:"),
-        #         ImageBlock(image_urls=["1.jpg", "2.jpg", "3.jpg"]),
-        #     ],
-        # )
-        # await app_state.chat_service.add_message(session_id, "ai", ai_message)
-
-        # # notify finish
-        # await sio.emit(
-        #     "stream_end", {"timestamp": ai_message.timestamp.isoformat()}, to=socket_id
-        # )
-
     except Exception as e:
-        await sio.emit("error", {"message": str(e)}, to=socket_id)
+        await sio.emit("error", {"message": str(e)}, to=session_room(session_id))
+
+
+async def save_message(session_id, accum):
+    ai_message = SessionMessage(
+        session_id=session_id,
+        role=MessageRole.ASSISTANT,
+        blocks=accum.ai_message_blocks,
+    )
+
+    # might put random id later
+    await app_state.chat_service.add_message(session_id, None, ai_message)
+
+
+@sio.on("join_session")
+async def join_session(sid, data):
+    session_id = data.get("session_id", None)
+    if session_id:
+        # Leave all previous session rooms first
+        rooms = sio.rooms(sid)
+        for room in rooms:
+            if room.startswith("session:") and room != session_room(session_id):
+                await sio.leave_room(sid, room)
+
+        # Now join the new session room
+        await sio.enter_room(sid, session_room(session_id))
+    # check inside global_session_tasks if there is a running task for this session
+    if session_id in global_session_tasks:
+        status = global_session_tasks[session_id]["status"]
+        if status == "streaming":
+            # Send just the blocks array, not the whole SessionMessage
+            # blocks = global_session_tasks[session_id]["accum_blocks"].copy()
+            blocks = global_session_tasks[session_id]["accum"].ai_message_blocks.copy()
+
+            # Include in-progress thinking block if any
+            # thinking_accum = global_session_tasks[session_id].get("thinking_accum", [])
+            thinking_accum = global_session_tasks[session_id]["accum"].thinking_accum
+            if thinking_accum:
+                blocks.append(ThinkingBlock(steps=thinking_accum))
+
+            # Include in-progress text block if any
+            text_accum = global_session_tasks[session_id]["accum"].text_accum
+            if text_accum:
+                blocks.append(TextBlock(text=text_accum))
+
+            blocks_data = [block.model_dump() for block in blocks]
+
+            await sio.emit(
+                "continue_stream",
+                {
+                    "session_id": session_id,
+                    "content": blocks_data,
+                },
+                to=sid,
+            )
+        # Don't emit anything for "done" status - data is already in DB
+        # and will be fetched by the frontend query
+
+
+@sio.on("cancel_stream")
+async def cancel_stream(sid, data):
+    """User explicitly requested to stop the stream (clicked Stop button)."""
+    session_id = data.get("session_id")
+    state = global_session_tasks.get(session_id)
+    if not state:
+        return
+
+    task = state["task"]
+    if task:
+        task.cancel()
+
+    state["status"] = "cancelled"
+
+    # Notify client that stream was cancelled
+    await sio.emit(
+        "stream_end",
+        {"session_id": session_id, "cancelled": True},
+        to=session_room(session_id),
+    )
+
+    #  save the accumulated thinking block and text block to Chat document in mongodb
+    await save_message(session_id, state["accum"])
+
+    # Clean up immediately since user cancelled
+    asyncio.create_task(cleanup_session(session_id, delay=1))
+
+
+async def cleanup_session(session_id: str, delay: int = 5):
+    """Clean up session task after a short delay to allow any final messages to be processed."""
+    await asyncio.sleep(delay)
+    state = global_session_tasks.get(session_id)
+    if not state:
+        return
+
+    # only delete if safe
+    if state["status"] in ("done", "cancelled"):
+        global_session_tasks.pop(session_id, None)

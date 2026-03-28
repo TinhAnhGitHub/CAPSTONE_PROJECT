@@ -10,7 +10,7 @@ class AppSettings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
 
     # Mongo Settings:
-    MONGO_URI: str = Field("mongodb://localhost:27017", description="MongoDB connection string")
+    MONGO_URI: str = Field("mongodb://100.120.22.90:27017", description="MongoDB connection string")
     MONGO_DB: str = Field("mydatabase", description="Default database name")
 
     # chat settings
@@ -28,7 +28,6 @@ class AppSettings(BaseSettings):
         "chat_messages", description="default chat message collection name"
     )
 
-
     # LLM settings
 
     # GOOGLE AUTH CLIENT settings
@@ -36,7 +35,8 @@ class AppSettings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_SECRET: str = Field(..., description="Google OAuth Client Secret")
 
     # MINIO settings for file storage
-    MINIO_PUBLIC_ENDPOINT: str = Field("localhost:9000", description="MinIO server endpoint")
+    MINIO_PUBLIC_ENDPOINT: str = Field("100.113.186.28:9000", description="MinIO server endpoint")
+
     MINIO_ACCESS_KEY: str = Field("minioadmin", description="MinIO access key")
     MINIO_SECRET_KEY: str = Field("minioadmin", description="MinIO secret key")
     # MINIO_SECURE: bool = Field(False, description="Use secure connection (HTTPS) for MinIO")

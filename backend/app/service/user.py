@@ -5,9 +5,11 @@ from typing import Annotated, Sequence
 
 from beanie import PydanticObjectId
 from bson import ObjectId
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, File, HTTPException, status
+
+import logging
+import httpx
 import jwt
-from passlib.exc import InvalidTokenError
 from app.model.user import User
 
 from llama_index.core.base.llms.types import MessageRole
@@ -17,7 +19,6 @@ from uuid import uuid4
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
-from app.core.auth import oauth2_scheme
 from app.schema.user import (
     ACCESS_TOKEN_EXPIRE_HOURS,
     ALGORITHM,
@@ -25,7 +26,7 @@ from app.schema.user import (
     TokenData,
 )
 import requests
-from app.service.minio import Minio as MinioService
+from app.service.minio import MinioService
 from app.model.chat_history import ChatHistory
 from app.model.group import Group
 from app.model.session_video import SessionVideo
@@ -33,10 +34,13 @@ from app.model.video import Video
 from app.model.session_message import SessionMessage
 from fastapi.encoders import jsonable_encoder
 
+from werkzeug.utils import secure_filename
+
 
 class UserService:
-    def __init__(self, minio_service: MinioService):
+    def __init__(self, minio_service: MinioService, sio):
         self.minio_service = minio_service
+        self.sio = sio
 
     def verify_google_id_token(self, id_token_str: str, access_token: str) -> dict:
         """Verify Google's JWT token and extract user info"""
@@ -164,6 +168,15 @@ class UserService:
         )
         return chat_history
 
+    async def create_new_chat_session(self, user_id: str):
+        session_id = PydanticObjectId()
+        new_chat_his = ChatHistory(
+            id=session_id,
+            user_id=PydanticObjectId(user_id),
+        )
+        await new_chat_his.insert()
+        return str(session_id)
+
     async def get_user_chat_detail(self, session_id: str):
         """get chat detail by session id"""
         chat_messages = (
@@ -181,20 +194,24 @@ class UserService:
         return groups
 
     async def create_user_group(self, user_id: str, group_name: str = "default"):
-        new_group = Group(user_id=user_id, name=group_name)
+        group_id = PydanticObjectId()
+        # new_group = Group(id=group_id, user_id=user_id, name=group_name)
+        new_group = Group(id=group_id, user_id=user_id)
         await new_group.insert()
-        return new_group
+        return str(group_id)
 
     async def add_videos_to_user(
-        self, user_id: str, filenames: list[str], group_id: str, session_id: str = None
+        self, user_id: str, files: list[File], group_id: str, session_id: str = None
     ):
+        # sanitize filenames
+        filenames = [secure_filename(file.filename) for file in files]
         new_videos = [
             Video(user_id=user_id, group_id=group_id, name=filename)
             for filename in filenames
         ]
-        # get video ids
+        # get video ids # order true
         inserted_videos = await Video.insert_many(new_videos)
-        video_ids = inserted_videos.inserted_ids
+        video_ids = inserted_videos.inserted_ids  # pydantic object ids
         new_group_videos = [
             SessionVideo(
                 session_id=PydanticObjectId(session_id),
@@ -205,17 +222,47 @@ class UserService:
         ]
         await SessionVideo.insert_many(new_group_videos)
         # save videos to minio
-        video_id_video_url_thumbnail_url_s3_url_obj = await self.minio_service.save_videos(
-            video_ids, files
+        video_id_video_url_thumbnail_url_length_fps_obj = (
+            self.minio_service.save_videos(video_ids, files)
         )
         # update video thumbnail urls
-        for vid, video_url, thumb_url, s3_url in video_id_video_url_thumbnail_url_s3_url_obj:
-            video = await Video.get(vid)
+        for (
+            video_id,
+            video_url,
+            thumbnail_url,
+            length,
+            fps,
+        ) in video_id_video_url_thumbnail_url_length_fps_obj:
+            video = await Video.get(video_id)
             if video:
-                video.thumbnail = thumb_url
+                video.thumbnail = thumbnail_url
+                video.url = video_url
+                video.length = length
+                video.fps = fps
                 await video.save()
 
-        return video_id_video_url_thumbnail_url_s3_url_obj
+        return video_id_video_url_thumbnail_url_length_fps_obj
+
+    async def ingest_videos(self, user_id: str, video_ids_video_url_obj):
+        # bảo ingestion ingest mấy video có id đó
+        try:
+            async with httpx.AsyncClient() as client:
+                answer = await client.post(
+                    "http://100.113.186.28:8050/uploads/",
+                    json={"videos": video_ids_video_url_obj, "user_id": user_id},
+                )
+        except Exception as e:
+            logging.error(f"Error notifying ingestion service: {e}")
+
+    async def retry_ingestion(self, user_id: str, video_ids: list[str]):
+        # get videos info from db and filter videoid and url only
+        video_objs = []
+        for vid in video_ids:
+            video = await Video.get(PydanticObjectId(vid))
+            if video:
+                video_objs.append({"video_id": vid, "video_url": video.url})
+        print("🔄🔄🔄 Retrying ingestion for videos:", video_objs)
+        await self.ingest_videos(user_id, video_objs)
 
     async def get_user_videos(self, group_id: str, session_id: str):
         # all videos and their selected state
@@ -223,6 +270,7 @@ class UserService:
             Video.group_id == PydanticObjectId(group_id)
         ).to_list()
 
+        # if session id is null return all videos with selected false
         session_videos = await SessionVideo.find(
             SessionVideo.session_id == PydanticObjectId(session_id)
         ).to_list()
@@ -266,4 +314,133 @@ class UserService:
         await Video.find({"_id": {"$in": video_ids}}).delete()
         # delete the session videos
         await SessionVideo.find({"video_id": {"$in": video_ids}}).delete()
+        # also tell ingestion to stop processing if it is processing those videos
+        # request ingestion service
+        async with httpx.AsyncClient() as client:
+            # loop thorugh video ids to make request
+            # liệu ingested có đưa ra 2th là xoá hay chưa xoá ko?
+            for vid in video_ids:
+                try:
+                    await client.post(
+                        f"http://100.113.186.28:8000/management/runs/{vid}/cancel",
+                        json={"video_id": str(vid)},
+                    )
+                except Exception as e:
+                    print(
+                        f"Error notifying ingestion service to delete video {vid}: {e}"
+                    )
+
+        # also delete from minio
+        self.minio_service.delete_videos(video_ids)
+
         return True
+
+    async def delete_session(self, session_id: str):
+        # xoá chat_messages
+        await SessionMessage.find(
+            SessionMessage.session_id == PydanticObjectId(session_id)
+        ).delete()
+        # xoá session_videos
+        await SessionVideo.find(
+            SessionVideo.session_id == PydanticObjectId(session_id)
+        ).delete()
+        # xoá session (chat_history)
+        await ChatHistory.find_one(
+            ChatHistory.id == PydanticObjectId(session_id)
+        ).delete()
+
+        return True
+
+    async def rename_session(self, session_id: str, new_name: str):
+        chat_history = await ChatHistory.find_one(
+            ChatHistory.id == PydanticObjectId(session_id)
+        )
+        if chat_history:
+            chat_history.name = new_name
+            await chat_history.save()
+            return True
+        return False
+
+    async def rename_group(self, group_id: str, new_name: str):
+        group = await Group.find_one(Group.id == PydanticObjectId(group_id))
+        if group:
+            group.name = new_name
+            await group.save()
+            return True
+        return False
+
+    async def rename_video(self, video_id: str, new_name: str):
+        video = await Video.find_one(Video.id == PydanticObjectId(video_id))
+        if video:
+            video.name = new_name
+            await video.save()
+            return True
+        return False
+
+    async def generate_video_thumbnails(self, video_id: str, frame_index: int):
+        video = await Video.get(PydanticObjectId(video_id))
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        if self.minio_service is None:
+            # right now for debugging, return empty list
+            return []
+            # raise HTTPException(status_code=500, detail="Minio service not available")
+
+        thumbnail_urls = await self.minio_service.generate_timeline_thumbnails(
+            video_id, frame_index
+        )
+
+        # socket.io to emit its done
+        await self.sio.emit(
+            "thumbnails_generated",
+            {"video_id": video_id, "thumbnail_urls": thumbnail_urls},
+        )
+
+        return thumbnail_urls
+
+    async def search_text_messages(self, user_id: str, query: str):
+        # Get all sessions for this user
+        sessions = await ChatHistory.find(
+            ChatHistory.user_id == PydanticObjectId(user_id)
+        ).to_list()
+        session_map = {s.id: s.name for s in sessions}
+        session_ids = list(session_map.keys())
+
+        if not session_ids:
+            return []
+
+        # Fetch all messages across user's sessions
+        messages = await SessionMessage.find(
+            {"session_id": {"$in": session_ids}}
+        ).to_list()
+
+        query_lower = query.lower()
+        results = []
+
+        for msg in messages:
+            for block in msg.blocks:
+                if block.block_type == "text" and query_lower in block.text.lower():
+                    sid = msg.session_id
+                    text = block.text
+                    idx = text.lower().find(query_lower)
+                    start = max(0, idx - 40)
+                    end = min(len(text), idx + len(query) + 40)
+                    snippet = (
+                        ("..." if start > 0 else "")
+                        + text[start:end]
+                        + ("..." if end < len(text) else "")
+                    )
+
+                    results.append(
+                        {
+                            "session_id": str(sid),
+                            "message_id": str(msg.id),
+                            "name": session_map.get(sid, str(sid)),
+                            "snippet": snippet,
+                            "role": str(msg.role),
+                        }
+                    )
+                    break
+
+        return results

@@ -1,19 +1,22 @@
-import React, { useState } from 'react'
-import { messagesConversations } from '@/mockdata/messages'
-import { useQuery } from 'react-query';
+import React, { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from 'react-query';
 import api from '@/api/api';
 import { useStore } from '@/stores/user';
 import { useStore as useStoreChat } from "@/stores/chat";
 
 import clsx from 'clsx';
+import SessionDropdownList from './SessionDropdownList';
+import { PencilSquareIcon } from '@heroicons/react/20/solid';
+import { useCreateNewChat } from '@/api/services/hooks/query';
+import ChatHistory from './ChatHistory';
+import SearchDialog from './SearchDialog';
+import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 
 export default function HistoryConversations() {
   const chatHistory = useStoreChat((state) => state.chatHistory);
   const setChatHistory = useStoreChat((state) => state.setChatHistory);
-  const setSessionId = useStoreChat((state) => state.setSessionId);
   const session_id = useStoreChat((state) => state.session_id);
-  const setChatMessages = useStoreChat((state) => state.setChatMessages);
-  const setWorkspaceVideos = useStoreChat((state) => state.setWorkspaceVideos);
+  const setSessionId = useStoreChat((state) => state.setSessionId);
   const user = useStore((state) => state.user);
 
   useQuery(
@@ -28,50 +31,70 @@ export default function HistoryConversations() {
         setChatHistory(data);
         if (data.length > 0) {
           if (!session_id) {
-            setSessionId(data[0].session_id);
+            setSessionId(data[0]._id);
           }
         }
       },
-      enabled: !!user,
     }
   );
 
+  const createNewChatMutation = useCreateNewChat();
+
   function createNewChat() {
-    // set session id to null
-    setSessionId(null);
-    setChatMessages([]);
-    setWorkspaceVideos([]);
+    createNewChatMutation.mutate();
   }
 
-  function selectConversation(session_id) {
-    // set session id 
-    setSessionId(session_id);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  function handleEditChat(chatId, newName) {
+    // Update local state optimistically
+    const newChatHistory = chatHistory.map(chat =>
+      chat._id === chatId ? { ...chat, name: newName } : chat
+    );
+    setChatHistory(newChatHistory);
+    // TODO: Call API to persist the change
+    api.patch(`/api/user/session/${chatId}/rename`, { new_name: newName });
   }
+
 
   return (
     <div className='relative flex flex-col h-full '>
-      <div className='border-b border-gray-800 flex items-center justify-between sticky top-0 bg-black/90 p-2 '>
-        <p className='text-sm p-2 text-gray-400/60'>Chats</p>
-        {/* delete logic */}
-        <div className='btn-icon' onClick={createNewChat}>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-          </svg>
+      {/* New Chat Button */}
+      <div className='sticky flex gap-2  top-0 px-2 py-2 border-b border-surface-light h-14'>
+        <button
+          onClick={createNewChat}
+          className='flex items-center gap-2 self-center w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
+        >
+          <PencilSquareIcon className="w-5 h-5" />
+          <span>New Chat</span>
+        </button>
+        <button
+          onClick={() => setSearchOpen(true)}
+          className='flex items-center justify-center self-center px-3 py-2 rounded-lg bg-surface-hover hover:bg-surface-light text-text-muted hover:text-text transition-colors cursor-pointer'
+          title='Search chats'
+        >
+          <MagnifyingGlassIcon className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Your Chats Section */}
+      <div className='flex flex-col flex-1 overflow-hidden'>
+        <p className='text-xs text-text-muted uppercase tracking-wide px-4 py-2'>Your Chats</p>
+        <div className='flex flex-col flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto'>
+          {
+            chatHistory.map((conv, idx) => (
+              <ChatHistory
+                key={conv._id || idx}
+                conv={conv}
+                session_id={session_id}
+                onEdit={handleEditChat}
+              />
+            ))
+          }
         </div>
       </div>
-      <div className='flex flex-col scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-300 overflow-y-auto'>
-        {
-          chatHistory.map((conv, idx) => (
-            <div key={idx}
-              className={clsx('m-1 py-2 px-4 hover:bg-gray-800 cursor-pointer rounded-lg',
-                (session_id === conv._id) ? 'bg-gray-800' : ''
-              )}
-              onClick={() => selectConversation(conv._id)}>
-              <div className='text-sm '>{conv?._id?.slice(0, 8)}</div>
-            </div>
-          ))
-        }
-      </div>
+
+      <SearchDialog isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   )
 }

@@ -1,6 +1,10 @@
-import { CheckIcon, XMarkIcon } from "@heroicons/react/16/solid"
+import { CheckCircleIcon } from "@heroicons/react/24/solid"
+import { PlusCircleIcon } from "@heroicons/react/24/outline"
+
 export default function SelectedIcon({ selected }) {
     return (
-        selected ? <CheckIcon className="h-5 w-5 text-green-500" /> : <XMarkIcon className="h-5 w-5 text-red-500" />
+        selected
+            ? <CheckCircleIcon className="size-5 text-accent" />
+            : <PlusCircleIcon className="size-5 text-white/70 hover:text-white transition-colors" />
     )
 }

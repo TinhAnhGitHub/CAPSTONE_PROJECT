@@ -1,10 +1,6 @@
 # app/main.py
 import socketio
 
-sio = socketio.AsyncServer(
-    async_mode="asgi", cors_allowed_origins="*", logger=True, engineio_logger=True
-)
-
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,8 +11,8 @@ import os
 from app.core.lifespan import lifespan
 from app.core.config import settings
 from app.api import chat
-from app.api import upload
 from app.api import user
+from app.api import ingestion
 
 from app.api.socket import sio
 
@@ -43,8 +39,8 @@ app_with_sockets = socketio.ASGIApp(sio, other_asgi_app=app)
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 app.include_router(chat.router)
-app.include_router(upload.router)
 app.include_router(user.router)
+app.include_router(ingestion.router)
 
 
 @app.get("/")

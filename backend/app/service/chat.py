@@ -8,7 +8,8 @@ from datetime import datetime
 from uuid import uuid4
 
 from app.model.chat_history import ChatHistory
-from app.model.session_message import CONTENT_BLOCK, SessionMessage
+from app.model.session_message import SessionMessage
+from llama_index.core.base.llms.types import MessageRole, ContentBlock
 
 
 class ChatService:
@@ -49,5 +50,5 @@ class ChatService:
         return False
 
     @staticmethod
-    def blocks_to_message(role: MessageRole, blocks: Sequence[CONTENT_BLOCK], **kwargs):
+    def blocks_to_message(role: MessageRole, blocks: Sequence[ContentBlock], **kwargs):
         return SessionMessage(role=role, blocks=list(blocks), additional_kwargs=kwargs)
