@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 class AgentModelConfig(BaseModel):
     model_id: str
     temperature: float | None = None
+    top_p: float | None = None
     max_tokens: int | None = None
+    max_completion_tokens: int | None = None
 
 
 class WorkerModelConfig(BaseModel):
@@ -19,7 +21,9 @@ class WorkerModelConfig(BaseModel):
     description: str = ""
     strengths: list[str] = []
     temperature: float | None = None
+    top_p: float | None = None
     max_tokens: int | None = None
+    max_completion_tokens: int | None = None
 
 
 class AgentsConfig(BaseModel):
@@ -180,7 +184,7 @@ class Settings(BaseModel):
 
 def load_settings(config_path: str | Path | None = None) -> Settings:
     if config_path is None:
-        config_path = Path(__file__).parent.parent.parent.parent.parent / "config" / "settings.yaml"
+        config_path = Path(__file__).parent.parent.parent.parent / "config" / "settings.yaml"
     else:
         config_path = Path(config_path)
 
