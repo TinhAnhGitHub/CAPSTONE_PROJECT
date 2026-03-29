@@ -34,7 +34,6 @@ async def start_workflow_ws(
         while True:
             data = await websocket.receive_json()
 
-            # Input validation
             required_fields = ['user_id', 'video_ids', 'user_demand', 'session_id']
             missing = [f for f in required_fields if f not in data]
             if missing:
