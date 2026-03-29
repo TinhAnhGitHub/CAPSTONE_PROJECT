@@ -3,13 +3,19 @@ from typing import Any
 from agno.db.base import AsyncBaseDb, BaseDb
 from agno.memory import MemoryManager
 from agno.models.base import Model
+from agno.run.agent import Message
+from agno.session.summary import SessionSummaryManager
 from agno.team import Team
 from agno.team.mode import TeamMode
+from agno.run.team import TeamRunEvent
+
 
 from videodeepsearch.agent.supervisor.greeter.prompt import (
     GREETER_VIDEO_DEEPSEARCH_DESCRIPTION,
     GREETER_VIDEO_DEEPSEARCH_SYSTEM_PROMPT,
     GREETER_VIDEO_DEEPSEARCH_INSTRUCTIONS,
+    SESSION_SUMMARY_PROMPT,
+    SESSION_SUMMARY_REQUEST_MESSAGE
 )
 
 
@@ -17,6 +23,7 @@ def build_videodeepsearch_team(
     session_id: str,
     user_id: str,
     model: Model,
+    summary_model: Model,
     members: list,  
     db: AsyncBaseDb | BaseDb,
 ) -> Team:
@@ -42,6 +49,13 @@ def build_videodeepsearch_team(
         update_memories=True,
         delete_memories=False,
         clear_memories=False,
+    )
+    
+    session_summarizer = SessionSummaryManager(
+        model=summary_model,
+        session_summary_prompt=SESSION_SUMMARY_PROMPT,
+        summary_request_message=SESSION_SUMMARY_REQUEST_MESSAGE
+        
     )
 
     return Team(
@@ -80,8 +94,14 @@ def build_videodeepsearch_team(
         markdown=True,
         instructions=GREETER_VIDEO_DEEPSEARCH_INSTRUCTIONS,
         
-        stream=False,
+        stream=True,
         stream_events=True,
         debug_mode=False,
-        debug_level=1
+        debug_level=1,
+        
+        events_to_skip=[
+            TeamRunEvent.session_summary_started,
+            TeamRunEvent.session_summary_completed
+        ],
+        session_summary_manager=session_summarizer
     )
