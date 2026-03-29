@@ -22,6 +22,11 @@ llm_provider:
       temperature: 0.3
       top_p: 0.9
       max_completion_tokens: 4096
+    summarizer:
+      model_id: google/gemini-2.5-flash-lite
+      temperature: 0.1
+      top_p: 0.9
+      max_completion_tokens: 4096
 
   workers:
   - name: qwen/qwen3.5-35b-a3b

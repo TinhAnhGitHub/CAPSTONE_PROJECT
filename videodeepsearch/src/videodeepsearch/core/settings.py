@@ -31,6 +31,7 @@ class AgentsConfig(BaseModel):
     orchestrator: AgentModelConfig
     planning: AgentModelConfig
     llm_tool: AgentModelConfig | None = None  # Separate model for LLM toolkit operations
+    summarizer: AgentModelConfig | None = None  
 
 
 class LLMProviderConfig(BaseModel):

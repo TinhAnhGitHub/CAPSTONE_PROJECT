@@ -26,6 +26,8 @@ from videodeepsearch.clients.storage.postgre import PostgresClient
 from videodeepsearch.clients.storage.qdrant import AudioQdrantClient, ImageQdrantClient, SegmentQdrantClient
 from videodeepsearch.core.settings import settings
 
+from dotenv import load_dotenv
+load_dotenv()
 
 def _init_mlflow():
     if not settings.mlflow.enabled:
@@ -182,6 +184,13 @@ async def lifespan(app: FastAPI):
     else:
         app.state.models["llm_tool"] = app.state.models["planning"]
         logger.info("llm_tool model not configured, using planning model as fallback")
+        
+    summarizer_cfg = llm_cfg.agents.summarizer
+    if summarizer_cfg:
+        app.state.models["summarizer"] = OpenRouter(**_build_model_kwargs(summarizer_cfg))
+    else:
+        app.state.models["summarizer"] = app.state.models["planning"]
+        logger.info("summarizer model not configured, using planning model as fallback")
     
     logger.info(f"Agent models initialized: {list(app.state.models.keys())}")
 
