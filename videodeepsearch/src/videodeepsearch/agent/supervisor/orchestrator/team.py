@@ -70,7 +70,7 @@ def build_orchestrator_team(
         db=db,
         description=PLANNING_AGENT_DESCRIPTION,
         system_prompt=PLANNING_AGENT_SYSTEM_PROMPT,
-        instructions=[PLANNING_AGENT_INSTRUCTIONS],
+        instructions=PLANNING_AGENT_INSTRUCTIONS,
         planning_toolkit=tool_registry,
     )
 

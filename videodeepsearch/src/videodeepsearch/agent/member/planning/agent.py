@@ -47,7 +47,6 @@ def get_planning_agent(
         enhanced_instructions = instructions
         tools_list = [planning_toolkit]
 
-    print(f"Planning agent: {enhanced_instructions=}")
     return Agent(
         name="Planning_Agent",
         role="Produce a detailed step-by-step execution plan for the given video retrieval demand",
