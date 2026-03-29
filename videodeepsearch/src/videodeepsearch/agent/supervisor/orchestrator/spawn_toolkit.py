@@ -66,10 +66,11 @@ class SpawnWorkerToolkit(Toolkit):
             return "No worker tools registered."
 
         lines = ["## Available Worker Tools\n"]
-        for alias, names in sorted(all_tools.items()):
+        for alias, tools_dict in sorted(all_tools.items()):
             lines.append(f"### {alias}")
-            for name in names:
-                lines.append(f"  - {alias}.{name}")
+            for name, instructions in tools_dict.items():
+                
+                lines.append(f"  - `{alias}.{name}`: \n{instructions}\n")
             lines.append("")
         lines.append(_TOOL_NAME_FORMAT_HINT)
         return "\n".join(lines)
@@ -233,7 +234,7 @@ class SpawnWorkerToolkit(Toolkit):
 
         all_names = [
             f"{alias}.{name}"
-            for alias, names in self.tool_selector.list_all().items()
-            for name in names
+            for alias, tools_dict in self.tool_selector.list_all().items()
+            for name in tools_dict.keys()
         ]
         return self.tool_selector.resolve(all_names)

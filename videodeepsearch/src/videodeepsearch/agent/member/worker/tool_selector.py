@@ -122,21 +122,28 @@ class ToolSelector:
         
         return resolved
     
-    def list_all(self) -> dict[str, list[str]]:
+    def list_all(self) -> dict[str, dict[str, str]]:
         """
         Return all tool names grouped by toolkit alias.
         Useful for the Planner to know what is available.
  
         Note: calls each factory once — use sparingly.
+
+        Returns:
+            Dict mapping alias -> dict of {func_name: instructions}
         """
-        result: dict[str, list[str]] = {}
+        result: dict[str, dict[str, str]] = {}
         for alias, factory in self._factories.items():
             try:
                 instance = factory()
                 all_funcs = {**instance.functions, **instance.async_functions}
-                result[alias] = sorted(all_funcs.keys())
+                result[alias] = {}
+                
+                for name, func in all_funcs.items():
+                    instructions = getattr(func, 'instructions', None) or ''
+                    result[alias][name] = instructions
+                
             except Exception as e:
                 logger.error(f"[ToolSelector] list_all failed for {alias!r}: {e}")
                 result[alias] = [f"<error: {e}>"]
         return result
- 
