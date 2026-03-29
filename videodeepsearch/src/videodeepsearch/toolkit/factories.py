@@ -1,20 +1,3 @@
-"""Toolkit factories for the VideoDeepSearch agent system.
-
-This module provides factory functions that create toolkit instances on demand.
-Each factory accepts optional user_id and video_ids for context binding,
-ensuring tools automatically use these values without explicit parameters.
-
-Usage:
-    from videodeepsearch.toolkit.factories import (
-        make_search_factory,
-        make_utility_factory,
-        ...
-    )
-
-    factory = make_search_factory(..., user_id="user123", video_ids=["vid1", "vid2"])
-    toolkit = factory()  # Fresh instance with bound context
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -46,12 +29,6 @@ def make_search_factory(
     user_id: str | None = None,
     video_ids: list[str] | None = None,
 ) -> ToolkitFactory:
-    """Factory for VideoSearchToolkit - image, segment, and audio search.
-
-    Args:
-        user_id: Default user ID for all searches (bound at creation)
-        video_ids: Default video IDs for all searches (bound at creation)
-    """
     def factory() -> VideoSearchToolkit:
         return VideoSearchToolkit(
             image_qdrant_client=image_qdrant_client,
@@ -70,7 +47,6 @@ def make_utility_factory(
     postgres_client: PostgresClient,
     minio_client: MinioStorageClient,
 ) -> ToolkitFactory:
-    """Factory for UtilityToolkit - ASR context, frame extraction, temporal navigation."""
     def factory() -> UtilityToolkit:
         return UtilityToolkit(
             postgres_client=postgres_client,
@@ -83,7 +59,6 @@ def make_video_metadata_factory(
     postgres_client: PostgresClient,
     minio_client: MinioStorageClient,
 ) -> ToolkitFactory:
-    """Factory for VideoMetadataToolkit - video listing, metadata, timeline."""
     def factory() -> VideoMetadataToolkit:
         return VideoMetadataToolkit(
             postgres_client=postgres_client,
@@ -98,12 +73,6 @@ def make_ocr_factory(
     user_id: str | None = None,
     video_ids: list[str] | None = None,
 ) -> ToolkitFactory:
-    """Factory for OCRSearchToolkit - OCR text search.
-
-    Args:
-        user_id: Default user ID for OCR searches (bound at creation)
-        video_ids: Default video IDs for OCR searches (bound at creation)
-    """
     def factory() -> OCRSearchToolkit:
         return OCRSearchToolkit(
             es_ocr_client=es_ocr_client,
@@ -115,10 +84,6 @@ def make_ocr_factory(
 
 
 def make_llm_factory(llm_client) -> ToolkitFactory:
-    """Factory for LLMToolkit - query enhancement.
-
-    Note: LLMToolkit doesn't use user_id or video_ids.
-    """
     def factory() -> LLMToolkit:
         return LLMToolkit(llm_client=llm_client)
     return factory
@@ -130,12 +95,6 @@ def make_kg_factory(
     user_id: str | None = None,
     video_ids: list[str] | None = None,
 ) -> ToolkitFactory:
-    """Factory for KGSearchToolkit - knowledge graph retrieval.
-
-    Args:
-        user_id: Default user ID for KG searches (bound at creation)
-        video_ids: Default video IDs for KG searches (bound at creation)
-    """
     def factory() -> KGSearchToolkit:
         return KGSearchToolkit(
             arango_db=arango_db,

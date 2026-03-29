@@ -1,15 +1,3 @@
-"""LLM Toolkit for query enhancement and generation.
-
-This toolkit provides LLM-powered tools for:
-- Visual query enhancement (CLIP-optimized variations)
-- Textual query enhancement (semantic variations)
-
-Similar to HyDE but with a twist: generates multiple perspective variations
-that get searched individually, then aggregated for better recall.
-
-All tools return ToolResult for unified interface.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -23,8 +11,6 @@ from pydantic import BaseModel, Field
 
 
 class EnhancedQueryResponse(BaseModel):
-    """Response model for query enhancement tools."""
-
     queries: list[str] = Field(
         ...,
         description="List of enhanced query variations",
@@ -92,16 +78,6 @@ Guidelines:
 
 
 class LLMToolkit(Toolkit):
-    """Toolkit for LLM-powered query enhancement.
-
-    Provides tools for enhancing search queries with multiple
-    perspective variations, improving retrieval recall.
-
-    Similar to HyDE (Hypothetical Document Embeddings) but generates
-    query variations instead of hypothetical documents.
-
-    All tools return ToolResult for unified interface.
-    """
 
     def __init__(
         self,
@@ -180,24 +156,6 @@ class LLMToolkit(Toolkit):
         raw_query: str,
         variants: list[str],
     ) -> ToolResult:
-        """Generate detailed CLIP-optimized variations of a visual query.
-
-        Takes a short visual query describing objects, scenes, or visual patterns
-        and expands it into multiple detailed variations optimized for CLIP-style
-        visual embedding retrieval.
-
-        Best for queries about WHAT THINGS LOOK LIKE (appearance, not events).
-
-        Args:
-            raw_query: The user's original visual query in English.
-                      Describes objects, actions, scenes, or visual intent.
-            variants: Perspective variations to generate. Each variant should be
-                     a specific viewpoint/visual-demand description emphasizing
-                     different aspects (camera angle, lighting, composition, etc.)
-
-        Returns:
-            ToolResult with enhanced query variations (one per line)
-        """
         variants_str = "\n".join(f"- {v}" for v in variants)
         
         user_prompt = f"""
@@ -271,24 +229,6 @@ class LLMToolkit(Toolkit):
         raw_query: str,
         variants: list[str],
     ) -> ToolResult:
-        """Generate rich semantic variations for event/scene queries.
-
-        Takes a query describing events, actions, or scene-level meaning
-        and expands it into multiple detailed variations optimized for caption/segment
-        embedding retrieval.
-
-        Unlike enhance_visual_query (which focuses on visual appearance), this tool
-        emphasizes semantic context and narrative structure.
-
-        Args:
-            raw_query: The user's original query.
-                      Describes events, actions, scenes, or semantic intent.
-            variants: Perspective variations to generate. Each variant should
-                     describe a different semantic angle or narrative perspective.
-
-        Returns:
-            ToolResult with enhanced query variations (one per line)
-        """
         variants_str = "\n".join(f"- {v}" for v in variants)
 
         user_prompt = f"""

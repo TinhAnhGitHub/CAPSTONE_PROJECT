@@ -1,11 +1,3 @@
-"""OCR Search Toolkit for text retrieval from video frames.
-
-This toolkit provides text search capabilities for OCR-extracted content
-from video frames, supporting both keyword (BM25) and semantic search.
-
-All tools return ToolResult for unified interface.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -25,19 +17,6 @@ from videodeepsearch.toolkit.common import CacheManager
 
 
 class OCRSearchToolkit(Toolkit):
-    """Toolkit for OCR text search with dependency injection.
-
-    Provides tools for:
-    - Keyword search using BM25
-    - Semantic search using MMBert embeddings
-    - Hybrid search combining BM25 + kNN with RRF fusion
-    - Retrieving all OCR text for a specific video
-
-    Supports context binding for user_id and video_ids.
-
-    All tools support caching and return ToolResult for unified interface.
-    """
-
     def __init__(
         self,
         es_ocr_client: ElasticsearchOCRClient,
@@ -47,23 +26,12 @@ class OCRSearchToolkit(Toolkit):
         cache_ttl: int = 1800,
         cache_dir: str | None = None,
     ):
-        """Initialize the OCRSearchToolkit.
-
-        Args:
-            es_ocr_client: Elasticsearch OCR client for text search
-            mmbert_client: Optional MMBert client for semantic embeddings
-            user_id: Default user ID for all searches (bound at creation)
-            video_ids: Default video IDs for all searches (bound at creation)
-            cache_ttl: Cache time-to-live in seconds (default 30 minutes)
-            cache_dir: Optional custom cache directory
-        """
         self.es_client = es_ocr_client
         self.mmbert = mmbert_client
         self.cache_ttl = cache_ttl
         self.cache_manager = CacheManager(cache_dir)
         self._result_store: dict[str, list[OCRSearchResult]] = {}
 
-        # Context binding
         self._user_id = user_id
         self._video_ids = video_ids
 
@@ -82,16 +50,6 @@ class OCRSearchToolkit(Toolkit):
         kwargs: dict[str, Any],
         results: list[OCRSearchResult],
     ) -> ToolResult:
-        """Store results in memory and return ToolResult.
-
-        Args:
-            tool_name: Name of the tool
-            kwargs: Tool arguments
-            results: Search results
-
-        Returns:
-            ToolResult with search results
-        """
         handle_id = hashlib.md5(
             json.dumps({"tool": tool_name, "args": kwargs}, sort_keys=True).encode()
         ).hexdigest()[:8]
@@ -179,22 +137,6 @@ class OCRSearchToolkit(Toolkit):
         user_id: str | None = None,
         fuzzy: bool = True,
     ) -> ToolResult:
-        """Search OCR text using BM25 keyword matching.
-
-        Best for finding specific words, phrases, or exact text matches.
-        Supports fuzzy matching to handle OCR recognition errors.
-
-        Args:
-            query: Text to search for (keywords or phrases)
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter (uses bound context if not provided)
-            user_id: Optional user ID to filter (uses bound context if not provided)
-            fuzzy: Enable fuzzy matching for OCR error tolerance (default True)
-
-        Returns:
-            ToolResult with OCR search results
-        """
-        # Use bound context as defaults
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -256,17 +198,6 @@ class OCRSearchToolkit(Toolkit):
         user_id: str | None = None,
         limit: int = 1000,
     ) -> ToolResult:
-        """Get all OCR text for a specific video.
-
-        Args:
-            video_id: Video ID to retrieve OCR for
-            user_id: Optional user ID to filter by (uses bound context if not provided)
-            limit: Maximum number of results (default 1000)
-
-        Returns:
-            ToolResult with all OCR results for the video
-        """
-        # Use bound context as default for user_id
         effective_user_id = user_id or self._user_id
 
         kwargs = {
@@ -324,16 +255,6 @@ class OCRSearchToolkit(Toolkit):
         view_mode: Literal["brief", "detailed", "full"] = "brief",
         top_n: int = 5,
     ) -> ToolResult:
-        """View cached OCR search results.
-
-        Args:
-            handle_id: Handle ID from previous search
-            view_mode: 'brief' (top N), 'detailed' (top N detailed), 'full' (all)
-            top_n: Number of results to show in brief/detailed mode
-
-        Returns:
-            ToolResult with formatted view of cached results
-        """
         if handle_id not in self._result_store:
             return ToolResult(
                 content=f"No cached results found for handle_id '{handle_id}'. "

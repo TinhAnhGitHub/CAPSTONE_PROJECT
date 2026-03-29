@@ -71,27 +71,11 @@ The ASR might have irrelevant events/context, so just focus on the related ASR s
 
 
 class UtilityToolkit(Toolkit):
-    """Toolkit for ASR context retrieval and video navigation.
-
-    Provides tools for:
-    - Retrieving ASR transcript context around segments/images
-    - Navigating to adjacent video segments/frames (temporal exploration)
-    - Extracting raw frames from videos for visual inspection
-
-    All tools return ToolResult for unified interface.
-    """
-
     def __init__(
         self,
         postgres_client: PostgresClient,
         minio_client: MinioStorageClient,
     ):
-        """Initialize the UtilityToolkit.
-
-        Args:
-            postgres_client: PostgreSQL client for artifact metadata
-            minio_client: MinIO storage client for ASR data and videos
-        """
         self.postgres = postgres_client
         self.storage = minio_client
         super().__init__(
@@ -136,17 +120,6 @@ class UtilityToolkit(Toolkit):
         segment_end_time: str,
         window_seconds: float = 10.0,
     ) -> ToolResult:
-        """Retrieve ASR transcript context around a video segment.
-
-        Args:
-            video_id: Video ID
-            segment_start_time: Segment start time (HH:MM:SS.sss)
-            segment_end_time: Segment end time (HH:MM:SS.sss)
-            window_seconds: Time window around segment (±seconds, default 10)
-
-        Returns:
-            ToolResult with ASR transcript context
-        """
         video_artifact = await self.postgres.get_artifact(artifact_id=video_id)
         if video_artifact is None:
             return ToolResult(content=f"Error: Video ID {video_id} does not exist")
@@ -242,16 +215,6 @@ class UtilityToolkit(Toolkit):
         image_timestamp: str,
         window_seconds: float = 10.0,
     ) -> ToolResult:
-        """Retrieve ASR transcript context around an image/frame.
-
-        Args:
-            video_id: Video ID
-            image_timestamp: Image timestamp (HH:MM:SS.sss)
-            window_seconds: Time window around image (±seconds, default 10)
-
-        Returns:
-            ToolResult with ASR transcript context
-        """
         video_artifact = await self.postgres.get_artifact(artifact_id=video_id)
         if video_artifact is None:
             return ToolResult(content=f"Error: Video ID {video_id} does not exist")
@@ -350,19 +313,6 @@ class UtilityToolkit(Toolkit):
         direction: Literal["forward", "backward"] = "forward",
         include_range: bool = True,
     ) -> ToolResult:
-        """Get adjacent video segments for temporal navigation.
-
-        Args:
-            video_id: Video ID
-            pivot_start_frame: Reference segment start frame
-            pivot_end_frame: Reference segment end frame
-            hop: Number of segments to hop (default 1)
-            direction: 'forward' or 'backward' navigation
-            include_range: If True, include all segments within hop range
-
-        Returns:
-            ToolResult with adjacent segments
-        """
         segment_artifacts = await self.postgres.get_children_artifact(
             artifact_id=video_id,
             filter_artifact_type=["SegmentCaptionArtifact"],
@@ -449,18 +399,6 @@ class UtilityToolkit(Toolkit):
         direction: Literal["forward", "backward"] = "forward",
         include_range: bool = True,
     ) -> ToolResult:
-        """Get adjacent images/frames for temporal navigation.
-
-        Args:
-            video_id: Video ID
-            image_frame_index: Reference image frame index
-            hop: Number of images to hop (default 1)
-            direction: 'forward' or 'backward' navigation
-            include_range: If True, include all images within hop range
-
-        Returns:
-            ToolResult with adjacent images
-        """
         image_artifacts = await self.postgres.get_children_artifact(
             artifact_id=video_id,
             filter_artifact_type=["ImageCaptionArtifact"],

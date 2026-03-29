@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from datetime import datetime
 from typing import Any, Literal
-
 from agno.tools import Toolkit, tool
 from agno.tools.function import ToolResult
 from loguru import logger
@@ -71,12 +69,6 @@ class VideoMetadataToolkit(Toolkit):
         postgres_client: PostgresClient,
         minio_client: MinioStorageClient,
     ):
-        """Initialize the VideoMetadataToolkit.
-
-        Args:
-            postgres_client: PostgreSQL client for artifact metadata
-            minio_client: MinIO storage client for fetching artifact data
-        """
         self.postgres = postgres_client
         self.storage = minio_client
         super().__init__(
@@ -94,16 +86,6 @@ class VideoMetadataToolkit(Toolkit):
         limit: int = 50,
         offset: int = 0,
     ) -> list[VideoInfo]:
-        """Fetch video artifacts from PostgreSQL.
-
-        Args:
-            user_id: Optional user ID filter
-            limit: Maximum number of results
-            offset: Offset for pagination
-
-        Returns:
-            List of VideoInfo objects
-        """
         videos = []
 
         async with self.postgres.get_session() as session:
@@ -145,14 +127,6 @@ class VideoMetadataToolkit(Toolkit):
         self,
         video_id: str,
     ) -> set[str]:
-        """Get all artifact types that exist for a video.
-
-        Args:
-            video_id: Video ID to check
-
-        Returns:
-            Set of artifact type names
-        """
         children = await self.postgres.get_children_artifact(video_id)
         return {child.artifact_type for child in children}
 
@@ -197,16 +171,6 @@ class VideoMetadataToolkit(Toolkit):
         limit: int = 50,
         offset: int = 0,
     ) -> ToolResult:
-        """List all videos for a specific user.
-
-        Args:
-            user_id: User ID to list videos for
-            limit: Maximum number of videos to return (default 50)
-            offset: Offset for pagination (default 0)
-
-        Returns:
-            ToolResult with list of videos and their metadata
-        """
         try:
             videos = await self._get_video_artifacts(
                 user_id=user_id,
@@ -271,14 +235,6 @@ class VideoMetadataToolkit(Toolkit):
         self,
         video_id: str,
     ) -> ToolResult:
-        """Get detailed metadata for a specific video.
-
-        Args:
-            video_id: Video ID to get metadata for
-
-        Returns:
-            ToolResult with detailed video metadata
-        """
         try:
             artifact = await self.postgres.get_artifact(video_id)
 
@@ -361,15 +317,6 @@ class VideoMetadataToolkit(Toolkit):
         video_id: str,
         granularity: Literal["segment", "shot", "minute"] = "segment",
     ) -> ToolResult:
-        """Get a visual timeline of video segments.
-
-        Args:
-            video_id: Video ID to generate timeline for
-            granularity: Timeline granularity ('segment', 'shot', or 'minute')
-
-        Returns:
-            ToolResult with visual timeline
-        """
         try:
             video_artifact = await self.postgres.get_artifact(video_id)
             if video_artifact is None:

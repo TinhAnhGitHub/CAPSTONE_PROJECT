@@ -21,11 +21,6 @@ from videodeepsearch.toolkit.common import (
 
 
 class VideoSearchToolkit(Toolkit):
-    """Toolkit for video search with context binding.
-
-    Supports binding user_id and video_ids at initialization time,
-    allowing tools to use these as defaults without explicit parameters.
-    """
 
     def __init__(
         self,
