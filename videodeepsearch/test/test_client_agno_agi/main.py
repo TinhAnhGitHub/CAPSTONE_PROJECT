@@ -1,0 +1,142 @@
+import asyncio
+import logging
+import sys
+from pathlib import Path
+import uuid
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.text import Text
+from rich import box
+from agno.agent import Message
+
+from client import WorkflowClient
+from session import SessionManager
+from event_handler import EventHandler
+
+
+async def run_interactive_session(test_session_dir: Path, user_id: str, list_video_ids:list[str]):
+    for name in ("websockets", "websockets.client", "websockets.server", "websockets.protocol"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+    console = Console()
+    session_dir = test_session_dir / "sessions"
+    session_dir.mkdir(parents=True, exist_ok=True)
+
+    session_manager = SessionManager(session_dir)
+    event_handler = EventHandler()
+
+    websocket_url = "ws://localhost:8080/ws/start_workflow"
+
+    console.print(Panel.fit(
+        "[bold cyan]🎬 Video Deep Search Workflow Client[/bold cyan]\n"
+        "[dim]Interactive CLI for testing workflow services[/dim]",
+        border_style="cyan",
+        box=box.DOUBLE
+    ))
+
+    console.print()
+
+    session_id = Prompt.ask(
+        "[bold magenta]Enter session_id (Press Enter to create a new one): [/bold magenta]"
+    ).strip()
+
+    if not session_id:
+        session_id = str(uuid.uuid4())
+        console.print(f"[green]✓[/green] Created new session with ID: [cyan]{session_id}[/cyan]")
+
+
+    console.print("\n[bold yellow]Available Commands:[/bold yellow]")
+    console.print("  [cyan]•[/cyan] Type your question to start workflow")
+    console.print("  [cyan]•[/cyan] [bold]history[/bold] - View chat history")
+    console.print("  [cyan]•[/cyan] [bold]clear[/bold] - Clear session")
+    console.print("  [cyan]•[/cyan] [bold]exit[/bold] or [bold]quit[/bold] - Quit\n")
+    
+    client = WorkflowClient(
+        websocket_url=websocket_url,
+        user_id=user_id,
+        event_handler=event_handler
+    )
+    
+    while True:
+        session = session_manager.load_session(user_id, session_id)
+        try:
+            console.print()
+            console.print(Panel(
+                f"[green]✓[/green] Session loaded: [bold]{len(session.chat_history)}[/bold] messages in history\n"
+                f"[dim]User:[/dim] [cyan]{user_id}[/cyan]\n"
+                f"[dim]Last updated:[/dim] {session.updated_at}",
+                title="[bold]Session Info[/bold]",
+                border_style="green",
+                box=box.ROUNDED
+            ))
+
+            user_input = Prompt.ask("[bold magenta]You[/bold magenta]").strip()
+            
+            if not user_input:
+                continue
+            
+            if user_input.lower() in ['exit', 'quit']:
+                console.print("\n[bold green]👋 Goodbye![/bold green]")
+                break
+            
+            if user_input.lower() == 'history':
+                session.display_history(console)
+                continue
+            
+            if user_input.lower() == 'clear':
+                session.clear_history()
+                session_manager.save_session(session)
+                console.print("[green]✓[/green] Session cleared", style="bold")
+                continue
+            
+            
+            console.print()
+            console.rule("[bold cyan]Starting Workflow[/bold cyan]", style="cyan")
+            console.print()
+            
+            final_chat_message = await client.execute_workflow(
+                user_demand=user_input,
+                video_ids=list_video_ids,
+                chat_history=session.chat_history,
+                session_id=session_id
+            )
+            
+            if final_chat_message:
+                final_message = [Message(role='user', content=user_input)]+ final_chat_message
+                session.add_message(final_message)
+                session_manager.save_session(session)
+                
+                console.print()
+                console.print(Panel(
+                    "[green]✓[/green] Workflow complete. Session saved.",
+                    border_style="green",
+                    box=box.ROUNDED
+                ))
+            else:
+                console.print("\n[yellow]⚠[/yellow] Workflow completed without final response", style="dim")
+        
+        except KeyboardInterrupt:
+            console.print("\n\n[yellow]⚠ Interrupted by user[/yellow]")
+            break
+        
+
+if __name__ == "__main__":
+    test_session_dir = Path('../local')
+    user_id = 'tinhanhuser'
+    list_video_ids = [
+        "0e64f1c0da591ca67f07b7f9",
+        "3636d10a2ad4787733c9700d",
+        "946330031ead69b21354d038",
+        "9b17f473300a5436f0a053be",
+        "c510fac771767405c891bf64",
+        "c98019fd17ff4420ea47eee7"
+    ]
+
+    try:
+        asyncio.run(run_interactive_session(test_session_dir=test_session_dir, user_id=user_id, list_video_ids=list_video_ids))
+    except KeyboardInterrupt:
+        console = Console()
+        console.print("\n[bold green]👋 Goodbye![/bold green]")
+        sys.exit(0)
+    
