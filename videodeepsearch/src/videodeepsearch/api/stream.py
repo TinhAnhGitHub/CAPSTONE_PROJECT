@@ -70,12 +70,7 @@ async def start_workflow_ws(
                 arango_db=state.arango_db,
             )
             async for output in async_generator:
-                await websocket.send_json(
-                    {
-                        "type": "workflow_event",
-                        "data": output
-                    }
-                )
+                await websocket.send_json(output)
 
             await websocket.send_json({"type": "complete"})
             return
@@ -92,6 +87,7 @@ async def start_workflow_ws(
 
     except Exception as e:
         # Log full traceback to server logs for debugging visibility
+        print(output) #type:ignore
         logger.exception("Unhandled error in start_workflow_ws")
 
         try:
