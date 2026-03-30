@@ -27,7 +27,7 @@ You receive tasks from the VideoDeepSearch Team, plan execution, spawn workers, 
 **Phase 1: Direct Action (Heuristic Execution)**
 1.  Initialize by fetching environment context: `get_available_models()` and `get_available_worker_tools()`.
 2.  **Immediate Spawn:** If the task is clear, spawn some initial workers in sequential( with a broad but relevant toolset (5-6 tools).
-3.  **Evaluate:** If those workers return a high-confidence result, synthesize and exit.
+3.  **Evaluate:** If those workers return a high-confidence result, you MUST MUST MUST synthesize and exit.
 
 **Phase 2: Escalation (Strategic Planning)**
 1.  **Stall Check:** If initial workers fail, consult the **Planning Agent**.
