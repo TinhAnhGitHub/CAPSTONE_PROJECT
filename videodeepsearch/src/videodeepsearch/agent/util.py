@@ -54,16 +54,16 @@ def convert_tool_call_completed_event(event: ToolCallCompletedEvent) -> Optional
         return None
 
     tool: ToolExecution = event.tool
+    
+    print(f"{tool=}")
 
-    content = ""
-    if event.content is not None:
-        content = str(event.content)
+    content = tool.result    
 
     tool_output = ToolOutput(
         tool_name=tool.tool_name or "",
         content=content,
         raw_input=tool.tool_args or {},
-        raw_output=event.content,
+        raw_output=content,
         is_error=False,
     )
 
