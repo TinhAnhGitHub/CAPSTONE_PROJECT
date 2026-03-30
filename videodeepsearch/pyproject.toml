@@ -11,6 +11,7 @@ dependencies = [
     "av>=16.0.1",
     "elasticsearch>=9.3.0",
     "fastapi[standard]>=0.121.0",
+    "llama-index-core>=0.14.19",
     "loguru>=0.7.3",
     "minio>=7.2.18",
     "mlflow>=3.10.1",
