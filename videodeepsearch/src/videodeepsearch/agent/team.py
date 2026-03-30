@@ -1,9 +1,14 @@
 import logging
-from typing import Any
+from typing import Any, cast
 from collections.abc import AsyncGenerator
 
 from agno.db.base import AsyncBaseDb, BaseDb
 from agno.models.base import Model
+from agno.run.team import (
+    TeamRunEvent,
+    TeamRunOutput,
+    TeamRunOutputEvent,
+)
 from agno.team import Team
 from arango.database import StandardDatabase
 
@@ -205,20 +210,25 @@ async def ignite_workflow(
             stream=True,
             stream_events=True,
         ):
-            chunk_yield = chunk
-            
+            chunk = cast(TeamRunOutputEvent, chunk)
+            chunk_yield = None
+
             event_type = chunk.event
+            print(event_type)
             match event_type:
-                case 'RunContentEvent':
+                case 'TeamRunContent' | 'RunContent':
                     chunk_yield = convert_run_content_event_to_agent_stream(chunk) #type:ignore
-                case 'ToolCallStartedEvent':
+                case 'TeamToolCallStarted' | 'ToolCallStarted': 
                     chunk_yield = convert_tool_call_started_event(chunk) #type:ignore
-                case 'ToolCallCompletedEvent':
+                case 'TeamToolCallCompleted' | 'ToolCallCompleted':
                     chunk_yield = convert_tool_call_completed_event(chunk) #type:ignore
-                case 'RunCompletedEvent':
+                case 'TeamRunContentCompleted' | 'RunContentCompleted':
                     chunk_yield = convert_run_completed_event(chunk) #type:ignore
                 case _:
-                    chunk_yield = chunk
+                    chunk_yield = None
+            
+            if chunk_yield is None:
+                continue
                 
             yield _serialize_event(chunk_yield)
     except Exception as e:
@@ -250,5 +260,5 @@ def _serialize_event(event: Any) -> dict[str, Any]:
                 payload[k] = v.isoformat()
     else:
         payload = {"data": str(event)}
-    payload.setdefault("event_type", event.__class__.__name__)
+    payload.setdefault("event_type", event.__class__.__name__) #type:ignore
     return payload

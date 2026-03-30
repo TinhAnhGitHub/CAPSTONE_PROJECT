@@ -2,16 +2,18 @@ from typing import Any, Optional
 from llama_index.core.tools import ToolOutput
 from llama_index.core.llms import ChatMessage, MessageRole
 
-
-from agno.run.agent import (
+from agno.models.response import ToolExecution
+from agno.run.team import (
+    RunStartedEvent,
     RunContentEvent,
+    RunContentCompletedEvent,
     RunCompletedEvent,
     ToolCallStartedEvent,
     ToolCallCompletedEvent,
-    ToolExecution,
 )
 
 from llama_index.core.agent.workflow import (
+    AgentInput,
     AgentStream,
     AgentOutput,
     ToolCall,
@@ -74,6 +76,8 @@ def convert_tool_call_completed_event(event: ToolCallCompletedEvent) -> Optional
     )
 
 def convert_run_completed_event(event: RunCompletedEvent, agent_name: str = "agent") -> AgentOutput:
+    
+    print(f"Event in completed: {event=}")
     content = ""
     if event.content is not None:
         content = str(event.content)
