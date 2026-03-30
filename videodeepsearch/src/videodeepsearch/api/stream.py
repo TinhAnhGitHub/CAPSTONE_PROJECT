@@ -72,7 +72,7 @@ async def start_workflow_ws(
             async for output in async_generator:
                 await websocket.send_json(output)
 
-            await websocket.send_json({"type": "complete"})
+            # await websocket.send_json({"type": "complete"})
             return
 
     except WebSocketDisconnect as e:

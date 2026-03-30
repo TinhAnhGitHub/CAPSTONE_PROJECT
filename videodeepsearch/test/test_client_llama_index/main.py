@@ -26,7 +26,7 @@ async def run_interactive_session(test_session_dir: Path, user_id: str, list_vid
     session_manager = SessionManager(session_dir)
     event_handler = EventHandler()
 
-    websocket_url = "ws://localhost:8050/ws/start_workflow"
+    websocket_url = "ws://localhost:8080/ws/start_workflow"
 
     console.print(Panel.fit(
         "[bold cyan]🎬 Video Deep Search Workflow Client[/bold cyan]\n"
@@ -127,8 +127,15 @@ async def run_interactive_session(test_session_dir: Path, user_id: str, list_vid
 
 if __name__ == "__main__":
     test_session_dir = Path('../local')
-    user_id = 'agenttest'
-    list_video_ids = ['692ad412086ada3a309334ff', '692ad412086ada3a30933500', '692ad412086ada3a30933501', '692ad412086ada3a30933502']
+    user_id = 'tinhanhuser'
+    list_video_ids = [
+        "0e64f1c0da591ca67f07b7f9",
+        "3636d10a2ad4787733c9700d",
+        "946330031ead69b21354d038",
+        "9b17f473300a5436f0a053be",
+        "c510fac771767405c891bf64",
+        "c98019fd17ff4420ea47eee7"
+    ]
 
     try:
         asyncio.run(run_interactive_session(test_session_dir=test_session_dir, user_id=user_id, list_video_ids=list_video_ids))
