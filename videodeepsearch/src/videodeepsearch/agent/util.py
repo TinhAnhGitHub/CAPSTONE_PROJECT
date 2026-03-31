@@ -55,7 +55,6 @@ def convert_tool_call_completed_event(event: ToolCallCompletedEvent) -> Optional
 
     tool: ToolExecution = event.tool
     
-    print(f"{tool=}")
 
     content = tool.result    
 
