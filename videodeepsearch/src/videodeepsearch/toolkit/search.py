@@ -5,7 +5,6 @@ import json
 from typing import Any, Literal
 
 from agno.tools import tool, Toolkit
-from agno.tools.function import ToolResult
 
 from videodeepsearch.clients.storage.qdrant import (
     ImageQdrantClient,
@@ -67,7 +66,7 @@ class VideoSearchToolkit(Toolkit):
         tool_name: str,
         kwargs: dict[str, Any],
         results: list[ImageInterface] | list[SegmentInterface] | list[AudioInterface],
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         if results and isinstance(results[0], ImageInterface):
             result_type = "image"
         elif results and isinstance(results[0], AudioInterface):
@@ -78,7 +77,7 @@ class VideoSearchToolkit(Toolkit):
         container = SearchResultContainer(
             tool_name=tool_name,
             tool_kwargs=kwargs,
-            results=results, #type:ignore
+            results=results,  # type:ignore
             result_type=result_type,
         )
 
@@ -88,14 +87,10 @@ class VideoSearchToolkit(Toolkit):
 
         self._result_store[handle_id] = container
 
-        content = (
-            f"Found {len(results)} {result_type}(s).\n"
-            f"Handle ID: {handle_id}\n"
-            f"To view: use `view_search_result(handle_id='{handle_id}', view_mode='brief')`\n\n"
-            f"{container.get_brief(5)}"
-        )
+        result_dict = container.get_brief(5)
+        result_dict["handle_id"] = handle_id
 
-        return ToolResult(content=content)
+        return result_dict
 
     @tool(
         description=(
@@ -140,7 +135,7 @@ class VideoSearchToolkit(Toolkit):
         use_hybrid: bool = False,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -156,7 +151,7 @@ class VideoSearchToolkit(Toolkit):
 
         embeddings = await self.mmbert.ainfer([caption_query])
         if embeddings is None:
-            return ToolResult(content="Error: MMBert encoding failed")
+            return {"error": "MMBert encoding failed"}
 
         dense_vector = embeddings[0]
 
@@ -218,7 +213,7 @@ class VideoSearchToolkit(Toolkit):
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -284,7 +279,7 @@ class VideoSearchToolkit(Toolkit):
         use_hybrid: bool = False,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -300,7 +295,7 @@ class VideoSearchToolkit(Toolkit):
 
         embeddings = await self.mmbert.ainfer([event_query])
         if embeddings is None:
-            return ToolResult(content="Error: MMBert encoding failed")
+            return {"error": "MMBert encoding failed"}
 
         query_vector = embeddings[0]
 
@@ -362,7 +357,7 @@ class VideoSearchToolkit(Toolkit):
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -421,7 +416,7 @@ class VideoSearchToolkit(Toolkit):
         top_k: int = 10,
         video_ids: list[str] | None = None,
         user_id: str | None = None,
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -434,7 +429,7 @@ class VideoSearchToolkit(Toolkit):
 
         embeddings = await self.mmbert.ainfer([audio_query])
         if embeddings is None:
-            return ToolResult(content="Error: MMBert encoding failed")
+            return {"error": "MMBert encoding failed"}
 
         dense_vector = embeddings[0]
 
@@ -486,7 +481,7 @@ class VideoSearchToolkit(Toolkit):
         user_id: str | None = None,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -501,7 +496,7 @@ class VideoSearchToolkit(Toolkit):
 
         dense_embeddings = await self.mmbert.ainfer([audio_query])
         if dense_embeddings is None:
-            return ToolResult(content="Error: MMBert encoding failed")
+            return {"error": "MMBert encoding failed"}
 
         dense_vector = dense_embeddings[0]
         sparse_vector = (await self.splade.aencode([audio_query]))[0]
@@ -556,25 +551,23 @@ class VideoSearchToolkit(Toolkit):
         view_mode: Literal["brief", "detailed", "statistics", "full"] = "brief",
         top_n: int = 5,
         group_by: Literal["video_id", "score_bucket"] = "video_id",
-    ) -> ToolResult:
+    ) -> dict[str, Any]:
         container = self._result_store.get(handle_id)
         if not container:
-            return ToolResult(
-                content=(
-                    f"No cached results found for handle_id '{handle_id}'.\n"
-                    f"Available handle_ids: {list(self._result_store.keys())}\n"
-                    f"Run a search tool first to generate results."
-                )
-            )
+            return {
+                "error": f"No cached results found for handle_id '{handle_id}'",
+                "available_handle_ids": list(self._result_store.keys()),
+                "message": "Run a search tool first to generate results.",
+            }
 
         if view_mode == "brief":
-            return ToolResult(content=container.get_brief(top_n))
+            return container.get_brief(top_n)
         elif view_mode == "detailed":
-            return ToolResult(content=container.get_detailed(top_n))
+            return container.get_detailed(top_n)
         elif view_mode == "statistics":
-            return ToolResult(content=container.get_statistics(group_by))
+            return container.get_statistics(group_by)
         else:
-            return ToolResult(content=container.get_full())
+            return container.get_full()
 
 
 __all__ = ["VideoSearchToolkit"]

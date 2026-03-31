@@ -14,6 +14,13 @@ from pydantic import BaseModel
 
 from videodeepsearch.schemas import ImageInterface, SegmentInterface, AudioInterface
 
+# Socket-compatible result type mapping
+RESULT_TYPE_TO_SOCKET = {
+    "image": "image_search",
+    "segment": "segment_caption_search",
+    "audio": "audio_search",
+}
+
 def extract_s3_minio_url(s3_link: str) -> tuple[str, str]:
     if s3_link.startswith('s3://'):
         s3_link = s3_link.replace('s3://', '', 1)
@@ -100,40 +107,44 @@ class SearchResultContainer(BaseModel):
     results: list[ImageInterface | SegmentInterface | AudioInterface]
     result_type: Literal["image", "segment", "audio"]
 
-    def get_brief(self, top_n: int = 5) -> str:
+    def get_brief(self, top_n: int = 5) -> dict[str, Any]:
+        """Return brief results as JSON dict for frontend consumption.
+        
+        Uses socket-compatible format:
+        - result_type mapped to socket-recognized values
+        - top_matches instead of results
+        - to_socket_format() for each item
+        """
         sorted_results = sorted(self.results, key=lambda x: x.score, reverse=True)[:top_n]
+        socket_result_type = RESULT_TYPE_TO_SOCKET.get(self.result_type, self.result_type)
+        
+        return {
+            "view_mode": "brief",
+            "tool_name": self.tool_name,
+            "tool_kwargs": self.tool_kwargs,
+            "result_type": socket_result_type,
+            "total": len(self.results),
+            "top_n": min(top_n, len(sorted_results)),
+            "top_matches": [item.to_socket_format() for item in sorted_results],
+        }
 
-        lines = [
-            f"Tool: {self.tool_name}",
-            f"Args: {self.tool_kwargs}",
-            f"Total: {len(self.results)} {self.result_type}(s)",
-            f"Top {min(top_n, len(sorted_results))}:",
-        ]
-
-        for i, item in enumerate(sorted_results):
-            lines.append(f"  {i}. {item.brief_representation()}")
-
-        return "\n".join(lines)
-
-    def get_detailed(self, top_n: int = 5) -> str:
+    def get_detailed(self, top_n: int = 5) -> dict[str, Any]:
+        """Return detailed results as JSON dict for frontend consumption."""
         sorted_results = sorted(self.results, key=lambda x: x.score, reverse=True)[:top_n]
+        socket_result_type = RESULT_TYPE_TO_SOCKET.get(self.result_type, self.result_type)
+        
+        return {
+            "view_mode": "detailed",
+            "tool_name": self.tool_name,
+            "tool_kwargs": self.tool_kwargs,
+            "result_type": socket_result_type,
+            "total": len(self.results),
+            "top_n": min(top_n, len(sorted_results)),
+            "top_matches": [item.to_socket_format() for item in sorted_results],
+        }
 
-        lines = [
-            "=== Detailed Results ===",
-            f"Tool: {self.tool_name}",
-            f"Args: {self.tool_kwargs}",
-            f"Total: {len(self.results)} {self.result_type}(s)",
-            f"Top {min(top_n, len(sorted_results))}:",
-            "",
-        ]
-
-        for i, item in enumerate(sorted_results):
-            lines.append(f"[{i}] {item.detailed_representation()}")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def get_statistics(self, group_by: str = "video_id") -> str:
+    def get_statistics(self, group_by: str = "video_id") -> dict[str, Any]:
+        """Return statistics as JSON dict for frontend consumption."""
         if self.result_type == "image":
             return ImageInterface.statistic_format(
                 tool_name=self.tool_name,
@@ -159,19 +170,18 @@ class SearchResultContainer(BaseModel):
                 group_by=group_by,
             )
 
-    def get_full(self) -> str:
-        lines = [
-            f"=== Full Results ({len(self.results)} items) ===",
-            f"Tool: {self.tool_name}",
-            f"Args: {self.tool_kwargs}",
-            "",
-        ]
-
-        for i, item in enumerate(self.results):
-            lines.append(f"[{i}] {item.detailed_representation()}")
-            lines.append("")
-
-        return "\n".join(lines)
+    def get_full(self) -> dict[str, Any]:
+        """Return full results as JSON dict for frontend consumption."""
+        socket_result_type = RESULT_TYPE_TO_SOCKET.get(self.result_type, self.result_type)
+        
+        return {
+            "view_mode": "full",
+            "tool_name": self.tool_name,
+            "tool_kwargs": self.tool_kwargs,
+            "result_type": socket_result_type,
+            "total": len(self.results),
+            "top_matches": [item.to_socket_format() for item in self.results],
+        }
 
 
 __all__ = [
@@ -184,4 +194,5 @@ __all__ = [
     "format_duration",
     "CacheManager",
     "SearchResultContainer",
+    "RESULT_TYPE_TO_SOCKET",
 ]
