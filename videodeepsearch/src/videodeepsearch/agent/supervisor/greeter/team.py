@@ -74,17 +74,17 @@ def build_videodeepsearch_team(
         add_session_state_to_context=False,
         enable_agentic_state=False,
 
-        memory_manager=memory_manager,
-        enable_agentic_memory=True,
-        update_memory_on_run=True,
-        add_memories_to_context=True,
+        # memory_manager=memory_manager,
+        # enable_agentic_memory=True,
+        # update_memory_on_run=True,
+        # add_memories_to_context=True,
 
-        enable_session_summaries=True,
-        add_session_summary_to_context=True,
+        # enable_session_summaries=True,
+        # add_session_summary_to_context=True,
 
-        add_history_to_context=True,
-        num_history_runs=5,
-        read_chat_history=True,
+        # add_history_to_context=True,
+        # num_history_runs=5,
+        # read_chat_history=True,
 
         retries=2,
         delay_between_retries=2,
@@ -103,5 +103,5 @@ def build_videodeepsearch_team(
             TeamRunEvent.session_summary_started,
             TeamRunEvent.session_summary_completed
         ],
-        session_summary_manager=session_summarizer
+        # session_summary_manager=session_summarizer
     )
