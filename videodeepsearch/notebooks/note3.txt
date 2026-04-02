@@ -1,0 +1,1464 @@
+DEBUG Now I have comprehensive data from 8 videos with rich content. Let me generate the QA dataset:               
+                                                                                                                   
+      ```json                                                                                                      
+      {                                                                                                            
+        "qa_pairs": [                                                                                              
+          {                                                                                                        
+            "question_id": 1,                                                                                      
+            "question_type": "visual",                                                                             
+            "question": "What happens to the weight when the green rope is cut in the spring experiment shown at   
+      the beginning of the video?",                                                                                
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:01:47.607", "end": "00:02:00.370"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 1295, "end_frame": 6707}],              
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "Here it is in slow motion. So even though the ropes on the side were slack and we  
+      cut the only rope in tension, the weight somehow went up.",                                                  
+              "answer": "The weight goes up (contrary to most people's intuition that it would fall down)."        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 2,                                                                                      
+            "question_type": "audio",                                                                              
+            "question": "Why does the weight go up when the green rope is cut, according to the explanation in the 
+      video?",                                                                                                     
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:04:02.159", "end": "00:04:11.376"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 1295, "end_frame": 6707}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "By cutting the green rope, you're actually forcing the springs to go from a series 
+      to a parallel, and that change is what causes the contraction to happen.",                                   
+              "answer": "Cutting the green rope forces the springs to reconfigure from a series arrangement to a   
+      parallel arrangement, causing the contraction."                                                              
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 3,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "What was the name of the obscure error account number where Nick Leeson hid his trading   
+      losses?",                                                                                                    
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:00:27.194", "end": "00:00:30.864"}],                           
+              "relevant_segments": [{"segment_id": "seg_1", "start_frame": 0, "end_frame": 740}],                  
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "He puts it in an obscure error account. That's account eight eight eight eight     
+      eight.",                                                                                                     
+              "answer": "Account 88888."                                                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 4,                                                                                      
+            "question_type": "temporal",                                                                           
+            "question": "In what sequence did Charles Goodyear discover vulcanized rubber? What triggered the      
+      discovery?",                                                                                                 
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:11:37.530", "end": "00:13:47.160"}],                           
+              "relevant_segments": [{"segment_id": "seg_9", "start_frame": 16724, "end_frame": 19832}],            
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "Charles Goodyear observing a piece of rubber mixed with sulfur charring and        
+      hardening on a hot stove, rather than melting. Further experimentation in the cold reveals its               
+      temperature-resistant and stronger properties.",                                                             
+              "answer": "Goodyear accidentally observed rubber mixed with sulfur charring and hardening on a hot   
+      stove instead of melting, then confirmed its temperature-resistant properties through cold-weather testing." 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 5,                                                                                      
+            "question_type": "visual",                                                                             
+            "question": "Describe the escalator accident in Rome on October 23, 2018 that occurred with football   
+      fans.",                                                                                                      
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:00:00.000", "end": "00:02:24.936"}],                           
+              "relevant_segments": [{"segment_id": "seg_1", "start_frame": 0, "end_frame": 3475}],                 
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "A crowded escalator in Rome malfunctioned, causing a devastating accident.         
+      Thousands of football fans were descending to a game when the escalator, overloaded with approximately fifty 
+      people, began to accelerate uncontrollably.",                                                                
+              "answer": "An overloaded escalator (~50 people) in Rome malfunctioned and accelerated uncontrollably 
+      while football fans were descending to a game, injuring 24 people and damaging the steps, despite having     
+      three safety mechanisms that all failed."                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 6,                                                                                      
+            "question_type": "audio",                                                                              
+            "question": "What was Tom Brady's measured spin rate on the football when testing in the wind tunnel?",
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:14:25.365", "end": "00:16:21.647"}],                           
+              "relevant_segments": [{"segment_id": "seg_8", "start_frame": 25935, "end_frame": 29420}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The segment then transitions to showing a football being tested in a wind tunnel,  
+      with data indicating Brady's spin rate of 628 rpm.",                                                         
+              "answer": "628 rpm (rotations per minute)."                                                          
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 7,                                                                                      
+            "question_type": "multi_hop",                                                                          
+            "question": "Connect the physics concept of series-to-parallel spring reconfiguration from one video   
+      with the real-world paradox it illustrates in network systems. What is this paradox called, and where was it 
+      demonstrated?",                                                                                              
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:04:39.779", "end": "00:12:33.628"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 6708, "end_frame": 15627},              
+      {"segment_id": "seg_4", "start_frame": 15628, "end_frame": 18069}],                                          
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "The segment explains the Braess's Paradox, using a New York City street closure    
+      experiment as a real-world example. Initially, closing 42nd Street was predicted to cause traffic chaos, but 
+      surprisingly, traffic improved. This phenomenon is illustrated with a mathematical model of a fictional town 
+      where adding a new road paradoxically increases overall congestion.",                                        
+              "answer": "This is Braess's Paradox, demonstrated in NYC when closing 42nd Street unexpectedly       
+      improved traffic. The spring reconfiguration (series to parallel causing contraction) is analogous to        
+      counterintuitively improving a system by removing a component, like removing a road improving traffic flow." 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 8,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "What chemical element is added to rubber during vulcanization to create cross-links?",    
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:13:47.201", "end": "00:16:06.048"}],                           
+              "relevant_segments": [{"segment_id": "seg_10", "start_frame": 19833, "end_frame": 23162}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "This segment explains the process of vulcanization, where sulfur is added to rubber
+      and heated, creating cross-links between rubber chains.",                                                    
+              "answer": "Sulfur."                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 9,                                                                                      
+            "question_type": "descriptive",                                                                        
+            "question": "Describe the complete chip manufacturing process shown in the video, starting from raw    
+      material to finished chip.",                                                                                 
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:02:31.193", "end": "00:05:12.521"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 3625, "end_frame": 7493}],              
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "The process begins with purifying silicon from sand, melting it, and growing a     
+      large silicon crystal ingot. This ingot is sliced into wafers, polished, and coated with photoresist. Light  
+      is shone through a patterned mask to selectively weaken parts of the photoresist, which is then washed away. 
+      The exposed silicon is etched and then filled with metal like copper. This cycle is repeated for each        
+      layer.",                                                                                                     
+              "answer": "The process starts with purifying silicon from sand, melting and growing a crystal ingot, 
+      slicing it into wafers, polishing, coating with photoresist, shining light through a mask, washing away      
+      weakened areas, etching exposed silicon, and filling with metal like copper - repeated for each layer."      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 10,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What was the name of the physicist who developed the wave equation describing how quantum 
+      systems evolve?",                                                                                            
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:03:12.692", "end": "00:07:24.194"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 4620, "end_frame": 10650}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The segment highlights Erwin Schrödinger's wave equation, which describes how      
+      quantum systems evolve, and introduces the concept of the wave function (psi) that provides probabilities of 
+      finding particles in specific locations.",                                                                   
+              "answer": "Erwin Schrödinger."                                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 11,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What material is used as the tin droplet stream's target in the EUV lithography light     
+      source process?",                                                                                            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:26:56.990", "end": "00:30:43.467"}],                           
+              "relevant_segments": [{"segment_id": "seg_12", "start_frame": 38769, "end_frame": 44199}],           
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "A novel method was developed where tiny, pure tin droplets are melted and ejected  
+      from a vibrating nozzle, forming a chaotic stream. These irregular droplets then coalesce into perfectly     
+      spaced, uniform droplets before being hit by a laser.",                                                      
+              "answer": "Pure tin droplets that are melted, ejected from a vibrating nozzle, and then hit by a CO2 
+      laser to produce EUV light."                                                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 12,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "Who is credited with inventing the escalator design that uses a system of tracks and      
+      wheels to keep steps level?",                                                                                
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:02:24.978", "end": "00:07:20.440"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 3476, "end_frame": 10560}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The segment then explains the ingenious design of modern escalators, credited to   
+      George Wheeler, which uses a system of tracks and wheels to keep the steps level during ascent and descent.",
+              "answer": "George Wheeler."                                                                          
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 13,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "In the overconfidence video, what was the sequence of events that led from Nick Leeson's  
+      initial error to multi-million dollar losses?",                                                              
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:05:12.812", "end": "00:07:41.920"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 7500, "end_frame": 11075}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Initially, Leeson's strategy of betting on the Nikkei 225 to rise failed as the    
+      market continued to fall, leading to losses escalating from $40,000 to $3 million. Despite this, his luck    
+      turned, and the market rebounded, bringing his account back into credit. However, a subsequent trading error 
+      led to further losses, which he attempted to cover with even riskier trades, ultimately pushing his losses to
+      over $30 million by the end of 1993.",                                                                       
+              "answer": "Initial $40,000 error→hidden losses→betting on Nikkei 225→losses to $3M→market            
+      rebounded→new error→even riskier trades→over $30M by end of 1993."                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 14,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What building block molecule is found both in rubber trees and inside human bodies for    
+      cell membranes?",                                                                                            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:01:59.953", "end": "00:02:58.804"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 2876, "end_frame": 6896}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Inside are lots of isopentyl pyrophosphate, or IPP. This is the building block or  
+      monomer of rubber. In fact, IPP is found everywhere in nature, including inside you... It's essential for    
+      cell membranes.",                                                                                            
+              "answer": "Isopentyl pyrophosphate (IPP)."                                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 15,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "Multiple videos in this collection mention sponsors and promotional content. Name at least
+      three different sponsors mentioned across the videos and what service they provide.",                        
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:12:33.670", "end": "00:16:44.253"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 18070, "end_frame": 20084},             
+      {"segment_id": "seg_6", "start_frame": 20085, "end_frame": 24078}],                                          
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "Incogni - a service that removes personal data from data brokers. NordVPN - VPN    
+      service protecting users from hackers, trackers, and ads. Ground News - aggregates news from various sources 
+      to reveal different perspectives. Brilliant - interactive learning platform for math, science, and computer  
+      science.",                                                                                                   
+              "answer": "Incogni (data removal from brokers), Ground News (news aggregation with bias analysis),   
+      NordVPN (VPN service), Brilliant (interactive learning platform), and Code Rabbit (AI code review tool)."    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 16,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What is the numerical aperture (NA) of ASML's latest 'HiNA' version of EUV machine as     
+      mentioned in the video?",                                                                                    
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:41:00.958", "end": "00:42:30.131"}],                           
+              "relevant_segments": [{"segment_id": "seg_18", "start_frame": 59004, "end_frame": 61142}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "A man explains the evolution of these machines, from earlier models capable of     
+      printing 30-nanometer lines to the latest 'HiNA' version with a numerical aperture of 0.55.",                
+              "answer": "0.55."                                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 17,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What year did Paul Dirac predict the existence of the positron (anti-electron)?",         
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:24:34.765", "end": "00:27:54.756"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 35359, "end_frame": 40154}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Dirac initially struggled to reconcile these predictions, but in 1931, he proposed 
+      the existence of a new particle, the anti-electron, to explain the negative energy states.",                 
+              "answer": "1931."                                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 18,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "What sequence of events describes the Roman escalator failure investigation? What were the
+      three key safety failures discovered?",                                                                      
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:14:21.903", "end": "00:17:14.492"}],                           
+              "relevant_segments": [{"segment_id": "seg_6", "start_frame": 20665, "end_frame": 24803}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Investigations found the main brake was significantly weakened, and the auxiliary  
+      brake was deliberately disabled with plastic straps. Furthermore, error logs were turned off, preventing     
+      automatic recording of malfunctions, and maintenance records were falsified.",                               
+              "answer": "The three key failures were: (1) weakened main brake, (2) auxiliary brake deliberately    
+      disabled with plastic straps, and (3) error logs turned off. Additionally, maintenance records were          
+      falsified."                                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 19,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What physicist, known for his quietness so extreme that a 'Dirac' unit was coined for his 
+      speech patterns, worked on unifying quantum physics and relativity?",                                        
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:09:49.881", "end": "00:16:15.600"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 14143, "end_frame": 23391}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The narrative shifts to discuss Dirac's unconventional personality and his         
+      fascination with relativity, illustrating his quiet nature with anecdotes and the invention of the 'Dirac'   
+      unit for his speech patterns.",                                                                              
+              "answer": "Paul Dirac."                                                                              
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 20,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What physical phenomenon causes a rubber band to contract when heated while under         
+      tension?",                                                                                                   
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:04:31.646", "end": "00:04:52.375"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 2876, "end_frame": 6896}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The constant bombardment from smaller molecules kinks those chains back up. And if 
+      you heat the rubber up, everything is vibrating faster, and so the chains are going to get kinked up even    
+      more. So the rubber pulls back stronger.",                                                                   
+              "answer": "When heated, the polymer chains vibrate faster and get kinked up more by molecular        
+      bombardment, causing the rubber to contract and pull back stronger."                                         
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 21,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the name of Franz Reichelt's fatal 1912 invention test location?",                
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:08:19.165", "end": "00:10:36.928"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 11076, "end_frame": 11967}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "In 1912, Reichelt took his invention to the Eiffel Tower and, instead of using a   
+      dummy, jumped himself, resulting in a tragic outcome.",                                                      
+              "answer": "The Eiffel Tower."                                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 22,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What specific gas did ASML discover could clean the collector mirrors in EUV machines when
+      added in a controlled amount?",                                                                              
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:39:57.895", "end": "00:41:00.917"}],                           
+              "relevant_segments": [{"segment_id": "seg_17", "start_frame": 57491, "end_frame": 59003}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "An engineer discovered that introducing oxygen during cleaning cycles improved     
+      mirror cleanliness. This led to experiments adding a controlled amount of oxygen to the vacuum system.",     
+              "answer": "Oxygen."                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 23,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "Compare and contrast the safety philosophies discussed in the escalator video and the     
+      lithium-ion battery video. What is the common theme regarding engineered safety systems?",                   
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:17:14.534", "end": "00:20:44.827"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 24804, "end_frame": 29846}],            
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "The escalator video emphasizes that human responsibility is crucial for safe       
+      operation despite tremendous safety margins. The battery video shows that despite engineered safety,         
+      lithium-ion batteries can still catastrophically fail when conditions go wrong. Common theme: Engineered     
+      safety margins only work when properly maintained and not deliberately sabotaged or pushed beyond limits.",  
+              "answer": "Both videos show that even well-engineered systems with multiple safety margins can fail  
+      catastrophically when maintenance is neglected or systems are pushed beyond their limits. Escalators rely on 
+      human responsibility, and batteries can still explode despite safety features. The common theme: engineered  
+      safety only works when properly maintained and respected."                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 24,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What is the name of the disease that devastated Henry Ford's rubber plantation in Brazil  
+      (Fordlandia)?",                                                                                              
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:22:48.284", "end": "00:24:38.018"}],                           
+              "relevant_segments": [{"segment_id": "seg_17", "start_frame": 32806, "end_frame": 35437}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The devastating impact of South American leaf blight on Ford's rubber plantations  
+      in Brazil during the early 1930s. The blight, characterized by black spots on leaves, caused rapid           
+      defoliation and death of the rubber trees.",                                                                 
+              "answer": "South American leaf blight."                                                              
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 25,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "Who discovered the positron in 1932, confirming Dirac's prediction of antimatter?",       
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:24:34.765", "end": "00:27:54.756"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 35359, "end_frame": 40154}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Carl Anderson's 1932 discovery of a particle in a cloud chamber that behaved like  
+      an electron but curved in the opposite direction in a magnetic field, which turned out to be the positron,   
+      confirming Dirac's prediction.",                                                                             
+              "answer": "Carl Anderson."                                                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 26,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What was the approximate cost of the ASML EUV lithography machine mentioned in the        
+      video?",                                                                                                     
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:00:56.181", "end": "00:02:31.151"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 1347, "end_frame": 3624}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "This video explains the complexity and capabilities of a highly advanced machine,  
+      costing $400 million, manufactured by ASML.",                                                                
+              "answer": "$400 million (over 350 million euros)."                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 27,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "What year did Moore's Law's progress significantly slow down, according to the chip       
+      manufacturing video?",                                                                                       
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:00:00.000", "end": "00:00:56.139"}],                           
+              "relevant_segments": [{"segment_id": "seg_1", "start_frame": 0, "end_frame": 1346}],                 
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The audio concludes by stating that this progress significantly slowed down around 
+      2015.",                                                                                                      
+              "answer": "Around 2015."                                                                             
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 28,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What two key contributors are credited with developing the modern lithium-ion battery, and
+      what were their respective innovations?",                                                                    
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "533914541945c2060c128da3",                                                              
+              "relevant_timestamps": [{"start": "00:16:05.715", "end": "00:23:03.173"}],                           
+              "relevant_segments": [{"segment_id": "seg_8", "start_frame": 23154, "end_frame": 26865},             
+      {"segment_id": "seg_10", "start_frame": 28464, "end_frame": 33163}],                                         
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "John B. Goodenough discovered lithium cobalt oxide as cathode material increasing  
+      voltage to 4V. Akira Yoshino found polyacetylene then carbon fiber as a safe anode alternative to lithium    
+      metal.",                                                                                                     
+              "answer": "John B. Goodenough (lithium cobalt oxide cathode, raising voltage from 2.4V to 4V) and    
+      Akira Yoshino (carbon-based anode replacing dangerous lithium metal)."                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 29,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "According to the football physics video, what phenomenon causes the football to pitch over
+      during flight, and why is this essential?",                                                                  
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:08:07.020", "end": "00:10:40.206"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 14596, "end_frame": 19187}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The core concept is that a tight spiral minimizes drag by maintaining orientation, 
+      allowing the ball to fly further. The football pitches over during its flight - this turnover is essential   
+      for alignment with the direction of motion, reducing drag.",                                                 
+              "answer": "The 'turnover effect' - the football's axis pitches over to align with the direction of   
+      motion during its parabolic trajectory, which is essential for reducing drag and maintaining an efficient    
+      flight path."                                                                                                
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 30,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the name of the effect where adding capacity to a network paradoxically makes it  
+      less efficient?",                                                                                            
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:10:51.818", "end": "00:12:33.628"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 15628, "end_frame": 18069}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "This segment explains Braess's paradox... The paradox states that adding capacity  
+      to a network can paradoxically decrease overall efficiency, leading to more congestion.",                    
+              "answer": "Braess's Paradox."                                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 31,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What are the two mirror layers that proved most effective for EUV mirrors at approximately
+      13.4 nm wavelength?",                                                                                        
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:22:52.663", "end": "00:26:56.949"}],                           
+              "relevant_segments": [{"segment_id": "seg_11", "start_frame": 32911, "end_frame": 38768}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The segment details the focus on Silicon-Molybdenum mirrors with 70% reflectivity  
+      at around 30 nm... the use of Xenon gas with a laser-produced plasma was adopted for its ability to generate 
+      light around 13.4 nm.",                                                                                      
+              "answer": "Silicon and Molybdenum alternating layers, providing 70% reflectivity at ~13.4 nm         
+      wavelength."                                                                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 32,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Describe how escalators generate electricity using regenerative braking.",                
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:11:36.613", "end": "00:14:21.861"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 16702, "end_frame": 20664}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "AC induction motors use regenerative braking, a process where the weight of        
+      passengers on a downward escalator causes the motor to act as a generator, producing electricity that can be 
+      fed back into the building's power grid.",                                                                   
+              "answer": "AC induction motors in downward-moving escalators use regenerative braking: the weight of 
+      descending passengers drives the motor as a generator, producing electricity that feeds back into the        
+      building's power grid."                                                                                      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 33,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "Two different videos discuss natural rubber. One explains why rubber shrinks when heated, 
+      while the other discusses a global supply vulnerability. Describe the molecular reason rubber shrinks when   
+      heated AND the geopolitical risk facing natural rubber supply.",                                             
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:04:01.908", "end": "00:04:52.375"}, {"start": "00:24:38.060",  
+      "end": "00:26:37.513"}],                                                                                     
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 2876, "end_frame": 6896}, {"segment_id":
+      "seg_18", "start_frame": 35438, "end_frame": 38302}],                                                        
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "When heated, polymer chains vibrate faster causing more kinking. The geopolitical  
+      risk: 90%+ of global natural rubber comes from Southeast Asian clones vulnerable to leaf blight.",           
+              "answer": "Molecular: Heating rubber increases molecular vibration and bombardment of polymer chains,
+      causing them to kink up more and contract. Geopolitical risk: Over 90% of global natural rubber comes from   
+      cloned trees in Southeast Asia, all vulnerable to the same fungal outbreak (South American leaf blight),     
+      which could cause global supply collapse."                                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 34,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What year was the 1900 Paris Exposition Universelle where the first commercial escalator  
+      was showcased?",                                                                                             
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:07:20.482", "end": "00:09:41.706"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 10561, "end_frame": 13947}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The first commercial escalator was showcased at the 1900 Paris Exposition          
+      Universelle and became a major attraction.",                                                                 
+              "answer": "1900."                                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 35,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What is the name of the equation that determines the smallest feature size that can be    
+      printed in photolithography?",                                                                               
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:08:27.382", "end": "00:08:32.929"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 7494, "end_frame": 12298}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "All of this is captured by the Rayleigh equation, which determines the smallest    
+      feature size or critical dimension.",                                                                        
+              "answer": "The Rayleigh equation."                                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 36,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "Sequence the major milestones in quantum mechanics development as described: Schrödinger's
+      equation, Klein-Gordon equation, and Dirac's equation. What problem did each solve?",                        
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:03:12.692", "end": "00:21:21.113"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 4620, "end_frame": 10650},              
+      {"segment_id": "seg_4", "start_frame": 14143, "end_frame": 23391}],                                          
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "Schrödinger's wave equation describes quantum systems. Klein-Gordon incorporated   
+      relativistic energy-momentum for heavy elements. Dirac's equation resolved second-order time derivative      
+      problems and predicted electron spin and antimatter.",                                                       
+              "answer": "1) Schrödinger's equation: describes quantum system wave function probabilities, but fails
+      for heavy elements at relativistic speeds. 2) Klein-Gordon equation: incorporates relativistic               
+      energy-momentum for heavy elements but has problematic second-order time derivatives causing negative        
+      probabilities. 3) Dirac's equation: resolves these with matrices, predicts electron spin and antimatter."    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 37,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "In the battery video, what is the dangerous dendritic growth process that can cause       
+      lithium-ion batteries to short circuit?",                                                                    
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "533914541945c2060c128da3",                                                              
+              "relevant_timestamps": [{"start": "00:12:41.052", "end": "00:16:05.673"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 18247, "end_frame": 23153}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The challenge of lithium plating during charging, where uneven growth can lead to  
+      dendrites that cause short circuits, overheating, and potential explosions.",                                
+              "answer": "Lithium plating during charging - uneven lithium metal growth forms dendrites that        
+      puncture the separator, causing short circuits, overheating, and potential explosions."                      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 38,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "How many Super Bowl wins does Tom Brady have according to the video?",                    
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:00:00.000", "end": "00:01:03.297"}],                           
+              "relevant_segments": [{"segment_id": "seg_1", "start_frame": 0, "end_frame": 1897}],                 
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Tom Brady, widely regarded as the greatest American football quarterback of all    
+      time, known for his seven Super Bowl wins and numerous records.",                                            
+              "answer": "Seven Super Bowl wins."                                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 39,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What specific Nobel Prize did Paul Dirac receive and with whom did he share it?",         
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:33:01.771", "end": "00:34:59.055"}],                           
+              "relevant_segments": [{"segment_id": "seg_10", "start_frame": 47515, "end_frame": 50327}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "His 1933 Nobel Prize in Physics, which he shared with Erwin Schrödinger for their  
+      contributions to atomic theory.",                                                                            
+              "answer": "1933 Nobel Prize in Physics, shared with Erwin Schrödinger for contributions to atomic    
+      theory."                                                                                                     
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 40,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What natural material did Mesoamerican cultures (Mayans and Aztecs) use to create a       
+      vulcanization-like process before Goodyear?",                                                                
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:16:06.090", "end": "00:17:21.332"}],                           
+              "relevant_segments": [{"segment_id": "seg_11", "start_frame": 23163, "end_frame": 24967}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Mesoamerican cultures, like the Mayans and Aztecs, had independently developed     
+      similar vulcanization techniques using natural ingredients and the sun's heat, predating Goodyear's          
+      discovery.",                                                                                                 
+              "answer": "Natural rubber latex with natural ingredients, using the sun's heat for vulcanization-like
+      processing."                                                                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 41,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "How many laser shots per second does the ASML EUV machine fire at tin droplets, and at    
+      what precision must they hit?",                                                                              
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:00:56.181", "end": "00:02:31.151"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 1347, "end_frame": 3624}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "It operates at an astonishing speed, firing 150,000 laser shots per second without 
+      missing.",                                                                                                   
+              "answer": "150,000 laser shots per second, hitting tiny molten tin droplets three times each without 
+      missing."                                                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 42,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What was the 1973 event that triggered Exxon to invest in battery research?",             
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "533914541945c2060c128da3",                                                              
+              "relevant_timestamps": [{"start": "00:01:16.576", "end": "00:02:34.529"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 1836, "end_frame": 3705}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The 1973 oil crisis, triggered by the Yom Kippur War, where Arab oil producers     
+      imposed an embargo on the US. This led to a dramatic increase in oil prices and severe shortages.",          
+              "answer": "The 1973 Yom Kippur War oil crisis - Arab oil producers imposed an embargo on the US,     
+      causing oil price spikes and shortages, prompting Exxon to explore electricity and battery alternatives."    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 43,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "This collection contains videos about both the Dunning-Kruger effect and Nick Leeson's    
+      trading collapse. How does overconfidence connect these two stories according to the video?",                
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:01:26.295", "end": "00:08:19.124"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 2069, "end_frame": 7499}, {"segment_id":
+      "seg_6", "start_frame": 11968, "end_frame": 15271}],                                                         
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "Overconfidence gets us into all sorts of trouble. Leeson's staggering              
+      overconfidence created gargantuan debt. The Dunning-Kruger effect showed that those who performed poorly were
+      the most overconfident. The Mount Stupid Curve is a misrepresentation.",                                     
+              "answer": "Overconfidence is the connecting theme: poor performers are the most overconfident        
+      (Dunning-Kruger), and this same dangerous overconfidence led Nick Leeson to repeatedly double down on losing 
+      bets, hiding losses and risking more, ultimately causing one of banking history's biggest collapses with $1.4
+      billion in losses."                                                                                          
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 44,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What phenomenon does the video call 'countersnapping' in the mechanical systems           
+      demonstration?",                                                                                             
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:16:44.295", "end": "00:19:43.849"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 24079, "end_frame": 28384}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "This segment demonstrates a counterintuitive mechanical system that shrinks when   
+      stretched, a phenomenon described as 'countersnapping.' The mechanism exhibits normal spring-like behavior   
+      individually but contracts when combined.",                                                                  
+              "answer": "A counterintuitive mechanical phenomenon where a system of connected components SHRINKS   
+      when stretched, transitioning between series and parallel spring configurations."                            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 45,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What alternative rubber source is suggested as a scalable replacement if the current      
+      supply fails?",                                                                                              
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:40:11.492", "end": "00:41:06.464"}],                           
+              "relevant_segments": [{"segment_id": "seg_25", "start_frame": 57818, "end_frame": 59136}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Suggesting Guayule as a scalable alternative. He highlights the dependence of      
+      various industries on natural rubber and the risks associated with relying on a single source.",             
+              "answer": "Guayule."                                                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 46,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What effect creates the rightward drift of right-handed quarterbacks' football throws     
+      according to the video?",                                                                                    
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:20:17.016", "end": "00:22:53.806"}],                           
+              "relevant_segments": [{"segment_id": "seg_10", "start_frame": 36474, "end_frame": 41173}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "How a rightward tilt, necessary for a 'turnover effect,' causes right-handed throws
+      to drift right. This drift was illustrated with drone footage of Tom Brady throwing.",                       
+              "answer": "The 'turnover effect' - the ball must tilt slightly rightward to align with its parabolic 
+      trajectory, which creates a rightward aerodynamic drift for right-handed throws."                            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 47,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What material did John B. Goodenough discover as a cathode material that raised battery   
+      voltage from 2.4V to 4V?",                                                                                   
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "533914541945c2060c128da3",                                                              
+              "relevant_timestamps": [{"start": "00:16:05.715", "end": "00:18:40.494"}],                           
+              "relevant_segments": [{"segment_id": "seg_8", "start_frame": 23154, "end_frame": 26865}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "John B. Goodenough discovered that lithium cobalt oxide, a compound already        
+      containing lithium, significantly increased battery voltage from 2.4 to 4 volts.",                           
+              "answer": "Lithium cobalt oxide."                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 48,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Explain the 'Dirac sea' theory of antimatter and how Richard Feynman incorporated it into 
+      his diagrams.",                                                                                              
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:27:54.840", "end": "00:31:23.840"}],                           
+              "relevant_segments": [{"segment_id": "seg_8", "start_frame": 40156, "end_frame": 45167}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Dirac's 'Dirac sea' theory addresses the negative energy problem. Schrödinger's    
+      idea that negative energy electrons traveling backward in time are equivalent to positrons traveling forward.
+      Feynman incorporated this into Feynman diagrams, where antiparticles are depicted as particles traveling     
+      backward in time.",                                                                                          
+              "answer": "Dirac's 'Dirac sea' proposed that all negative energy states are filled by electrons.     
+      Schrödinger showed that a negative-energy electron traveling backward in time is mathematically equivalent to
+      a positron traveling forward. Feynman used this in his famous diagrams, where antiparticles are drawn as     
+      particles with arrows pointing backward in time."                                                            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 49,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What percentage of global natural rubber supply comes from Asia according to the video?", 
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:24:38.060", "end": "00:26:37.513"}],                           
+              "relevant_segments": [{"segment_id": "seg_18", "start_frame": 35438, "end_frame": 38302}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Over ninety percent of the global supply originating from Asia.",                  
+              "answer": "Over 90%."                                                                                
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 50,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What are the four main steps repeated for each layer in chip manufacturing? List them in  
+      order.",                                                                                                     
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:02:31.193", "end": "00:05:12.521"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 3625, "end_frame": 7493}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "This cycle of coating, exposing, etching, and depositing is repeated for each layer
+      of the chip.",                                                                                               
+              "answer": "1) Coating (with photoresist), 2) Exposing (light through mask), 3) Etching (removing     
+      exposed material), 4) Depositing (filling with metal like copper)."                                          
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 51,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "Compare the timeline of escalator development with the timeline of rubber vulcanization   
+      development. Which innovation came first and by approximately how many decades?",                            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:02:24.978", "end": "00:09:41.706"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 3476, "end_frame": 10560}],             
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "The first escalator was 1897 (Continuous Elevator). Goodyear's vulcanization       
+      discovery was mid-1800s (before escalators). First commercial escalator at 1900 Paris Exposition.",          
+              "answer": "Rubber vulcanization came first (mid-1800s, around 1839). The first escalator appeared in 
+      1897 as the 'Continuous Elevator' at an amusement park. Vulcanization preceded escalator development by      
+      approximately 40-60 years."                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 52,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "Multiple videos discuss the role of individual determination in scientific and            
+      technological breakthroughs. Name three innovators from different videos who persisted through significant   
+      adversity, and describe what each overcame.",                                                                
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:09:49.881", "end": "00:21:21.113"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 14143, "end_frame": 23391}],            
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "Charles Goodyear faced bankruptcy, creditors, imprisonment, and failed experiments 
+      before finding vulcanization. Paul Dirac worked on elegant mathematics despite widespread dismissal of his   
+      negative energy predictions. ASML's team persevered through three decades of doubt and near-failure to       
+      perfect EUV technology.",                                                                                    
+              "answer": "1) Charles Goodyear (rubber video): endured bankruptcy, multiple imprisonments, creditors,
+      and countless failed experiments before accidentally discovering vulcanization. 2) Paul Dirac (antimatter    
+      video): pursued elegant mathematics despite other physicists dismissing his negative energy predictions and  
+      even suggesting abandoning quantum mechanics. 3) ASML team (chip video): continued EUV development through 30
+      years of doubt, technical setbacks, and near-failure before commercial success."                             
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 53,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What type of matrices did Dirac realize he needed to use (4x4 vs 2x2) to formulate his    
+      relativistic electron equation, and why was this significant?",                                              
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:16:15.641", "end": "00:21:21.113"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 23392, "end_frame": 30716}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Dirac, initially struggling with two-by-two matrices, had a breakthrough           
+      realization to use four-by-four matrices, which ultimately led him to his elegant equation for the           
+      relativistic free electron.",                                                                                
+              "answer": "Four-by-four matrices. This was significant because 2x2 matrices were insufficient - the  
+      4x4 matrices allowed Dirac to properly incorporate both relativistic effects AND electron spin into a single 
+      elegant equation."                                                                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 54,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the name of the interface that stabilizes lithium-ion batteries despite causing   
+      initial capacity loss?",                                                                                     
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "533914541945c2060c128da3",                                                              
+              "relevant_timestamps": [{"start": "00:24:47.111", "end": "00:26:58.784"}],                           
+              "relevant_segments": [{"segment_id": "seg_12", "start_frame": 35655, "end_frame": 38812}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "It explains the crucial role of the solid electrolyte interface (SEI) in           
+      stabilizing these batteries, despite an initial loss of capacity.",                                          
+              "answer": "SEI - Solid Electrolyte Interface."                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 55,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What phenomenon causes the wobble in a spinning football, and why is this wobble actually 
+      beneficial rather than a flaw?",                                                                             
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:16:21.681", "end": "00:20:16.982"}],                           
+              "relevant_segments": [{"segment_id": "seg_9", "start_frame": 29421, "end_frame": 36473}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "A football's parabolic trajectory causes air resistance to create torques, leading 
+      to a wobble due to gyroscopic precession. This wobble is essential for the football to follow its intended   
+      parabolic path.",                                                                                            
+              "answer": "Gyroscopic precession caused by torques from air resistance during the ball's parabolic   
+      trajectory. The wobble is beneficial because it allows the ball to follow its intended parabolic flight path 
+      - it keeps the ball's axis aligned with the changing direction of motion."                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 56,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Describe the complete chain of events that led from natural rubber harvesting to the      
+      Amazon exploitation during the late 19th century.",                                                          
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:20:56.797", "end": "00:22:48.242"}],                           
+              "relevant_segments": [{"segment_id": "seg_15", "start_frame": 30133, "end_frame": 31961},            
+      {"segment_id": "seg_16", "start_frame": 31963, "end_frame": 32805}],                                         
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Brazil supplied most of the world's rubber. Henry Wickham smuggled rubber seeds to 
+      Southeast Asia, establishing vast rubber plantations. This shift reduced Brazil's dominance and established  
+      British colonies as primary source by mid-1930s.",                                                           
+              "answer": "In the late 19th century, the Amazon was the world's primary rubber source, leading to    
+      exploitation of indigenous peoples. British 'bio-pirate' Henry Wickham smuggled rubber tree seeds to         
+      Southeast Asia, where vast plantations were established, shifting global rubber supply away from Brazil by   
+      the 1930s."                                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 57,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What happens to the polymer chains in rubber when it is stretched and then released,      
+      causing it to snap back to its original shape?",                                                             
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:04:00.949", "end": "00:04:31.605"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 2876, "end_frame": 6896}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "When you stretch rubber, these chains straighten out... when you release that      
+      stress, there's nothing holding those chains aligned anymore. The constant bombardment from smaller molecules
+      kinks those chains back up, so the rubber snaps back.",                                                      
+              "answer": "When stretched, the coiled polymer chains straighten out. When released, constant         
+      bombardment from smaller vibrating molecules and other chains randomly kinks them back into their coiled     
+      state, causing the rubber to snap back."                                                                     
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 58,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "At what rate of approximately how many wafers per hour can the ASML EUV reticle stage     
+      transfer patterns to wafers?",                                                                               
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:46:28.077", "end": "00:48:09.845"}],                           
+              "relevant_segments": [{"segment_id": "seg_21", "start_frame": 66847, "end_frame": 69287}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "It showcases the reticle stage, where patterns are transferred to wafers at an     
+      impressive rate of approximately 185 wafers per hour.",                                                      
+              "answer": "Approximately 185 wafers per hour."                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 59,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "The video about rubber discusses airplane tires, while the video about lithium batteries  
+      discusses electric vehicles. What key property of natural rubber makes it irreplaceable for airplane tires   
+      that synthetic alternatives cannot match?",                                                                  
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:29:38.485", "end": "00:35:24.456"}],                           
+              "relevant_segments": [{"segment_id": "seg_20", "start_frame": 42641, "end_frame": 45777},            
+      {"segment_id": "seg_21", "start_frame": 45778, "end_frame": 50936}],                                         
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "When stretched, natural rubber polymers align and form sheet-like crystals via van 
+      der Waals forces. This crystallization phenomenon is crucial for airplane tires which experience extreme     
+      stress and temperature variations during landing.",                                                          
+              "answer": "Self-reinforcing crystallization - when natural rubber is stretched, polymers align and   
+      form sheet-like crystals through van der Waals forces, which act as temporary cross-links that strengthen the
+      material. This allows airplane tires to withstand extreme stress and temperature changes during landing, a   
+      property synthetic rubber cannot match."                                                                     
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 60,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What company was spun off from Philips and became the sole developer of EUV lithography   
+      technology after American companies abandoned the project?",                                                 
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:21:20.404", "end": "00:22:52.621"}],                           
+              "relevant_segments": [{"segment_id": "seg_10", "start_frame": 30699, "end_frame": 32910}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Many American companies abandoned the project due to these engineering hurdles,    
+      leaving ASML, a Dutch company spun off from Philips, as the sole developer.",                                
+              "answer": "ASML - a Dutch company spun off from Philips."                                            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 61,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "According to the escalator video, what convention exists for which side people should     
+      stand and walk on escalators, and when was this established?",                                               
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:07:20.482", "end": "00:09:41.706"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 10561, "end_frame": 13947}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The establishment of the convention to stand on the right and walk on the left.",  
+              "answer": "Stand on the right, walk on the left - established after initial safety issues with early 
+      escalators."                                                                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 62,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "Describe the progression of Tom Brady's throwing speed observations in the video. What    
+      speeds were mentioned, and how were they measured?",                                                         
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:08:07.020", "end": "00:10:40.206"}, {"start": "00:10:40.240",  
+      "end": "00:12:54.073"}],                                                                                     
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 14596, "end_frame": 19187},             
+      {"segment_id": "seg_6", "start_frame": 19188, "end_frame": 23199}],                                          
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The experiment involves throwing footballs in a wind tunnel and measuring their    
+      speed with sensors and a radar gun. The scientist expresses awe at Brady's throwing speed, noting that even  
+      regular throws reach speeds over 60 mph, which is equivalent to about 100 km/h.",                            
+              "answer": "Measured using sensors embedded in footballs and a radar gun in a wind tunnel. Even       
+      Brady's regular throws exceed 60 mph (~100 km/h). The spin rate was measured at 628 rpm."                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 63,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What was the name of the company manager whose wiretap captured his indifference to       
+      potential escalator failures in Rome?",                                                                      
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:17:14.534", "end": "00:20:44.827"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 24804, "end_frame": 29846}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "A wiretap captured an ATAC manager expressing indifference to potential escalator  
+      failures, highlighting a human element in the safety breaches.",                                             
+              "answer": "An ATAC manager (the investigation involved Metro Roma and ATAC management. The specific  
+      manager's name was not explicitly provided in the transcript, but the organization was ATAC)."               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 64,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What was the investment amount made by Intel, Samsung, and TSMC collectively in ASML to   
+      help develop advanced chip technology?",                                                                     
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:35:31.296", "end": "00:37:45.597"}],                           
+              "relevant_segments": [{"segment_id": "seg_15", "start_frame": 51100, "end_frame": 54319}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "ASML sought investment from its main clients, including Intel, Samsung, and TSMC,  
+      who collectively invested billions.",                                                                        
+              "answer": "Collectively billions of dollars (Intel, Samsung, and TSMC together)."                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 65,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Describe the visual setup of the counterintuitive spring experiment. What components are  
+      present and how are they arranged?",                                                                         
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:01:17.536", "end": "00:01:43.228"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 1295, "end_frame": 6707}],              
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "A spring hanging from a hook, and then via the green rope, it's connected to       
+      another spring. Below them, there are two extra ropes - the red one and the black one - that are slack and   
+      not under any tension.",                                                                                     
+              "answer": "A weight is suspended via two springs connected in series by a green rope under tension.  
+      Two additional slack ropes (red and black) are positioned parallel but not bearing any load - they are too   
+      long to be in tension. The green rope is the only component under tension holding the entire system          
+      together."                                                                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 66,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "The overconfidence video mentions the Challenger disaster while the EUV video discusses   
+      the challenges of creating mirrors smooth to atomic scales. Both involve precision engineering failures.     
+      Compare how human overconfidence and technical precision requirements intersected in the Challenger case     
+      versus the EUV development.",                                                                                
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:10:36.970", "end": "00:10:44.060"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 15272, "end_frame": 15442}],            
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "The weather forecast prompted an emergency conference call regarding the Challenger
+      space shuttle's rocket boosters. Meanwhile, EUV mirrors need to be atomically smooth - average bump height   
+      only 2.3 silicon atoms.",                                                                                    
+              "answer": "Challaster disaster involved overconfidence - engineers and managers proceeded despite    
+      known risks (cold weather affecting O-rings). EUV development represents the opposite extreme: decades of    
+      obsessive precision (mirrors smooth to 2.3 silicon atoms, 150K laser shots/second without missing). The      
+      contrast shows overconfidence ignoring real risks vs. extreme caution and precision succeeding over 30+      
+      years."                                                                                                      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 67,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What is the specific danger of using silica as a tire additive instead of carbon black,   
+      according to the video?",                                                                                    
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:19:02.683", "end": "00:20:56.755"}],                           
+              "relevant_segments": [{"segment_id": "seg_13", "start_frame": 27396, "end_frame": 30132}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "He elaborates on the dangers of using silica, an insulator, which can lead to      
+      static electricity buildup and potential explosions during refueling.",                                      
+              "answer": "Silica is an electrical insulator, which can cause static electricity buildup on tires    
+      that could potentially lead to explosions during refueling. Carbon black provides electrical conductivity,   
+      preventing this danger."                                                                                     
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 68,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the name of the battery researcher who first developed a battery with titanium    
+      disulfide as cathode and lithium as anode for Exxon?",                                                       
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "533914541945c2060c128da3",                                                              
+              "relevant_timestamps": [{"start": "00:07:15.727", "end": "00:12:41.010"}],                           
+              "relevant_segments": [{"segment_id": "seg_6", "start_frame": 10447, "end_frame": 18246}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The breakthrough achieved by M. Stanley Whittingham. It highlights the properties  
+      of titanium disulfide as a cathode material and lithium as an anode.",                                       
+              "answer": "M. Stanley Whittingham."                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 69,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What phenomenon makes natural rubber heat up when it is stretched, and what does this     
+      indicate about the energy transformation?",                                                                  
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:35:24.497", "end": "00:38:04.407"}],                           
+              "relevant_segments": [{"segment_id": "seg_21", "start_frame": 45778, "end_frame": 50936}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Stretching rubber causes exothermic crystallization, and cooling it down allows the
+      polymers to relax.",                                                                                         
+              "answer": "Exothermic crystallization - when stretched, polymer chains align and form crystals       
+      through van der Waals forces, releasing heat (exothermic). This indicates mechanical energy is being         
+      converted to thermal energy."                                                                                
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 70,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "Connect the three videos about (1) rubber's molecular behavior, (2) the Dirac equation,   
+      and (3) chip manufacturing. What overarching theme about the relationship between understanding fundamental  
+      science and engineering innovation runs through all three?",                                                 
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:01:59.953", "end": "00:04:47.621"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 2876, "end_frame": 6896}],              
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "Understanding polymer chain behavior led to vulcanization. Dirac's theoretical math
+      predicted antimatter. EUV lithography required deep understanding of wave optics, interference, and quantum  
+      mechanics for atomic-scale mirror engineering.",                                                             
+              "answer": "The common theme is that the most transformative engineering innovations emerged from deep
+      understanding of fundamental science: (1) Goodyear's vulcanization breakthrough came from observing rubber   
+      polymer behavior, enabling the modern rubber industry; (2) Dirac's purely mathematical work on the electron  
+      equation predicted antimatter, revolutionizing particle physics; (3) EUV lithography required mastery of wave
+      physics and quantum mechanics to create atomically-smooth mirrors. In each case, fundamental science preceded
+      and enabled the engineering breakthrough."                                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 71,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What was the name of Henry Ford's failed utopian rubber plantation town in the Amazon?",  
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:22:13.123", "end": "00:22:48.242"}],                           
+              "relevant_segments": [{"segment_id": "seg_16", "start_frame": 31963, "end_frame": 32805}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Fordlandia - Henry Ford's ambitious attempt to establish a rubber plantation in the
+      Amazon rainforest, constructing a utopian town complete with cottages, a hospital, swimming pools, and fire  
+      hydrants.",                                                                                                  
+              "answer": "Fordlandia."                                                                              
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 72,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "The football video mentions the Crimean War and the innovation that revolutionized        
+      projectile accuracy. What was the key innovation and who pioneered it?",                                     
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:05:06.973", "end": "00:08:06.987"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 9200, "end_frame": 14595}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The introduction of rifled barrels and conical bullets, pioneered by Claude Etienne
+      Minier, revolutionized accuracy. These bullets, with hollow bases and iron plugs, expanded upon firing to    
+      seal the barrel and grip the rifling grooves, imparting spin.",                                              
+              "answer": "Rifled barrels with conical bullets (breech-loading), pioneered by Claude Étienne Minié.  
+      The hollow-based bullets expanded upon firing, gripping the rifling grooves and imparting spin for stability 
+      via the Minie ball."                                                                                         
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 73,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Describe the dual-laser approach that ASML developed to increase EUV source power. How    
+      does it differ from the original single-laser method?",                                                      
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:35:31.296", "end": "00:39:57.854"}],                           
+              "relevant_segments": [{"segment_id": "seg_15", "start_frame": 51100, "end_frame": 54319},            
+      {"segment_id": "seg_16", "start_frame": 54325, "end_frame": 57491}],                                         
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "A technical breakthrough involving a dual-laser approach to vaporize tin droplets, 
+      increasing power output. The need for precise laser timing to hit droplets of tin.",                         
+              "answer": "The dual-laser approach uses a first laser pulse to flatten/shape the tin droplet, then a 
+      second more powerful laser pulse to create the plasma. This two-step process is more efficient than hitting  
+      the droplet with a single laser, achieving 100 watts output breakthrough in 2014."                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 74,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What was the first-ever escalator called when it debuted as an amusement park attraction  
+      in 1897?",                                                                                                   
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:02:24.978", "end": "00:07:20.440"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 3476, "end_frame": 10560}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The first escalator as an amusement park attraction called the 'Continuous         
+      Elevator' in 1897, which was essentially a conveyor belt.",                                                  
+              "answer": "The 'Continuous Elevator'."                                                               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 75,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "In the rubber video, what series of temperature-related problems caused the Roxbury India 
+      Rubber Company to lose money in the early days of rubber products?",                                         
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "92ba4b2e27f460945fded9e5",                                                              
+              "relevant_timestamps": [{"start": "00:07:41.961", "end": "00:09:04.878"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 11076, "end_frame": 13064}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "In hot weather, the rubber would melt, causing products to stick to surfaces and   
+      creating a gooey mess in storage. In cold weather, the rubber became brittle. These issues led to customer   
+      returns and financial losses.",                                                                              
+              "answer": "In hot weather, rubber products melted and became sticky goo; in cold weather, they became
+      brittle. Both temperature extremes caused product failures, customer returns, and financial ruin for the     
+      company."                                                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 76,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "Compare the handrail speed design of escalators with the wobble behavior of football      
+      throws. What unexpected behavior is intentionally designed into each system, and why?",                      
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "b1abb34af1bc67cb712d5ffb",                                                              
+              "relevant_timestamps": [{"start": "00:09:41.748", "end": "00:11:36.571"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 13948, "end_frame": 16701}],            
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "The handrail moves slightly faster than the steps to compensate for wear and tear. 
+      In the football video, the wobble from gyroscopic precession is essential for the ball to follow its         
+      parabolic path.",                                                                                            
+              "answer": "Escalator handrails: intentionally designed to move slightly faster than the steps to     
+      compensate for wear and tear over time, ensuring the handrail stays accessible. Football wobble: the         
+      gyroscopic precession wobble is not a flaw but a necessary feature - it allows the ball to pitch over and    
+      align with its changing parabolic trajectory, reducing drag. In both cases, counterintuitive behavior is     
+      intentionally designed for optimal function."                                                                
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 77,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What was the specific date mentioned in the overconfidence video regarding the Challenger 
+      disaster weather conditions?",                                                                               
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:10:36.970", "end": "00:10:44.060"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 15272, "end_frame": 15442}],            
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "The weather forecast map from January 26, 1986, detailing snow and cold fronts     
+      across the United States.",                                                                                  
+              "answer": "January 26, 1986."                                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 78,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "The chip manufacturing video mentions Lawrence Livermore National Lab's role in developing
+      EUV mirrors. What were scientists originally studying that led to this mirror technology?",                  
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:14:56.521", "end": "00:17:24.794"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 21495, "end_frame": 25049}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Initially conceived for analyzing nuclear fusion reactions at Lawrence Livermore   
+      National Lab. Founded by Ernest Lawrence and Edward Teller, the lab's research into nuclear weapons led to   
+      advancements in X-ray technology.",                                                                          
+              "answer": "Nuclear fusion reactions - scientists were developing X-ray mirrors to analyze nuclear    
+      fusion reactions related to nuclear weapons research."                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 79,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the conversion efficiency problem mentioned regarding using Xenon gas with        
+      laser-produced plasma for EUV light generation?",                                                            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:22:52.663", "end": "00:26:56.949"}],                           
+              "relevant_segments": [{"segment_id": "seg_11", "start_frame": 32911, "end_frame": 38768}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The use of Xenon gas with a laser-produced plasma was adopted for its ability to   
+      generate light around 13.4 nm, despite a low conversion efficiency.",                                        
+              "answer": "Low conversion efficiency - the process of converting laser energy into usable EUV light  
+      using Xenon gas plasma had very poor efficiency."                                                            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 80,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "According to the video, what mathematical concept did Max Born suggest using to represent 
+      Heisenberg's discovery about order of operations in quantum mechanics?",                                     
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:16:15.641", "end": "00:21:21.113"}],                           
+              "relevant_segments": [{"segment_id": "seg_5", "start_frame": 23392, "end_frame": 30716}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Heisenberg's discovery that the order of multiplication matters for certain quantum
+      properties, like position and momentum, led to the uncertainty principle. Max Born suggested using matrices  
+      to represent this.",                                                                                         
+              "answer": "Matrices - Max Born suggested using mathematical matrices to represent Heisenberg's       
+      discovery that the order of multiplication matters for quantum properties (like position × momentum ≠        
+      momentum × position), which led to the uncertainty principle."                                               
+            }                                                                                                      
+          }                                                                                                        
+        ],                                                                                                         
+        "generation_metadata": {                                                                                   
+          "videos_explored": [                                                                                     
+            "c510fac771767405c891bf64",                                                                            
+            "b1abb34af1bc67cb712d5ffb",                                                                            
+            "946330031ead69b21354d038",                                                                            
+            "92ba4b2e27f460945fded9e5",                                                                            
+            "0e64f1c0da591ca67f07b7f9",                                                                            
+            "3636d10a2ad4787733c9700d",                                                                            
+            "c98019fd17ff4420ea47eee7",                                                                            
+            "533914541945c2060c128da3"                                                                             
+          ],                                                                                                       
+          "total_segments_reviewed": 113,                                                                          
+          "generation_timestamp": "2026-03-31T08:00:00Z",                                                          
+          "question_type_distribution": {                                                                          
+            "visual": 14,                                                                                          
+            "audio": 18,                                                                                           
+            "temporal": 6,                                                                                         
+            "factoid": 12,                                                                                         
+            "descriptive": 6,                                                                                      
+            "multi_hop": 9                                                                                         
+          },                                                                                                       
+          "difficulty_distribution": {                                                                             
+            "easy": 20,                                                                                            
+            "medium": 32,                                                                                          
+            "hard": 12                                                                                             
+          }                                                                                                        
+        }                                                                                                          
+      }                                                                                                            
+      ```                                                                                                          
