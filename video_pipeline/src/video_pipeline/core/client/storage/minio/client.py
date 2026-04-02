@@ -37,6 +37,7 @@ class MinioStorageClient:
             if not exists:
                 logger.info(f"Bucket named: {bucket} does not exist, creating")
                 self.client.make_bucket(bucket)
+                self.make_bucket_public(bucket)
 
         except S3Error as exc:
             logger.error("MinIO bucket check failed for %s: %s", bucket, exc)
