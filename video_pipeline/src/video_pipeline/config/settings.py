@@ -137,6 +137,29 @@ class TritonSettings(BaseSettings):
     )
 
 
+class TrackerSettings(BaseSettings):
+    """Progress tracker service configuration."""
+
+    url: str | None = Field(default=None)
+    timeout: int = Field(default=30)
+
+    model_config = SettingsConfigDict(
+        env_prefix="TRACKER_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
+    )
+
+
+class EmbeddingServiceSettings(BaseSettings):
+    """Centralized embedding service URLs for consistent configuration across tasks."""
+
+    mmbert_url: str = Field(default="http://mmbert:8000")
+    qwen_vl_url: str = Field(default="http://qwen_vl_embedding:8080/embedding")
+    splade_url: str = Field(default="triton-server:8001")
+
+    model_config = SettingsConfigDict(
+        env_prefix="EMBEDDING_", env_file=_ENV_FILE, extra="ignore", case_sensitive=False
+    )
+
+
 class AppSettings(BaseSettings):
     """Main application settings."""
 
@@ -153,6 +176,8 @@ class AppSettings(BaseSettings):
     dask: DaskSettings = Field(default_factory=DaskSettings)
     tasks: TaskConfigSettings = Field(default_factory=TaskConfigSettings)
     triton: TritonSettings = Field(default_factory=TritonSettings)
+    tracker: TrackerSettings = Field(default_factory=TrackerSettings)
+    embedding: EmbeddingServiceSettings = Field(default_factory=EmbeddingServiceSettings)
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore", case_sensitive=False
