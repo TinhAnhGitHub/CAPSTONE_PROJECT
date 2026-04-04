@@ -161,6 +161,11 @@ tasks:
     timeout_seconds: 600
     cache_enabled: false
 
+    additional_kwargs:
+      asr_batch_size: 10
+      image_batch_size: 35
+      frames_per_segment: 5
+
   image_extraction:
     name: "Image Extraction"
     description: "Extract representative frames from video segments and persist as ImageArtifacts"
