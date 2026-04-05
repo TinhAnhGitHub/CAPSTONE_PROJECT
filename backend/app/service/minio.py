@@ -235,4 +235,4 @@ class MinioService:
         return f"http://100.113.186.28:9000/thumbnails/{video_id}_{frame_index}.jpg"
 
     def generate_video_link(self, video_id):
-        return f"http://100.113.186.29:9000/videos/{video_id}.mp4"
+        return f"http://100.113.186.28:9000/videos/{video_id}.mp4"
