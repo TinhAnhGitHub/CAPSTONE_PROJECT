@@ -49,6 +49,15 @@ global_session_tasks = {
 }
 
 
+class AccumulatedData:
+    def __init__(self):
+        self.text_accum = ""
+        self.thinking_accum = []
+        self.tools_accum = []
+        self.ai_message_blocks = []
+        self.prev_msg_type = ""
+
+
 # at agentouput, delete session_id task from global_session_tasks
 @sio.on("stream_chat")
 async def handle_stream_chat(socket_id, data: dict):
@@ -56,7 +65,7 @@ async def handle_stream_chat(socket_id, data: dict):
         # socket_id is the socket id to chat
         # session id is the chat bot session id
         session_id = data.get("sessionId", None)
-        user_id = data.get("userId")  # could be None for guest
+        user_id = data.get("userId", "6916f84e9a79606c0413d5d6")  # could change 6916f84e9a79606c0413d5d6 to None to take all videos
         message = data.get("text")
         video_ids = data.get("videos", [])  # list of video ids
 
@@ -94,6 +103,7 @@ async def handle_stream_chat(socket_id, data: dict):
             # request agent
             # lấy history giữa người dùng và bot bằng session_id
             # [{"role": "user", "content": message}, {"role": "assistant", "content": response}, ...]
+
             user_service = app_state.user_service
             chat_history = await user_service.get_user_chat_detail(session_id)
             chat_history_dict = []
@@ -103,9 +113,15 @@ async def handle_stream_chat(socket_id, data: dict):
                 del chat_dict["session_id"]
                 del chat_dict["timestamp"]
                 chat_history_dict.append(chat_dict)
+            # chat_history_dict = [
+            #     {
+            #         "role": "user",
+            #         "content": message,
+            #     }
+            # ]
 
             # ai_url = "ws://100.113.186.28:8050/ws/start_workflow"
-            ai_url = "ws://localhost:8050/ws/start_workflow"
+            ai_url = "ws://localhost:8080/ws/start_workflow"
             # payload = {
             #     "user_id": user_id,
             #     "video_ids": video_ids,
@@ -138,14 +154,7 @@ async def handle_stream_chat(socket_id, data: dict):
                 # }
                 # ],
             }
-
-            class AccumulatedData:
-                def __init__(self):
-                    self.text_accum = ""
-                    self.thinking_accum = []
-                    self.tools_accum = []
-                    self.ai_message_blocks = []
-                    self.prev_msg_type = ""
+            
 
             # HTTP stream
             async with websockets.connect(ai_url) as ws:
@@ -161,7 +170,6 @@ async def handle_stream_chat(socket_id, data: dict):
                 async for msg in ws:
                     try:
                         data = json.loads(msg)
-                        data = data.get("data", {})
                         msg_type = data.get("event_type", "")
 
                         # Save accumulated stream when transitioning away from AgentStream
@@ -207,9 +215,10 @@ async def handle_stream_chat(socket_id, data: dict):
                             await handle_agent_stream(session_id, data, accum)
                         elif msg_type == "ToolCall":
                             tool_id = data.get("tool_id", "")
+                            tool_name = data.get('tool_name', '')
                             description = data.get("description", "")
                             tool_step = ToolStep(
-                                tool_name=tool_id,
+                                tool_name=tool_name,
                                 description=description,
                                 status="finished",
                             )
@@ -219,30 +228,46 @@ async def handle_stream_chat(socket_id, data: dict):
                                 "tool_call",
                                 {
                                     "tool_id": tool_id,
-                                    "tool_name": tool_id,
+                                    "tool_name": tool_name,
                                 },
                                 to=session_room(session_id),
                             )
                         elif msg_type == "ToolCallResult":
-                            # show toolicon trước
-                            # mốt show list hình ảnh từ s3, video + các timestamp
-
+                            # Tool result now comes in format:
+                            # {
+                            #   "result_type": "image_search" | "segment_caption_search",
+                            #   "top_matches": [...],
+                            #   "total": 10,
+                            #   ...
+                            # }
+                            import ast
                             raw_output = data.get("tool_output", {}).get(
                                 "raw_output", {}
                             )
 
-                            if isinstance(raw_output, dict):
-                                summary = raw_output.get("summary", {})
-                            else:
-                                summary = {}
-                            # check if object
-                            media_type = summary.get("result_type", "")
+                            # raw_output can be either string of json or string of text markdown, need to check if it's json first
+                            if isinstance(raw_output, str):
+                                # try: 
+                                    # raw_output = json.loads(raw_output)
+                                try: 
+                                    raw_output = ast.literal_eval(raw_output)
+                                    if isinstance(raw_output, dict):
+                                        media_type = raw_output.get("result_type", "text") # text type, now markdown
+                                        media = raw_output.get("top_matches", []) # if text type then the media is the text result
+                                    else: # a string (mark down)
+                                        media_type = "text"
+                                        media = raw_output
+
+                                except:
+                                    media_type = "text"
+                                    media = raw_output
+                                
 
                             s3_base = "s3://"
                             http_base = "http://100.113.186.28:9000/"
 
-                            async def format_tool_result(media):
-                                if media_type == "image_search":
+                            async def format_tool_result():
+                                if "image_search" in media_type:
                                     image_groups = defaultdict(list)
                                     image_results = []
                                     for item in media:
@@ -251,25 +276,24 @@ async def handle_stream_chat(socket_id, data: dict):
                                     for video_id, images in image_groups.items():
                                         url_list = []
                                         for item in images:
-                                            url_list.append(
-                                                item["minio_path"].replace(
-                                                    s3_base, http_base
+                                            minio_path = item.get("minio_path", "")
+                                            if minio_path:
+                                                url_list.append(
+                                                    minio_path.replace(
+                                                        s3_base, http_base
+                                                    )
                                                 )
+                                        if url_list:
+                                            image_block = ImageBlock(
+                                                video_id=video_id, url=url_list
                                             )
-                                        image_block = ImageBlock(
-                                            video_id=video_id, url=url_list
-                                        )
-                                        accum.ai_message_blocks.append(image_block)
-                                        image_results.append(image_block)
+                                            accum.ai_message_blocks.append(image_block)
+                                            image_results.append(image_block)
                                     return {
                                         "media_type": "image",
                                         "results": image_results,
                                     }
-                                elif media_type == "segment_caption_search":
-                                    # video_url = [
-                                    #     item["minio_path"].replace(s3_base, http_base)
-                                    #     for item in media
-                                    # ]
+                                elif "segment_caption_search" in media_type:
                                     # group similar video segments into one block
                                     video_groups = defaultdict(list)
                                     video_results = []
@@ -279,26 +303,27 @@ async def handle_stream_chat(socket_id, data: dict):
                                     for video_id, segments in video_groups.items():
                                         segment_list = []
                                         for item in segments:
+                                            # Get frame range
+                                            frame_range = item.get("frame_range", {})
+                                            start_frame = frame_range.get("start", 0)
+                                            end_frame = frame_range.get("end", 0)
+                                            
                                             # fire-and-forget: schedule but don't await
                                             asyncio.create_task(
                                                 app_state.user_service.generate_video_thumbnails(
                                                     video_id=video_id,
-                                                    frame_index=item["frame_range"][
-                                                        "start"
-                                                    ],
+                                                    frame_index=start_frame,
                                                 )
                                             )
                                             thumbnail_urls = await app_state.minio_service.generate_thumbnail_links(
                                                 video_id=video_id,
-                                                frame_index=item["frame_range"][
-                                                    "start"
-                                                ],
+                                                frame_index=start_frame,
                                             )
 
                                             segment = VideoSegment(
-                                                start=item["frame_range"]["start"],
-                                                end=item["frame_range"]["end"],
-                                                caption=item["caption_preview"],
+                                                start=start_frame,
+                                                end=end_frame,
+                                                caption=item.get("caption_preview", ""),
                                                 preview_images=thumbnail_urls,
                                             )
                                             segment_list.append(segment)
@@ -329,8 +354,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 else:
                                     return {"media_type": "unknown", "results": []}
 
-                            media = summary.get("top_matches", [])
-                            formatted_media = await format_tool_result(media)
+                            formatted_media = await format_tool_result()
                             if formatted_media["media_type"] in [
                                 "image",
                                 "video",
@@ -348,7 +372,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 )
                             else:
                                 tool_id = data.get("tool_id", "unknown_tool")
-                                tool_name = data.get("tool_id", "unknown_tool")
+                                tool_name = data.get("tool_name", "unknown_tool")
                                 description = data.get("description", "")
                                 # also update tool result in ai message blocks
                                 await sio.emit(
@@ -356,14 +380,18 @@ async def handle_stream_chat(socket_id, data: dict):
                                     {
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
-                                        "description": description,
+                                        "description": media,
                                     },
                                     to=session_room(session_id),
                                 )
                         elif msg_type == "AgentOutput":
                             # save to database
                             await save_message(session_id, accum)
-                            global_session_tasks[session_id]["status"] = "done"
+                            # Session state can be cleaned up earlier (e.g. cancel/disconnect).
+                            # Guard lookup to avoid KeyError on late AgentOutput events.
+                            state = global_session_tasks.get(session_id)
+                            if state:
+                                state["status"] = "done"
 
                             # Emit stream_end to notify the client
                             await sio.emit(
@@ -397,6 +425,9 @@ async def handle_stream_chat(socket_id, data: dict):
 
 
 async def save_message(session_id, accum):
+    if accum is None:
+        return
+
     ai_message = SessionMessage(
         session_id=session_id,
         role=MessageRole.ASSISTANT,
