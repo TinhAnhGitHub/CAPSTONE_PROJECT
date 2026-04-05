@@ -5,7 +5,7 @@ description = "Backend API services for Agentic Application"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "beanie>=2.0.0",
+    "beanie<2.0",
     "fastapi[standard]>=0.116.1",
     "ffmpeg-python>=0.2.0",
     "google-auth>=2.40.3",
@@ -14,7 +14,7 @@ dependencies = [
     "llama-index==0.14.12",
     "llama-index-core>=0.12.42",
     "minio>=7.2.18",
-    "motor>=3.7.1",
+    "motor>=3.6",
     "moviepy>=2.2.1",
     "netifaces",
     "opencv-python>=4.12.0.88",
@@ -22,6 +22,7 @@ dependencies = [
     "pydantic>=2.11.9",
     "pydantic-settings>=2.10.1",
     "pyjwt>=2.10.1",
+    "pymongo>=4.9",
     "python-dotenv>=1.1.1",
     "python-jose[cryptography]>=3.5.0",
     "python-socketio>=5.13.0",

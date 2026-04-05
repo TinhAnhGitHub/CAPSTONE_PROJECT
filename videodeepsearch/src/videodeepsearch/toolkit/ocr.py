@@ -1,11 +1,3 @@
-"""OCR Search Toolkit for text retrieval from video frames.
-
-This toolkit provides text search capabilities for OCR-extracted content
-from video frames, supporting both keyword (BM25) and semantic search.
-
-All tools return ToolResult for unified interface.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -13,7 +5,6 @@ import json
 from typing import Any, Literal
 
 from agno.tools import Toolkit, tool
-from agno.tools.function import ToolResult
 from loguru import logger
 
 from videodeepsearch.clients.storage.elasticsearch import (
@@ -25,19 +16,6 @@ from videodeepsearch.toolkit.common import CacheManager
 
 
 class OCRSearchToolkit(Toolkit):
-    """Toolkit for OCR text search with dependency injection.
-
-    Provides tools for:
-    - Keyword search using BM25
-    - Semantic search using MMBert embeddings
-    - Hybrid search combining BM25 + kNN with RRF fusion
-    - Retrieving all OCR text for a specific video
-
-    Supports context binding for user_id and video_ids.
-
-    All tools support caching and return ToolResult for unified interface.
-    """
-
     def __init__(
         self,
         es_ocr_client: ElasticsearchOCRClient,
@@ -47,23 +25,12 @@ class OCRSearchToolkit(Toolkit):
         cache_ttl: int = 1800,
         cache_dir: str | None = None,
     ):
-        """Initialize the OCRSearchToolkit.
-
-        Args:
-            es_ocr_client: Elasticsearch OCR client for text search
-            mmbert_client: Optional MMBert client for semantic embeddings
-            user_id: Default user ID for all searches (bound at creation)
-            video_ids: Default video IDs for all searches (bound at creation)
-            cache_ttl: Cache time-to-live in seconds (default 30 minutes)
-            cache_dir: Optional custom cache directory
-        """
         self.es_client = es_ocr_client
         self.mmbert = mmbert_client
         self.cache_ttl = cache_ttl
         self.cache_manager = CacheManager(cache_dir)
         self._result_store: dict[str, list[OCRSearchResult]] = {}
 
-        # Context binding
         self._user_id = user_id
         self._video_ids = video_ids
 
@@ -81,62 +48,45 @@ class OCRSearchToolkit(Toolkit):
         tool_name: str,
         kwargs: dict[str, Any],
         results: list[OCRSearchResult],
-    ) -> ToolResult:
-        """Store results in memory and return ToolResult.
-
-        Args:
-            tool_name: Name of the tool
-            kwargs: Tool arguments
-            results: Search results
-
-        Returns:
-            ToolResult with search results
-        """
+    ) -> dict[str, Any]:
         handle_id = hashlib.md5(
             json.dumps({"tool": tool_name, "args": kwargs}, sort_keys=True).encode()
         ).hexdigest()[:8]
 
         self._result_store[handle_id] = results
 
-        content = (
-            f"Found {len(results)} OCR result(s).\n"
-            f"Handle ID: {handle_id}\n"
-            f"To view details: use `view_ocr_result(handle_id='{handle_id}', view_mode='detailed')`\n\n"
-            f"{self._get_brief(results, 5)}"
-        )
+        return self._get_brief(results, 5, handle_id)
 
-        return ToolResult(content=content)
-
-    def _get_brief(self, results: list[OCRSearchResult], top_n: int = 5) -> str:
-        """Get brief representation of top N results."""
+    def _get_brief(self, results: list[OCRSearchResult], top_n: int = 5, handle_id: str | None = None) -> dict[str, Any]:
+        """Get brief representation of top N results as JSON dict."""
         sorted_results = sorted(results, key=lambda x: x.score, reverse=True)[:top_n]
 
-        lines = [
-            f"Total: {len(results)} OCR result(s)",
-            f"Top {min(top_n, len(sorted_results))}:",
-        ]
+        return {
+            "view_mode": "brief",
+            "total": len(results),
+            "top_n": min(top_n, len(sorted_results)),
+            "handle_id": handle_id,
+            "results": [r.model_dump() for r in sorted_results],
+        }
 
-        for i, item in enumerate(sorted_results):
-            lines.append(f"  {i}. {item.brief_representation()}")
-
-        return "\n".join(lines)
-
-    def _get_detailed(self, results: list[OCRSearchResult], top_n: int = 5) -> str:
-        """Get detailed representation of top N results."""
+    def _get_detailed(self, results: list[OCRSearchResult], top_n: int = 5) -> dict[str, Any]:
+        """Get detailed representation of top N results as JSON dict."""
         sorted_results = sorted(results, key=lambda x: x.score, reverse=True)[:top_n]
 
-        lines = [
-            "=== Detailed OCR Results ===",
-            f"Total: {len(results)} result(s)",
-            f"Top {min(top_n, len(sorted_results))}:",
-            "",
-        ]
+        return {
+            "view_mode": "detailed",
+            "total": len(results),
+            "top_n": min(top_n, len(sorted_results)),
+            "results": [r.model_dump() for r in sorted_results],
+        }
 
-        for i, item in enumerate(sorted_results):
-            lines.append(f"[{i}] {item.detailed_representation()}")
-            lines.append("")
-
-        return "\n".join(lines)
+    def _get_full(self, results: list[OCRSearchResult]) -> dict[str, Any]:
+        """Get full results as JSON dict."""
+        return {
+            "view_mode": "full",
+            "total": len(results),
+            "results": [r.model_dump() for r in results],
+        }
 
     @tool(
         description=(
@@ -178,23 +128,7 @@ class OCRSearchToolkit(Toolkit):
         video_ids: list[str] | None = None,
         user_id: str | None = None,
         fuzzy: bool = True,
-    ) -> ToolResult:
-        """Search OCR text using BM25 keyword matching.
-
-        Best for finding specific words, phrases, or exact text matches.
-        Supports fuzzy matching to handle OCR recognition errors.
-
-        Args:
-            query: Text to search for (keywords or phrases)
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter (uses bound context if not provided)
-            user_id: Optional user ID to filter (uses bound context if not provided)
-            fuzzy: Enable fuzzy matching for OCR error tolerance (default True)
-
-        Returns:
-            ToolResult with OCR search results
-        """
-        # Use bound context as defaults
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
@@ -218,7 +152,7 @@ class OCRSearchToolkit(Toolkit):
             return self._store_result("search_ocr_text", kwargs, results)
         except Exception as e:
             logger.error(f"[OCRSearchToolkit] search_ocr_text failed: {e}")
-            return ToolResult(content=f"Error: OCR text search failed - {str(e)}")
+            return {"error": f"OCR text search failed - {str(e)}"}
 
     @tool(
         description=(
@@ -255,18 +189,7 @@ class OCRSearchToolkit(Toolkit):
         video_id: str,
         user_id: str | None = None,
         limit: int = 1000,
-    ) -> ToolResult:
-        """Get all OCR text for a specific video.
-
-        Args:
-            video_id: Video ID to retrieve OCR for
-            user_id: Optional user ID to filter by (uses bound context if not provided)
-            limit: Maximum number of results (default 1000)
-
-        Returns:
-            ToolResult with all OCR results for the video
-        """
-        # Use bound context as default for user_id
+    ) -> dict[str, Any]:
         effective_user_id = user_id or self._user_id
 
         kwargs = {
@@ -284,7 +207,7 @@ class OCRSearchToolkit(Toolkit):
             return self._store_result("get_ocr_by_video", kwargs, results)
         except Exception as e:
             logger.error(f"[OCRSearchToolkit] get_ocr_by_video failed: {e}")
-            return ToolResult(content=f"Error: Failed to get OCR for video - {str(e)}")
+            return {"error": f"Failed to get OCR for video - {str(e)}"}
 
     @tool(
         description=(
@@ -323,31 +246,21 @@ class OCRSearchToolkit(Toolkit):
         handle_id: str,
         view_mode: Literal["brief", "detailed", "full"] = "brief",
         top_n: int = 5,
-    ) -> ToolResult:
-        """View cached OCR search results.
-
-        Args:
-            handle_id: Handle ID from previous search
-            view_mode: 'brief' (top N), 'detailed' (top N detailed), 'full' (all)
-            top_n: Number of results to show in brief/detailed mode
-
-        Returns:
-            ToolResult with formatted view of cached results
-        """
+    ) -> dict[str, Any]:
         if handle_id not in self._result_store:
-            return ToolResult(
-                content=f"No cached results found for handle_id '{handle_id}'. "
-                f"Run a search tool first to generate results."
-            )
+            return {
+                "error": f"No cached results found for handle_id '{handle_id}'",
+                "available_handle_ids": list(self._result_store.keys()),
+            }
 
         results = self._result_store[handle_id]
 
         if view_mode == "brief":
-            return ToolResult(content=self._get_brief(results, top_n))
+            return self._get_brief(results, top_n)
         elif view_mode == "detailed":
-            return ToolResult(content=self._get_detailed(results, top_n))
+            return self._get_detailed(results, top_n)
         else:
-            return ToolResult(content=self._get_detailed(results, len(results)))
+            return self._get_full(results)
 
 
 __all__ = ["OCRSearchToolkit"]

@@ -34,7 +34,6 @@ async def start_workflow_ws(
         while True:
             data = await websocket.receive_json()
 
-            # Input validation
             required_fields = ['user_id', 'video_ids', 'user_demand', 'session_id']
             missing = [f for f in required_fields if f not in data]
             if missing:
@@ -71,14 +70,9 @@ async def start_workflow_ws(
                 arango_db=state.arango_db,
             )
             async for output in async_generator:
-                await websocket.send_json(
-                    {
-                        "type": "workflow_event",
-                        "data": output
-                    }
-                )
+                await websocket.send_json(output)
 
-            await websocket.send_json({"type": "complete"})
+            # await websocket.send_json({"type": "complete"})
             return
 
     except WebSocketDisconnect as e:
@@ -93,6 +87,7 @@ async def start_workflow_ws(
 
     except Exception as e:
         # Log full traceback to server logs for debugging visibility
+        print(output) #type:ignore
         logger.exception("Unhandled error in start_workflow_ws")
 
         try:

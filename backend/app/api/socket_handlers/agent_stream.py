@@ -28,6 +28,9 @@ async def handle_agent_stream(session_id, data, accum):
     else:  # reponse
         response = data.get("response", "")
         response_delta = data.get("delta", "")
+        if not response and not response_delta:
+            return
+
         # accumulate the delta
         if response_delta:
             accum.text_accum += response_delta

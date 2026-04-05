@@ -39,30 +39,35 @@ class WorkflowClient:
                     try:
                         message = await websocket.recv()
                         data = json.loads(message)
-                        if data.get("type") == "error":
-                            err = data.get("error")
-                            tb = data.get("traceback")
-                            from rich.console import Console
-                            Console().print("\n[bold red]✗ Server Error:[/bold red] " + str(err))
-                            if tb:
-                                Console().print(f"[dim]{tb}[/dim]")
-                            break
+                        try:
+                            self.event_handler.handle_event(data)
+                        except Exception as e:
+                            print(f"Data: {data}. Error: {e=}")
+                        # print(f"{data=}")
+                        # if data.get("type") == "error":
+                        #     err = data.get("error")
+                        #     tb = data.get("traceback")
+                        #     from rich.console import Console
+                        #     Console().print("\n[bold red]✗ Server Error:[/bold red] " + str(err))
+                        #     if tb:
+                        #         Console().print(f"[dim]{tb}[/dim]")
+                        #     break
 
-                        if data.get("type") == "complete":
-                            break
+                        # if data.get("type") == "complete":
+                        #     break
 
-                        if data.get("type") == "workflow_event":
-                            event_data = data.get("data", {})
-                            # print(f"{event_data=}")
-                            # print()
-                            # print()
-                            # print()
-                            response = self.event_handler.handle_event(event_data)
+                        # if data.get("type") == "workflow_event":
+                        #     event_data = data.get("data", {})
+                        #     # print(f"{event_data=}")
+                        #     # print()
+                        #     # print()
+                        #     # print()
+                        #     response = self.event_handler.handle_event(event_data)
                             
-                            # chat_message = ChatMessage(role='assistant', content=str(response))
+                        #     # chat_message = ChatMessage(role='assistant', content=str(response))
 
 
-                            # chat_history.append(chat_message)
+                        #     # chat_history.append(chat_message)
                       
                     
                     except websockets.exceptions.ConnectionClosed:

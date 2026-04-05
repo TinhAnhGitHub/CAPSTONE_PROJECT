@@ -1,0 +1,627 @@
+DEBUG Now I have gathered comprehensive context from all 6 videos. Let me generate 32 diverse Q&A pairs.           
+                                                                                                                   
+      ```json                                                                                                      
+      {                                                                                                            
+        "qa_pairs": [                                                                                              
+          {                                                                                                        
+            "question_id": 1,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "How many Super Bowls has Tom Brady won according to the video?",                          
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:00:09.009", "end": "00:00:10.744"}],                           
+              "relevant_segments": [{"segment_id": "seg_0", "start_frame": 0, "end_frame": 1897}],                 
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "He's won seven Super Bowls",                                                       
+              "answer": "Seven Super Bowls"                                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 2,                                                                                      
+            "question_type": "visual",                                                                             
+            "question": "What happens to the weight when the green rope is cut in the spring experiment?",         
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:01:45.272", "end": "00:01:49.651"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 1295, "end_frame": 6706}],              
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "Even though the ropes on the side were slack and we cut the only rope in tension,  
+      the weight somehow went up.",                                                                                
+              "answer": "The weight goes up (moves upward)"                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 3,                                                                                      
+            "question_type": "audio",                                                                              
+            "question": "What famous equation did Einstein derive from his theory of special relativity linking    
+      mass and energy?",                                                                                           
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:02:08.629", "end": "00:02:16.053"}],                           
+              "relevant_segments": [{"segment_id": "seg_1", "start_frame": 4620, "end_frame": 10650}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "In other words, he found that energy must be equal to mc squared, e equals mc      
+      squared. Mass and energy are different manifestations of the same thing.",                                   
+              "answer": "E=mc² (energy equals mass times the speed of light squared)"                              
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 4,                                                                                      
+            "question_type": "multi_hop",                                                                          
+            "question": "In the Tom Brady football video, what is the relationship between the football's wobble   
+      and the turnover effect that keeps the ball aligned with its parabolic trajectory?",                         
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:16:21.681", "end": "00:20:16.982"}],                           
+              "relevant_segments": [{"segment_id": "seg_9", "start_frame": 29421, "end_frame": 36473}],            
+              "evidence_type": "both",                                                                             
+              "evidence_text": "Because the ball's path is a parabola, the oncoming air is constantly dipping down 
+      away from it. The ball precesses around the airflow direction, and over time this gradually pitches the nose 
+      of the football down, keeping it aligned with its parabolic path. Wobble is essential to make sure that the  
+      ball follows the path that you want it to follow.",                                                          
+              "answer": "The wobble is caused by gyroscopic precession as air pushes on the ball during its        
+      parabolic flight. This wobble gradually pitches the nose down, keeping the ball aligned with its curved      
+      parabolic trajectory rather than flying straight. The wobble is therefore not a flaw but essential for       
+      accurate flight."                                                                                            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 5,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "What company builds the EUV lithography machine that costs four hundred million dollars?",
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:00:56.181", "end": "00:01:14.783"}],                           
+              "relevant_segments": [{"segment_id": "seg_0", "start_frame": 0, "end_frame": 1346}],                 
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "It costs a whopping four hundred million dollars and it is so bizarre... a single  
+      company that makes these machines. The machines that saved Moore's Law.",                                    
+              "answer": "ASML"                                                                                     
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 6,                                                                                      
+            "question_type": "temporal",                                                                           
+            "question": "In the overconfidence video, what sequence of events led to Nick Leeson's losses          
+      escalating to over $30 million by the end of 1993?",                                                         
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:05:12.812", "end": "00:07:41.920"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 7500, "end_frame": 11075}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "A junior trader mistakenly sold rather than bought twenty futures contracts,       
+      costing nearly $40,000. Leeson hid it in account 88888. He bet on the Nikkei 225 to rise. Initially losses   
+      escalated to $3 million, then the market rebounded. A subsequent trading error led to further losses, which  
+      he attempted to cover with even riskier trades, ultimately pushing his losses to over $30 million by the end 
+      of 1993.",                                                                                                   
+              "answer": "It started with a $40,000 rookie trading error (selling instead of buying 20 contracts)   
+      hidden in account 88888. Leeson then doubled down by betting the Nikkei would rise. After losses hit $3M, the
+      market recovered. But another trading error occurred, and Leeson kept making riskier trades to cover losses, 
+      eventually reaching over $30 million by end of 1993."                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 7,                                                                                      
+            "question_type": "descriptive",                                                                        
+            "question": "Describe the process by which ASML creates uniform tin droplets for EUV light             
+      generation.",                                                                                                
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:28:04.766", "end": "00:28:38.675"}],                           
+              "relevant_segments": [{"segment_id": "seg_11", "start_frame": 38769, "end_frame": 44199}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Pure tin is melted and pushed through a microscopic nozzle by high pressure        
+      nitrogen. This nozzle vibrates at a high frequency, breaking the stream into tiny droplets. These droplets   
+      are irregular at first, but then before they reach the laser, the irregular droplets come together to form   
+      perfectly spaced, perfectly regular droplets that are about the same size and shape, all traveling at the    
+      same velocity.",                                                                                             
+              "answer": "Molten pure tin is pushed through a microscopic nozzle using high-pressure nitrogen. The  
+      nozzle vibrates at high frequency, initially creating irregular droplets that vary in size, shape, velocity, 
+      and distance. Through a chaotic coalescence process, these irregular droplets merge into perfectly spaced,   
+      uniform droplets of the same size and shape, all traveling at identical velocity, just before being hit by   
+      the laser."                                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 8,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "What German mathematician discovered Braess's paradox, and in what year?",                
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:06:33.351", "end": "00:06:39.274"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 6708, "end_frame": 15627}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "His name was Dietrich Bres, a German mathematician, and back in nineteen           
+      sixty-eight. Braze was studying road networks.",                                                             
+              "answer": "Dietrich Braess in 1968"                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 9,                                                                                      
+            "question_type": "multi_hop",                                                                          
+            "question": "How does the series-to-parallel spring transition in the physics experiment relate to     
+      Braess's paradox in traffic networks?",                                                                      
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:10:32.841", "end": "00:10:51.776"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 6708, "end_frame": 15627}],             
+              "evidence_type": "both",                                                                             
+              "evidence_text": "It's just like cutting the green rope from before. That's because both of these are
+      examples of the same paradox. The springs are like the narrow city roads. The more weight or cars you add,   
+      the longer they get, and the ropes are like the highways. It doesn't matter how much weight is on them; they 
+      don't stretch.",                                                                                             
+              "answer": "In both cases, adding a connection makes the system worse. In the spring experiment,      
+      cutting the green rope (removing a constraint) forces springs from series to parallel, causing the weight to 
+      rise unexpectedly. In Braess's paradox, adding a new road to a network causes all drivers to use it          
+      rationally, increasing overall congestion. Removing that road actually improves traffic for everyone — just  
+      like how removing the green rope constraint causes the springs to reorganize counterintuitively."            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 10,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What does the visual demonstration with a spinning bicycle wheel and a leaf blower        
+      illustrate in the football physics video?",                                                                  
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:17:12.899", "end": "00:17:57.643"}],                           
+              "relevant_segments": [{"segment_id": "seg_9", "start_frame": 29421, "end_frame": 36473}],            
+              "evidence_type": "both",                                                                             
+              "evidence_text": "Imagine this ring of golf balls is like a cross-sectional slice of the football... 
+      As the ring passes the leaf blower, that's where the force is applied. But each ball still has momentum in   
+      the direction of rotation. So it actually reaches its peak ninety degrees further along from where the force 
+      is applied, and this is known as gyroscopic precession.",                                                    
+              "answer": "It demonstrates gyroscopic precession — showing that when force is applied to a spinning  
+      object, the resulting motion occurs 90 degrees later in the rotation direction, not where the force is       
+      applied. This explains why a spinning football tilts sideways rather than tipping backwards when air hits its
+      underside."                                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 11,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What poem did Andrey Markov analyze to demonstrate dependent events that still follow the 
+      law of large numbers?",                                                                                      
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [{"start": "00:05:11.686", "end": "00:05:18.902"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 2069, "end_frame": 7499}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Markov turned to a poem at the heart of Russian literature: Eugene Onegin by       
+      Alexander Pushkin. He took the first twenty thousand letters of the poem, stripped out all punctuation and   
+      spaces.",                                                                                                    
+              "answer": "Eugene Onegin by Alexander Pushkin"                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 12,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "According to the Dirac video, what did Carl Anderson discover in 1932 that confirmed      
+      Dirac's prediction?",                                                                                        
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:27:28.021", "end": "00:28:09.187"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 35359, "end_frame": 40154}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "A Caltech postdoc named Carl Anderson was working on a project trying to identify  
+      the charged particles produced by cosmic rays. He photographed the tracks these particles left in a cloud    
+      chamber. Anderson noticed several instances of a similar track. It looked a lot like the tracks left by      
+      electrons, only it curved in the opposite direction in the magnetic field... It had to be something with     
+      around the same mass as an electron, but opposite charge.",                                                  
+              "answer": "The positron (anti-electron) — a particle with the same mass as an electron but opposite  
+      (positive) charge, discovered in cosmic ray tracks in a cloud chamber."                                      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 13,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Describe the fictional town model used by Dietrich Braess to illustrate Braess's          
+      paradox.",                                                                                                   
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:06:41.735", "end": "00:08:42.939"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 6708, "end_frame": 15627}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Route one starts with a wide highway that takes twenty-five minutes regardless of  
+      cars. The second half turns into a narrow city street where time depends on number of cars. Route two is the 
+      mirror image. With 2000 drivers, each route takes 35 minutes. A new connecting road of 1 minute is added.    
+      Drivers all funnel through narrow streets, increasing total time to 41 minutes.",                            
+              "answer": "The model features a fictional town with 2000 drivers trying to cross it. There are two   
+      identical routes, each with a 25-minute highway section (traffic-independent) and a narrow street section    
+      (where travel time increases by 1 minute per 100 cars). Initially each route takes 35 minutes. When a        
+      1-minute shortcut connects the routes at the midpoint, every driver takes it, overloading both narrow street 
+      sections to 20 minutes each, making total journey time 41 minutes — worse than the original 35."             
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 14,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What percentage of people think they are better drivers than the median, according to the 
+      overconfidence video?",                                                                                      
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:01:47.065", "end": "00:01:51.695"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 7500, "end_frame": 11075}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Ninety-three percent of us think we are better drivers than the median, which is of
+      course [impossible].",                                                                                       
+              "answer": "93 percent"                                                                               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 15,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "In the Markov chain video, what was the progression from Markov's analysis of Pushkin's   
+      poem to the development of the Monte Carlo method?",                                                         
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [{"start": "00:08:42.981", "end": "00:16:00.418"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 12539, "end_frame": 23828}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Markov showed with his chain that he found a way to do probability with dependent  
+      events. Stanislaw Ulam, recovering from encephalitis, played solitaire and wondered about winning            
+      probabilities. He shared the idea of random sampling with von Neumann, who realized neutrons needed a Markov 
+      chain. They ran it on ENIAC, creating the Monte Carlo method named after Monaco's casino.",                  
+              "answer": "Sequence: (1) Markov analyzed Pushkin's poem showing dependent events follow law of large 
+      numbers (early 1900s). (2) In 1946, Stanislaw Ulam, recovering from encephalitis, played solitaire and       
+      conceived random sampling to estimate win probabilities. (3) He shared this with John von Neumann, who       
+      recognized its potential for neutron simulation but realized dependent events required Markov chains. (4)    
+      They implemented it on the ENIAC computer, creating what Ulam named the Monte Carlo method after the casino —
+      used for nuclear bomb calculations at Los Alamos."                                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 16,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "Why did physicists like Heisenberg and Pauli initially react negatively to Dirac's 1928   
+      equation?",                                                                                                  
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:25:35.659", "end": "00:26:09.568"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 35359, "end_frame": 40154}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Negative energy solutions are baked right into the Dirac equation. This idea that a
+      free electron could have negative energy. If electrons can have a negative energy, then they could           
+      continually radiate positive energy — emit photons — drop into lower and lower negative energy states. There 
+      would be no limit to how far they could fall into the negative energy abyss. It looked like, to many very    
+      smart people, ridiculous.",                                                                                  
+              "answer": "Dirac's equation predicted negative energy states for electrons, which implied electrons  
+      could continuously emit photons and cascade into infinitely negative energy states — an 'negative energy     
+      abyss.' This seemed physically nonsensical to physicists like Heisenberg (who called it 'the saddest chapter 
+      in modern physics') and Pauli (who said he'd abandon quantum physics)."                                      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 17,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the spin rate of Tom Brady's throws as measured in the wind tunnel, according to  
+      the video?",                                                                                                 
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:14:25.365", "end": "00:16:21.647"}],                           
+              "relevant_segments": [{"segment_id": "seg_8", "start_frame": 25935, "end_frame": 29420}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The transcript reveals data indicating Brady's spin rate of 628 rpm.",             
+              "answer": "628 rpm (revolutions per minute)"                                                         
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 18,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "How does the concept of angular momentum connect the rifled musket bullets from the       
+      Crimean War to the tight spiral of a thrown football?",                                                      
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:07:34.521", "end": "00:08:06.987"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 9200, "end_frame": 14595}],             
+              "evidence_type": "both",                                                                             
+              "evidence_text": "The expanded bullet could grip spiral grooves carved into the inside of the barrel,
+      called rifling. This imparted spin to the bullet as it shot out, and this is key because all spinning objects
+      have a fundamental quantity they conserve: angular momentum. This helps them resist changes in their         
+      orientation, just like a spinning top. So if I give it a little touch, it reorients itself in the direction  
+      of its angular momentum.",                                                                                   
+              "answer": "Both rely on spin imparting angular momentum to stabilize the projectile. In 1854,        
+      Minier's conical bullets gripped spiral rifling grooves in musket barrels, giving them spin and angular      
+      momentum that resisted orientation changes, making them accurate at long ranges. Similarly, a quarterback's  
+      wrist flick imparts spin on a football, giving it angular momentum that resists tumbling and keeps it aligned
+      with its trajectory, minimizing drag and maximizing distance and accuracy."                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 19,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "How fast does the ASML machine hit tin droplets with laser shots per second?",            
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:02:06.209", "end": "00:02:12.549"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 1347, "end_frame": 3624}],              
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "You do one hundred fifty thousand laser shots a second. And you don't miss one.    
+      Exactly.",                                                                                                   
+              "answer": "150,000 laser shots per second"                                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 20,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "What happens in the New York 42nd Street closure example, and what did the Department of  
+      Transport Commissioner predict would happen?",                                                               
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:05:05.347", "end": "00:06:18.420"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 6708, "end_frame": 15627}],             
+              "evidence_type": "both",                                                                             
+              "evidence_text": "In April 1990, for Earth Day, 42nd Street was closed. The Commissioner of New      
+      York's Department of Transport said: 'You didn't need to be a rocket scientist to see that this could have   
+      been a major problem.' But no cars were allowed and to everyone's surprise, the traffic in the surrounding   
+      area actually got better. The number of cars was reduced by twenty percent.",                                
+              "answer": "In April 1990, 42nd Street was closed for 6 hours for Earth Day. The NYC DOT Commissioner 
+      predicted it would cause doomsday-level traffic chaos. Instead, traffic in the surrounding area actually     
+      improved — car numbers dropped by 20% — an example of Braess's paradox where removing a route improves       
+      overall flow."                                                                                               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 21,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Describe how hydrogen gas is used to solve the tin contamination problem in ASML's EUV    
+      machines.",                                                                                                  
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:30:43.508", "end": "00:30:58.899"}],                           
+              "relevant_segments": [{"segment_id": "seg_12", "start_frame": 44200, "end_frame": 47570}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "So our main tool here is the hydrogen gas, actually. They fill the chamber with    
+      low-pressure hydrogen. This slows and cools the tin particles down, and even if some tin makes it to the     
+      collector, the hydrogen pulls it off to form a gas called stannane.",                                        
+              "answer": "After hitting tin droplets with lasers to generate EUV light, tin residue threatens to    
+      coat the precious collector mirrors. To prevent this, the chamber is filled with low-pressure hydrogen gas.  
+      The hydrogen slows and cools scattered tin particles, and if any tin reaches the collector, the hydrogen     
+      chemically reacts with it to form stannane gas, which is then flushed away, keeping the mirrors clean."      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 22,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What was the mathematical feud between Pavel Nekrasov and Andrei Markov fundamentally     
+      about?",                                                                                                     
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [{"start": "00:01:47.774", "end": "00:02:34.588"}],                           
+              "relevant_segments": [{"segment_id": "seg_2", "start_frame": 2584, "end_frame": 12538}],             
+              "evidence_type": "both",                                                                             
+              "evidence_text": "Nekrasov believed that observing the law of large numbers implied independent      
+      events, which he linked to free will. Markov, however, argued that dependent events could also follow the law
+      of large numbers. He demonstrated this using a poem by Pushkin... proving that convergence could occur even  
+      in dependent systems.",                                                                                      
+              "answer": "Nekrasov, a Tsarist who believed in free will and God's will, argued that the law of large
+      numbers required independent events, using social statistics (marriage/birth rates) to 'prove' free will.    
+      Markov, an atheist and socialist opponent, showed that dependent events could also follow the law of large   
+      numbers using his analysis of letter sequences in Pushkin's poem, thereby disproving Nekrasov's claim that   
+      convergence proved independence (and thus free will)."                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 23,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What are the four components of Dirac's four-component wave function describing?",        
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:27:09.294", "end": "00:27:19.972"}],                           
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 35359, "end_frame": 40154}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Dirac was proposing that those four states described in his four-component wave    
+      function are a spin-up electron, a spin-down electron, a spin-up antielectron, and a spin-down               
+      antielectron.",                                                                                              
+              "answer": "A spin-up electron, a spin-down electron, a spin-up antielectron (positron), and a        
+      spin-down antielectron (positron)"                                                                           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 24,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What happens to the camera plexiglass when Tom Brady throws the football at it during the 
+      slow-motion filming?",                                                                                       
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:14:25.365", "end": "00:16:21.647"}],                           
+              "relevant_segments": [{"segment_id": "seg_8", "start_frame": 25935, "end_frame": 29420}],            
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "He is being filmed in slow motion with a camera that is protected by plexiglass.   
+      After throwing the ball, the plexiglass is shown to be cracked.",                                            
+              "answer": "The camera's plexiglass protection cracks after being hit by the football."               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 25,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "How did the Monte Carlo method get its name, and what mathematical concept from Markov was
+      crucial to making it work for neutron simulations?",                                                         
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [{"start": "00:12:51.562", "end": "00:16:00.418"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 12539, "end_frame": 23828}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The method was named Monte Carlo because Ulam's uncle was a gambler and the Monte  
+      Carlo Casino in Monaco reminded him of the random sampling and high stakes. Von Neumann realized you needed  
+      to model a whole chain of events where each step influenced the next. What von Neumann realized is that you  
+      needed a Markov chain.",                                                                                     
+              "answer": "The method was named 'Monte Carlo' because Stanislaw Ulam's uncle was a gambler, and the  
+      Monte Carlo Casino in Monaco evoked the randomness and high stakes of the simulation approach. The crucial   
+      mathematical concept from Markov was the Markov chain — von Neumann realized that unlike independent         
+      solitaire games, neutron behavior had dependent events where each step influences the next, requiring a chain
+      model of transition probabilities rather than simple random sampling."                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 26,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Explain why an unspinning football decelerates much faster than one thrown with a tight   
+      spiral.",                                                                                                    
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [{"start": "00:04:43.450", "end": "00:05:06.940"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 4634, "end_frame": 9199}],              
+              "evidence_type": "both",                                                                             
+              "evidence_text": "When a football is going sideways, it exposes nearly seventy percent more area to  
+      the oncoming air. Combined with the higher drag coefficient, this means that the drag force is ten times     
+      greater than when the football is aligned with the throw. So an unspinning ball can end up going sideways,   
+      meaning it decelerates up to ten times faster.",                                                             
+              "answer": "When a football tumbles sideways rather than flying point-first, it exposes about 70% more
+      surface area to the oncoming air. Combined with a higher drag coefficient in that orientation, the total drag
+      force becomes approximately 10 times greater than when the ball is aligned with its direction of travel. Spin
+      stabilizes the ball in a tight spiral, keeping it aligned and minimizing drag, while an unspinning ball      
+      tumbles and decelerates much faster."                                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 27,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the cost of ASML's latest 'HiNA' EUV machine in euros?",                          
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:41:00.958", "end": "00:42:30.131"}],                           
+              "relevant_segments": [{"segment_id": "seg_17", "start_frame": 59004, "end_frame": 61142}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The cost of these machines is revealed to be over 350 million euros.",             
+              "answer": "Over 350 million euros"                                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 28,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "In the brain's overconfidence quiz example, when the subjects were 90% certain of their   
+      answers, how often were they actually correct?",                                                             
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [{"start": "00:03:33.839", "end": "00:03:39.845"}],                           
+              "relevant_segments": [{"segment_id": "seg_3", "start_frame": 7500, "end_frame": 11075}],             
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "When people are ninety percent certain, they are right only seventy-five percent of
+      the time.",                                                                                                  
+              "answer": "Only 75 percent of the time"                                                              
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 29,                                                                                     
+            "question_type": "audio",                                                                              
+            "question": "What material was originally used for EUV light generation before ASML switched to tin,   
+      and why was it replaced?",                                                                                   
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c98019fd17ff4420ea47eee7",                                                              
+              "relevant_timestamps": [{"start": "00:26:44.436", "end": "00:27:18.846"}],                           
+              "relevant_segments": [{"segment_id": "seg_11", "start_frame": 38769, "end_frame": 44199}],           
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "While Xenon does emit light in the thirteen to fourteen nanometer range, there is  
+      much more light released around eleven nanometers. Most of the energy went into making light the mirrors     
+      couldn't reflect. Plus leftover neutral xenon atoms would strongly reabsorb the 13.4nm light. ASML started   
+      looking at tin, which has a much higher emission peak around 13.5nm, resulting in 5-10 times higher          
+      conversion efficiency.",                                                                                     
+              "answer": "Xenon was used first. It was replaced because most of its energy went into making light at
+      11nm (which the mirrors couldn't reflect at 13.4nm), and leftover neutral xenon atoms reabsorbed the EUV     
+      light. Tin was adopted instead because it has a much stronger emission peak at 13.5nm, giving 5-10 times     
+      higher conversion efficiency."                                                                               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 30,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "How does the video connect the math feud between Nekrasov and Markov to Google's search   
+      algorithm?",                                                                                                 
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [{"start": "00:08:42.981", "end": "00:16:33.826"}],                           
+              "relevant_segments": [{"segment_id": "seg_4", "start_frame": 12539, "end_frame": 23828},             
+      {"segment_id": "seg_5", "start_frame": 23829, "end_frame": 36219}],                                          
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "Markov chains found probability with dependent events. PageRank by Stanford        
+      students Sergey Brin and Larry Page revolutionized ranking webpages based on link endorsements, akin to      
+      library book stamps. This Markov chain concept of transition probabilities between states was applied to the 
+      web's link structure.",                                                                                      
+              "answer": "The video traces a chain of influence: (1) Markov's feud with Nekrasov led him to develop 
+      Markov chains for dependent probability. (2) This concept was later used by von Neumann and Ulam to create   
+      the Monte Carlo method for nuclear calculations. (3) The same Markov chain principles of transition          
+      probabilities between states were applied by Sergey Brin and Larry Page to create PageRank — where web pages 
+      are states and hyperlinks are transitions, ranking pages by the 'probability' a random web surfer lands on   
+      them. This became Google's core search algorithm that made it superior to competitors like Yahoo."           
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 31,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "How does the 'countersnapping' mechanism resist resonance and vibrations in a structure?",
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [{"start": "00:22:35.521", "end": "00:23:06.010"}],                           
+              "relevant_segments": [{"segment_id": "seg_8", "start_frame": 32500, "end_frame": 33231}],            
+              "evidence_type": "both",                                                                             
+              "evidence_text": "The mechanism demonstrates switching between series and parallel configurations,   
+      altering its stiffness and natural frequency without changing its length. This 'countersnapping' mechanism   
+      resists resonance by automatically switching states when driven at certain frequencies.",                    
+              "answer": "The 'countersnapping' mechanism is a novel mechanical system that can switch between      
+      series and parallel spring configurations. When driven at certain frequencies that would normally cause      
+      resonance, the mechanism automatically snaps from one configuration to the other. This switching alters the  
+      system's stiffness and natural frequency on-the-fly without changing its length, effectively resisting       
+      resonance and preventing the destructive vibrations that typically damage structures. This is compared to    
+      traditional tuned mass dampers as a potentially more effective approach."                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 32,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "According to the Dirac video, in what year did Dirac propose the existence of the         
+      anti-electron, and in what year was it experimentally confirmed?",                                           
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [{"start": "00:26:41.725", "end": "00:27:09.253"}, {"start": "00:27:28.021",  
+      "end": "00:28:09.187"}],                                                                                     
+              "relevant_segments": [{"segment_id": "seg_7", "start_frame": 35359, "end_frame": 40154}],            
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Then in nineteen thirty-one he proposed something radical... a new kind of         
+      particle... an anti-electron. In 1932, a Caltech postdoc named Carl Anderson was working on identifying      
+      charged particles from cosmic rays and noticed tracks that curved opposite to electrons.",                   
+              "answer": "Dirac proposed the anti-electron (positron) in 1931, and it was experimentally confirmed  
+      by Carl Anderson in 1932."                                                                                   
+            }                                                                                                      
+          }                                                                                                        
+        ],                                                                                                         
+        "generation_metadata": {                                                                                   
+          "videos_explored": ["0e64f1c0da591ca67f07b7f9", "c98019fd17ff4420ea47eee7", "c510fac771767405c891bf64",  
+      "3636d10a2ad4787733c9700d", "946330031ead69b21354d038", "9b17f473300a5436f0a053be"],                         
+          "total_segments_reviewed": 71,                                                                           
+          "generation_timestamp": "2024-01-15T10:00:00Z"                                                           
+        }                                                                                                          
+      }                                                                                                            
+      ```                                                                                                          

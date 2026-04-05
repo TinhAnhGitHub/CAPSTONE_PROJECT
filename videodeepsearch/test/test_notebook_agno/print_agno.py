@@ -18,8 +18,8 @@ from rich.style import Style
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from agno.run.response import RunOutputEvent  # type: ignore
-    from agno.run.team import TeamRunOutputEvent  # type: ignore
+    from agno.run.team import TeamRunOutputEvent  
+    from agno.run.agent import RunOutputEvent
 
 console = Console()
 

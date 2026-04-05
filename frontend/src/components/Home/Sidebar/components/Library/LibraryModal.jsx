@@ -88,17 +88,21 @@ export default function LibraryModal({ isModalOpen, closeModal, focusVideoId }) 
                 </div>
                 <div className="relative md:w-[80%] h-[70vh] flex flex-col">
                     <div className="flex-1 overflow-y-auto px-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
-                        <div className=" grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-2">
-                            {videos.map((video, idx) => (
-                                <div
-                                    key={idx}
-                                    className='break-inside-avoid'
-                                    ref={el => videoRefs.current[video._id] = el}
-                                >
-                                    <VideoCard video={video} isHighlighted={highlightedVideoId === video._id} onEdit={handleEditVideo} />
-                                </div>
-                            ))}
-                        </div>
+                        {videos.length === 0 ? (
+                            <p className='text-sm text-text-dim text-center py-6'>There is no video</p>
+                        ) : (
+                            <div className=" grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-2">
+                                {videos.map((video, idx) => (
+                                    <div
+                                        key={idx}
+                                        className='break-inside-avoid'
+                                        ref={el => videoRefs.current[video._id] = el}
+                                    >
+                                        <VideoCard video={video} isHighlighted={highlightedVideoId === video._id} onEdit={handleEditVideo} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Sticky Upload at bottom */}

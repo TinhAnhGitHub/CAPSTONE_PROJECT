@@ -60,6 +60,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
     }
 
     const failed = video.ingested_status === -1;
+    const isVideoUnavailable = !ingested(video.ingested_status) || failed;
 
     const openModal = useVideoModalStore((s) => s.open);
     const handleOpenModal = () => {
@@ -94,16 +95,19 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
                         onError={() => setImgError(true)}
                     />
                 )}
-                <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
-                    {formatVideoLength(video.length)}
-                </span>
+                {isVideoUnavailable && (
+                    <div className='absolute inset-0 bg-black/20 backdrop-blur-sm pointer-events-none' />
+                )}
                 {!failed && <div className='absolute inset-0 flex items-center justify-center'>
                     <IngestedStatus percentage={video.ingested_status} />
                 </div>}
+                <span className='absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium bg-black/70 text-white rounded'>
+                    {formatVideoLength(video.length)}
+                </span>
                 {/* Selection indicator */}
                 <div className={
                     clsx('absolute top-1 right-1 rounded-md p-1 bg-black/50 backdrop-blur-sm cursor-pointer hover:bg-black/70  transition-colors',
-                        (!ingested(video.ingested_status) || failed) && "!cursor-not-allowed opacity-50")
+                        isVideoUnavailable && "!cursor-not-allowed opacity-50")
                 }
 
                     onClick={(e) => {

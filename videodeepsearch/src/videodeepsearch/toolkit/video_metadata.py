@@ -1,10 +1,7 @@
 from __future__ import annotations
-
 from datetime import datetime
 from typing import Any, Literal
-
 from agno.tools import Toolkit, tool
-from agno.tools.function import ToolResult
 from loguru import logger
 
 from videodeepsearch.clients.storage.postgre import PostgresClient
@@ -71,12 +68,6 @@ class VideoMetadataToolkit(Toolkit):
         postgres_client: PostgresClient,
         minio_client: MinioStorageClient,
     ):
-        """Initialize the VideoMetadataToolkit.
-
-        Args:
-            postgres_client: PostgreSQL client for artifact metadata
-            minio_client: MinIO storage client for fetching artifact data
-        """
         self.postgres = postgres_client
         self.storage = minio_client
         super().__init__(
@@ -94,16 +85,6 @@ class VideoMetadataToolkit(Toolkit):
         limit: int = 50,
         offset: int = 0,
     ) -> list[VideoInfo]:
-        """Fetch video artifacts from PostgreSQL.
-
-        Args:
-            user_id: Optional user ID filter
-            limit: Maximum number of results
-            offset: Offset for pagination
-
-        Returns:
-            List of VideoInfo objects
-        """
         videos = []
 
         async with self.postgres.get_session() as session:
@@ -145,14 +126,6 @@ class VideoMetadataToolkit(Toolkit):
         self,
         video_id: str,
     ) -> set[str]:
-        """Get all artifact types that exist for a video.
-
-        Args:
-            video_id: Video ID to check
-
-        Returns:
-            Set of artifact type names
-        """
         children = await self.postgres.get_children_artifact(video_id)
         return {child.artifact_type for child in children}
 
@@ -196,17 +169,7 @@ class VideoMetadataToolkit(Toolkit):
         user_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> ToolResult:
-        """List all videos for a specific user.
-
-        Args:
-            user_id: User ID to list videos for
-            limit: Maximum number of videos to return (default 50)
-            offset: Offset for pagination (default 0)
-
-        Returns:
-            ToolResult with list of videos and their metadata
-        """
+    ) -> dict[str, Any]:
         try:
             videos = await self._get_video_artifacts(
                 user_id=user_id,
@@ -215,26 +178,23 @@ class VideoMetadataToolkit(Toolkit):
             )
 
             if not videos:
-                return ToolResult(
-                    content=f"No videos found for user '{user_id}'."
-                )
+                return {
+                    "user_id": user_id,
+                    "total": 0,
+                    "videos": [],
+                }
 
-            lines = [
-                f"Found {len(videos)} video(s) for user '{user_id}':",
-                "",
-            ]
-
-            for i, video in enumerate(videos):
-                lines.append(f"{i + 1}. {video.brief_repr()}")
-
-            lines.append("")
-            lines.append(f"Showing {len(videos)} results (offset: {offset}, limit: {limit})")
-
-            return ToolResult(content="\n".join(lines))
+            return {
+                "user_id": user_id,
+                "total": len(videos),
+                "offset": offset,
+                "limit": limit,
+                "videos": [video.to_dict() for video in videos],
+            }
 
         except Exception as e:
             logger.error(f"[VideoMetadataToolkit] list_user_videos failed: {e}")
-            return ToolResult(content=f"Error: Failed to list videos - {str(e)}")
+            return {"error": f"Failed to list videos - {str(e)}"}
 
     @tool(
         description=(
@@ -270,53 +230,34 @@ class VideoMetadataToolkit(Toolkit):
     async def get_video_metadata(
         self,
         video_id: str,
-    ) -> ToolResult:
-        """Get detailed metadata for a specific video.
-
-        Args:
-            video_id: Video ID to get metadata for
-
-        Returns:
-            ToolResult with detailed video metadata
-        """
+    ) -> dict[str, Any]:
         try:
             artifact = await self.postgres.get_artifact(video_id)
 
             if artifact is None:
-                return ToolResult(
-                    content=f"Error: Video '{video_id}' not found."
-                )
+                return {"error": f"Video '{video_id}' not found."}
 
             if artifact.artifact_type != "VideoArtifact":
-                return ToolResult(
-                    content=f"Error: Artifact '{video_id}' is not a video (type: {artifact.artifact_type})."
-                )
+                return {"error": f"Artifact '{video_id}' is not a video (type: {artifact.artifact_type})."}
 
             metadata = artifact.artifact_metadata or {}
 
-            lines = [
-                "=== Video Metadata ===",
-                "",
-                f"Video ID: {video_id}",
-                f"Filename: {metadata.get('filename', 'unknown')}",
-                f"User ID: {artifact.user_id}",
-                f"Duration: {metadata.get('duration', 'unknown')}",
-                f"FPS: {metadata.get('fps', 'unknown')}",
-                f"Resolution: {metadata.get('resolution', 'unknown')}",
-                f"Extension: {metadata.get('extension', 'unknown')}",
-                f"Created: {artifact.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
-                "",
-                "=== Full Metadata ===",
-            ]
-
-            for key, value in sorted(metadata.items()):
-                lines.append(f"  {key}: {value}")
-
-            return ToolResult(content="\n".join(lines))
+            return {
+                "video_id": video_id,
+                "user_id": artifact.user_id,
+                "filename": metadata.get("filename", "unknown"),
+                "duration": metadata.get("duration", "unknown"),
+                "fps": metadata.get("fps", "unknown"),
+                "resolution": metadata.get("resolution", "unknown"),
+                "extension": metadata.get("extension", "unknown"),
+                "created_at": artifact.created_at.isoformat(),
+                "minio_url": artifact.minio_url,
+                "metadata": metadata,
+            }
 
         except Exception as e:
             logger.error(f"[VideoMetadataToolkit] get_video_metadata failed: {e}")
-            return ToolResult(content=f"Error: Failed to get video metadata - {str(e)}")
+            return {"error": f"Failed to get video metadata - {str(e)}"}
 
     @tool(
         description=(
@@ -360,32 +301,22 @@ class VideoMetadataToolkit(Toolkit):
         self,
         video_id: str,
         granularity: Literal["segment", "shot", "minute"] = "segment",
-    ) -> ToolResult:
-        """Get a visual timeline of video segments.
-
-        Args:
-            video_id: Video ID to generate timeline for
-            granularity: Timeline granularity ('segment', 'shot', or 'minute')
-
-        Returns:
-            ToolResult with visual timeline
-        """
+    ) -> dict[str, Any]:
         try:
             video_artifact = await self.postgres.get_artifact(video_id)
             if video_artifact is None:
-                return ToolResult(
-                    content=f"Error: Video '{video_id}' not found."
-                )
+                return {"error": f"Video '{video_id}' not found."}
 
             video_metadata = video_artifact.artifact_metadata or {}
             video_fps = video_metadata.get("fps", 30.0)
             video_duration = video_metadata.get("duration", "00:00:00.000")
 
-            lines = [
-                f"=== Video Timeline for {video_id} ===",
-                f"Duration: {video_duration} | FPS: {video_fps}",
-                "",
-            ]
+            result = {
+                "video_id": video_id,
+                "duration": video_duration,
+                "fps": video_fps,
+                "granularity": granularity,
+            }
 
             if granularity == "segment":
                 segment_artifacts = await self.postgres.get_children_artifact(
@@ -394,8 +325,9 @@ class VideoMetadataToolkit(Toolkit):
                 )
 
                 if not segment_artifacts:
-                    lines.append("No segments found. Video may still be processing.")
-                    return ToolResult(content="\n".join(lines))
+                    result["segments"] = []
+                    result["message"] = "No segments found. Video may still be processing."
+                    return result
 
                 segments_data = []
                 for artifact in segment_artifacts:
@@ -406,23 +338,12 @@ class VideoMetadataToolkit(Toolkit):
                         "end_frame": metadata.get("end_frame", 0),
                         "start_time": metadata.get("start_timestamp", "00:00:00.000"),
                         "end_time": metadata.get("end_timestamp", "00:00:00.000"),
-                        "summary_caption": metadata.get("summary_caption", "")[:100],
+                        "summary_caption": metadata.get("summary_caption", ""),
                     })
 
                 segments_data.sort(key=lambda x: x["start_frame"])
-
-                lines.append(f"{'Time Range':<25} | {'Frames':<15} | Caption")
-                lines.append("-" * 80)
-
-                for seg in segments_data:
-                    time_range = f"{seg['start_time']} - {seg['end_time']}"
-                    frame_range = f"{seg['start_frame']} - {seg['end_frame']}"
-                    caption = seg['summary_caption'][:40] + "..." if len(seg['summary_caption']) > 40 else seg['summary_caption']
-
-                    lines.append(f"{time_range:<25} | {frame_range:<15} | {caption}")
-
-                lines.append("")
-                lines.append(f"Total segments: {len(segments_data)}")
+                result["total_segments"] = len(segments_data)
+                result["segments"] = segments_data
 
             elif granularity == "shot":
                 autoshot_artifacts = await self.postgres.get_children_artifact(
@@ -431,29 +352,20 @@ class VideoMetadataToolkit(Toolkit):
                 )
                 
                 if not autoshot_artifacts:
-                    lines.append("No shot boundaries found. Video may still be processing.")
-                    return ToolResult(content="\n".join(lines))
+                    result["shots"] = []
+                    result["message"] = "No shot boundaries found. Video may still be processing."
+                    return result
 
                 for artifact in autoshot_artifacts:
                     metadata: dict = artifact.artifact_metadata or {}
                     shots = metadata.get("segments", [])
 
                     if shots:
-                        lines.append(f"Total shots detected: {len(shots)}")
-                        lines.append("")
-                        lines.append(f"{'Shot #':<8} | {'Start Frame':<12} | {'End Frame':<12}")
-                        lines.append("-" * 40)
-
-                        for i, shot in enumerate(shots[:50]):  
-                            start_frame, end_frame = shot
-                            lines.append(
-                                f"{i + 1:<8} | {start_frame:<12} | "
-                                f"{end_frame:<12}"
-                            )
-
-                        if len(shots) > 50:
-                            lines.append(f"... and {len(shots) - 50} more shots")
-
+                        result["total_shots"] = len(shots)
+                        result["shots"] = [
+                            {"shot_number": i + 1, "start_frame": s[0], "end_frame": s[1]}
+                            for i, s in enumerate(shots)
+                        ]
                         break
 
             elif granularity == "minute":
@@ -463,8 +375,9 @@ class VideoMetadataToolkit(Toolkit):
                 )
 
                 if not segment_artifacts:
-                    lines.append("No segments found. Video may still be processing.")
-                    return ToolResult(content="\n".join(lines))
+                    result["minutes"] = []
+                    result["message"] = "No segments found. Video may still be processing."
+                    return result
 
                 segments_data = []
                 for artifact in segment_artifacts:
@@ -474,30 +387,30 @@ class VideoMetadataToolkit(Toolkit):
                     segments_data.append({
                         "start_sec": start_sec,
                         "minute": int(start_sec // 60),
-                        "summary_caption": metadata.get("summary_caption", "")[:100],
+                        "summary_caption": metadata.get("summary_caption", ""),
                     })
 
-                
                 from collections import defaultdict
                 minute_groups = defaultdict(list)
                 for seg in segments_data:
                     minute_groups[seg["minute"]].append(seg)
 
-                lines.append(f"{'Minute':<8} | {'Num of Segments':<10} | Sample Caption")
-                lines.append("-" * 60)
-
+                minutes_data = []
                 for minute in sorted(minute_groups.keys()):
                     segments = minute_groups[minute]
-                    sample = segments[0]["summary_caption"][:100] + "..." if segments[0]["summary_caption"] else "N/A"
-                    lines.append(f"{minute:<8} | {len(segments):<10} | {sample}")
+                    minutes_data.append({
+                        "minute": minute,
+                        "segment_count": len(segments),
+                        "sample_caption": segments[0]["summary_caption"] if segments else "",
+                    })
 
-                lines.append("")
-                lines.append(f"Total minutes with content: {len(minute_groups)}")
+                result["total_minutes"] = len(minutes_data)
+                result["minutes"] = minutes_data
 
-            return ToolResult(content="\n".join(lines))
+            return result
 
         except Exception as e:
             logger.error(f"[VideoMetadataToolkit] get_video_timeline failed: {e}")
-            return ToolResult(content=f"Error: Failed to get video timeline - {str(e)}")
+            return {"error": f"Failed to get video timeline - {str(e)}"}
 
 __all__ = ["VideoMetadataToolkit"]

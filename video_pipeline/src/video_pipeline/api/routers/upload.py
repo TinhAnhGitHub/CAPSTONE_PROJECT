@@ -10,6 +10,7 @@ from prefect.exceptions import ObjectNotFound
 from pydantic import BaseModel, Field
 
 from video_pipeline.api.lifespan import DEPLOY_IDENTIFIER
+from video_pipeline.config import get_settings
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -57,6 +58,9 @@ class UploadResponse(BaseModel):
 async def upload_videos(request: UploadRequest) -> UploadResponse:
     run_id = str(uuid4())
     results: list[VideoFlowResponse] = []
+    settings = get_settings()
+
+    tracker_url = settings.tracker.url or ""
 
     for video in request.videos:
         idempotency_key = f"{run_id}-{video.video_id}"
@@ -67,11 +71,11 @@ async def upload_videos(request: UploadRequest) -> UploadResponse:
                     "video_id": video.video_id,
                     "user_id": request.user_id,
                     "video_file_path": video.video_url,
-                    "tracker_url": "http://100.120.22.90:8010",
+                    "tracker_url": tracker_url,
                 },
                 flow_run_name=idempotency_key,
                 idempotency_key=idempotency_key,
-                timeout=0, 
+                timeout=0,
             )
             logger.info(
                 f"[upload] Triggered '{DEPLOY_IDENTIFIER}' | "

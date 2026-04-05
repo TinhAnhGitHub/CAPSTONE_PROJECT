@@ -1,23 +1,26 @@
 [project]
 name = "videodeepsearch"
-version = "1.0.2"
+version = "1.0.3"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "agno>=2.5.10",
-    "arize-phoenix>=12.12.0",
+    "aiohttp>=3.13.4",
     "asyncpg>=0.30.0",
     "av>=16.0.1",
     "elasticsearch>=9.3.0",
     "fastapi[standard]>=0.121.0",
+    "llama-index-core>=0.14.19",
     "loguru>=0.7.3",
     "minio>=7.2.18",
     "mlflow>=3.10.1",
+    "openai>=2.30.0",
     "opencv-python>=4.12.0.88",
     "pydantic-settings>=2.11.0",
     "python-arango>=8.3.0",
     "qdrant-client>=1.17.1",
+    "tritonclient>=2.67.0",
 ]
 
 [build-system]

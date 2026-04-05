@@ -80,14 +80,14 @@ export default function VideosInConversation() {
         <p className='text-xs text-text-muted uppercase tracking-wide px-4 py-2'>
           Active Videos {displayVideos.length > 0 && `(${displayVideos.length})`}
         </p>
-        <div className='columns-2 gap-2 px-2 flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto'>
+        <div className='grid grid-cols-2 gap-2 px-2 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent overflow-y-auto'>
           {displayVideos.length === 0 ? (
             <p className='text-sm text-text-dim col-span-2 text-center py-4'>No videos selected</p>
           ) : (
             displayVideos.map((video, idx) => (
               <div
                 key={idx}
-                className='pb-2 break-inside-avoid group cursor-pointer hover:bg-text/10 rounded-lg p-1 transition-colors'
+                className='group cursor-pointer hover:bg-text/10 rounded-lg p-1 transition-colors'
                 onClick={() => handleVideoClick(video._id)}
               >
                 <div className='relative overflow-hidden rounded-lg border border-white/10  transition-colors'>

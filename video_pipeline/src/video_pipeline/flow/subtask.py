@@ -17,9 +17,6 @@ _base_kwargs = PREPROCESS_CONFIG.to_task_kwargs()
 @task(**_base_kwargs)  # type: ignore
 async def preprocess_video_task(
     autoshot_artifact: AutoshotArtifact,
-    asr_batch_size: int = 10,
-    image_batch_size: int = 35,
-    frames_per_segment: int = 5,
 ) -> tuple[list[list[ASRItem]], list[list[ImageItem]]]:
     """Download the video once and prepare both ASR and image extraction inputs.
 
@@ -31,11 +28,21 @@ async def preprocess_video_task(
     - asr_batches:   list[list[ASRItem]]   — each batch goes to asr_chunk_task
     - image_batches: list[list[ImageItem]] — each batch goes to image_chunk_task
 
+    Batch sizes and frames per segment are configurable via tasks.yaml:
+    - asr_batch_size: number of audio segments per ASR batch
+    - image_batch_size: number of frames per image extraction batch
+    - frames_per_segment: number of representative frames to extract per segment
+
     Audio temp files are owned by asr_chunk_task and deleted after inference.
     Frame bytes are extracted lazily inside image_chunk_task.preprocess().
     """
     logger = get_run_logger()
     settings = get_settings()
+
+    kwargs = PREPROCESS_CONFIG.additional_kwargs
+    asr_batch_size = kwargs.get("asr_batch_size", 10)
+    image_batch_size = kwargs.get("image_batch_size", 35)
+    frames_per_segment = kwargs.get("frames_per_segment", 5)
 
     segments: list[list[int]] = autoshot_artifact.metadata["segments"]  # type: ignore
     fps = autoshot_artifact.related_video_fps

@@ -3,48 +3,83 @@ llm_provider:
   base_url: https://openrouter.ai/api/v1
   agents:
     greeter:
-      model_id: openai/gpt-4o-mini
+      model_id: qwen/qwen3.5-35b-a3b
       temperature: 0.7
-      max_tokens: 1024
+      top_p: 0.9
+      max_completion_tokens: 4096
     orchestrator:
-      model_id: openai/gpt-4o
+      model_id: minimax/minimax-m2.7
       temperature: 0.3
-      max_tokens: 2048
+      top_p: 0.95
+      max_completion_tokens: 2048
     planning:
-      model_id: openai/gpt-4o
+      model_id: minimax/minimax-m2.7
       temperature: 0.2
-      max_tokens: 4096
+      top_p: 0.95
+      max_completion_tokens: 4096
     llm_tool:
-      model_id: openai/gpt-4o-mini
+      model_id: qwen/qwen3.5-9b
       temperature: 0.3
-      max_tokens: 2048
+      top_p: 0.9
+      max_completion_tokens: 4096
+    summarizer:
+      model_id: google/gemini-2.5-flash-lite
+      temperature: 0.1
+      top_p: 0.9
+      max_completion_tokens: 4096
+
   workers:
-  - name: default
-    model_id: openai/gpt-4o-mini
-    description: General-purpose worker for most tasks
+  - name: qwen/qwen3.5-35b-a3b
+    model_id: qwen/qwen3.5-35b-a3b
+    description: "Qwen3.5-35B-A3B excels in reasoning, coding, and agent/tool use, with strong multimodal (vision + text) capabilities. It offers efficient inference and supports long-context processing (~256K tokens) across 200+ languages, making it well-suited for complex, multilingual, and long-horizon tasks."
     strengths:
-    - fast
-    - cheap
-    - general
+    - multimodal understanding
+    - efficient inference
+    - multilingual support
+    - long-context reasoning
     temperature: 0.3
-    max_tokens: 2048
-  - name: vision
-    model_id: openai/gpt-4o
-    description: Vision-capable model for multimodal tasks
+    top_p: 0.9
+    max_completion_tokens: 2048
+
+  - name: nvidia/nemotron-3-super-120b-a12b
+    model_id: nvidia/nemotron-3-super-120b-a12b
+    description: "NVIDIA Nemotron-3-Super-120B-A12B is optimized for advanced agentic workflows, including complex reasoning, coding, planning, and tool integration. Its hybrid Mamba-Transformer MoE architecture enables high throughput and stability, with support for extremely long contexts (up to ~1M tokens), making it ideal for large-scale automation and RAG systems."
     strengths:
-    - vision
-    - multimodal
-    - image-analysis
+    - ultra-long context
+    - complex reasoning
+    - multi-step planning
+    - agent workflows
+    - high-throughput inference
     temperature: 0.3
-    max_tokens: 4096
-  - name: reasoning
-    model_id: openai/o1-mini
-    description: Reasoning model for complex analysis
+    top_p: 0.95
+    max_completion_tokens: 4096
+
+  - name: xiaomi/mimo-v2-pro
+    model_id: xiaomi/mimo-v2-pro
+    description: "Xiaomi MiMo-V2-Pro is designed for large-scale agentic applications, with a focus on long-context reasoning, coding, and real-world task execution. With its massive scale (~1T parameters) and extended context window (~1M tokens), it enables robust multi-step planning, tool use, and consistent performance across complex workflows."
     strengths:
-    - reasoning
-    - analysis
-    - complex-tasks
-    max_tokens: 8192
+    - large-scale modeling
+    - long-context reasoning
+    - task execution
+    - tool integration
+    - multi-step planning
+    temperature: 0.3
+    top_p: 0.95
+    max_completion_tokens: 4096
+
+  - name: stepfun/step-3.5-flash
+    model_id: stepfun/step-3.5-flash
+    description: "StepFun Step-3.5-Flash is a high-efficiency model optimized for fast reasoning and agentic tasks such as coding, planning, and tool use. Its sparse MoE architecture activates only a small subset of parameters per token, enabling real-time performance (~100-300 tokens/s) while maintaining strong results on coding and math benchmarks."
+    strengths:
+    - low latency
+    - efficient MoE architecture
+    - real-time performance
+    - coding and math proficiency
+    - agent task execution
+    temperature: 0.3
+    top_p: 0.9
+    max_completion_tokens: 2048
+
 storage:
   postgres:
     host: localhost
@@ -68,7 +103,7 @@ storage:
     port: 6333
     grpc_port: 6334
     prefer_grpc: true
-    collection_name: video_embeddings
+    collection_name: video_embeddings_dev
   elasticsearch:
     host: localhost
     port: 9200
@@ -77,7 +112,7 @@ storage:
     use_ssl: false
     verify_certs: true
     request_timeout: 30
-    index_name: video_ocr_docs
+    index_name: video_ocr_docs_dev
   arangodb:
     host: http://localhost:8529
     database: video_kg
@@ -96,7 +131,7 @@ storage:
       structural_dim: 128
 inference:
   qwenvl:
-    base_url: http://localhost:8000
+    base_url: http://localhost:8010/embedding
   mmbert:
     base_url: http://localhost:8009
     model_name: mmbert
@@ -117,3 +152,7 @@ server:
   cors_origins:
   - http://localhost:3000
   - http://localhost:5173
+mlflow:
+  enabled: false
+  tracking_uri: http://localhost:5000
+  experiment_name: VideoDeepSearch

@@ -85,24 +85,22 @@ def build_orchestrator_team(
         user_id=user_id,
         session_id=session_id,
 
-        learning=LearningMachine(
-            db=db,
-            model=model,
-            session_context=SessionContextConfig(
-                mode=LearningMode.ALWAYS,
-                enable_planning=True,
-            ),
-        ),
-        add_learnings_to_context=True,
+        # learning=LearningMachine(
+        #     db=db,
+        #     model=model,
+        #     session_context=SessionContextConfig(
+        #         mode=LearningMode.ALWAYS,
+        #         enable_planning=True,
+        #     ),
+        # ),
+        # add_learnings_to_context=True,
   
-        add_session_state_to_context=False,
-        enable_agentic_state=False,
+        # add_session_state_to_context=False,
+        # enable_agentic_state=False,
         
-        add_history_to_context=True,
-        num_history_runs=3,
-        share_member_interactions=True,  # Planning Agent sees worker results
-
-
+        # add_history_to_context=True,
+        # num_history_runs=3,
+        # share_member_interactions=True,  # Planning Agent sees worker results
 
         retries=2,
         delay_between_retries=2,

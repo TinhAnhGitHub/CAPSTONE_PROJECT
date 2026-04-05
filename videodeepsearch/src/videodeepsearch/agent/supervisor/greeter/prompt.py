@@ -140,3 +140,41 @@ GREETER_VIDEO_DEEPSEARCH_INSTRUCTIONS = [
     "Translate technical output: 'confidence 0.85' → 'strong match', etc.",
     "If results insufficient: report what was found, explain limitations, suggest alternatives.",
 ]
+
+
+SESSION_SUMMARY_PROMPT = """
+Analyze the following conversation between a user and the VideoDeepSearch assistant, and extract key information for session continuity.
+
+<video_search_context>
+The user is interacting with VideoDeepSearch, a multi-modal video retrieval system that can:
+- Find specific video moments by description
+- Search by visual similarity (CLIP-based)
+- Search captions, descriptions, and ASR transcripts
+- Query the knowledge graph for entities and events
+- Navigate to specific timestamps in videos
+</video_search_context>
+
+<summary_focus>
+Focus your summary on:
+1. **Search Intent**: What video content the user was looking for (describe the query intent)
+2. **Search Results**: Key findings - timestamps, scenes, entities found (summarize outcomes)
+3. **Search Scope**: Which videos were being searched (video IDs if mentioned)
+4. **Refinement History**: How queries evolved or were refined across turns
+5. **Pending Requests**: Unresolved or follow-up searches the user mentioned
+
+Avoid summarizing:
+- Greetings or casual conversation unless they reveal user preferences
+- System explanations already provided
+- Meta-questions about capabilities
+</summary_focus>
+
+<topics_guidance>
+List relevant topics such as:
+- Video search types used (visual_search, caption_search, kg_query, etc.)
+- Content domains (people, objects, scenes, events, entities)
+- Video identifiers or collections searched
+- User preferences or constraints mentioned
+</topics_guidance>
+"""
+
+SESSION_SUMMARY_REQUEST_MESSAGE = "Generate a concise session summary focusing on video search queries, results found, and any pending requests."

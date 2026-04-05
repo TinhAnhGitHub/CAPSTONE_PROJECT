@@ -9,8 +9,6 @@ from pydantic import BaseModel, Field
 
 class AgentModelConfig(BaseModel):
     model_id: str
-    temperature: float | None = None
-    max_tokens: int | None = None
 
 
 class WorkerModelConfig(BaseModel):
@@ -18,8 +16,6 @@ class WorkerModelConfig(BaseModel):
     model_id: str
     description: str = ""
     strengths: list[str] = []
-    temperature: float | None = None
-    max_tokens: int | None = None
 
 
 class AgentsConfig(BaseModel):
@@ -27,17 +23,20 @@ class AgentsConfig(BaseModel):
     orchestrator: AgentModelConfig
     planning: AgentModelConfig
     llm_tool: AgentModelConfig | None = None  # Separate model for LLM toolkit operations
+    summarizer: AgentModelConfig | None = None  
 
 
 class LLMProviderConfig(BaseModel):
-    provider: str = "openrouter"
-    base_url: str
+    api_key: str | None = None
     agents: AgentsConfig
     workers: list[WorkerModelConfig] = []
 
     @property
-    def api_key(self) -> str | None:
-        return os.environ.get("OPENROUTER_API_KEY")
+    def resolved_api_key(self) -> str | None:
+        if self.api_key and self.api_key.startswith("${") and self.api_key.endswith("}"):
+            env_var = self.api_key[2:-1]
+            return os.environ.get(env_var)
+        return self.api_key or os.environ.get("OPENROUTER_API_KEY")
 
 
 class PostgresConfig(BaseModel):
@@ -180,7 +179,7 @@ class Settings(BaseModel):
 
 def load_settings(config_path: str | Path | None = None) -> Settings:
     if config_path is None:
-        config_path = Path(__file__).parent.parent.parent.parent.parent / "config" / "settings.yaml"
+        config_path = Path(__file__).parent.parent.parent.parent / "config" / "settings.yaml"
     else:
         config_path = Path(config_path)
 

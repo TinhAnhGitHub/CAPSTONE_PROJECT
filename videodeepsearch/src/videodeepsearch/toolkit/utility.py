@@ -8,7 +8,6 @@ import av
 import cv2
 from agno.media import Image as AgnoImage
 from agno.tools import Toolkit, tool
-from agno.tools.function import ToolResult
 from loguru import logger
 from PIL import Image as PILImage
 from tqdm import tqdm
@@ -26,16 +25,20 @@ from videodeepsearch.toolkit.common import (
 )
 
 
-def format_interface_list(items: list[Any], item_type: str) -> str:
-    """Format a list of interfaces for ToolResult content."""
+def format_interface_list(items: list[Any], item_type: str) -> dict[str, Any]:
+    """Format a list of interfaces for JSON output."""
     if not items:
-        return f"No {item_type}s found."
+        return {
+            "total": 0,
+            "item_type": item_type,
+            "results": [],
+        }
 
-    lines = [f"Found {len(items)} {item_type}(s):", ""]
-    for i, item in enumerate(items):
-        lines.append(f"[{i}] {item.detailed_representation()}")
-
-    return "\n".join(lines)
+    return {
+        "total": len(items),
+        "item_type": item_type,
+        "results": [item.model_dump() for item in items],
+    }
 
 
 
@@ -71,27 +74,11 @@ The ASR might have irrelevant events/context, so just focus on the related ASR s
 
 
 class UtilityToolkit(Toolkit):
-    """Toolkit for ASR context retrieval and video navigation.
-
-    Provides tools for:
-    - Retrieving ASR transcript context around segments/images
-    - Navigating to adjacent video segments/frames (temporal exploration)
-    - Extracting raw frames from videos for visual inspection
-
-    All tools return ToolResult for unified interface.
-    """
-
     def __init__(
         self,
         postgres_client: PostgresClient,
         minio_client: MinioStorageClient,
     ):
-        """Initialize the UtilityToolkit.
-
-        Args:
-            postgres_client: PostgreSQL client for artifact metadata
-            minio_client: MinIO storage client for ASR data and videos
-        """
         self.postgres = postgres_client
         self.storage = minio_client
         super().__init__(
@@ -135,21 +122,10 @@ class UtilityToolkit(Toolkit):
         segment_start_time: str,
         segment_end_time: str,
         window_seconds: float = 10.0,
-    ) -> ToolResult:
-        """Retrieve ASR transcript context around a video segment.
-
-        Args:
-            video_id: Video ID
-            segment_start_time: Segment start time (HH:MM:SS.sss)
-            segment_end_time: Segment end time (HH:MM:SS.sss)
-            window_seconds: Time window around segment (±seconds, default 10)
-
-        Returns:
-            ToolResult with ASR transcript context
-        """
+    ) -> dict[str, Any]:
         video_artifact = await self.postgres.get_artifact(artifact_id=video_id)
         if video_artifact is None:
-            return ToolResult(content=f"Error: Video ID {video_id} does not exist")
+            return {"error": f"Video ID {video_id} does not exist"}
 
         video_fps = video_artifact.artifact_metadata.get("fps", 30.0)
         duration = video_artifact.artifact_metadata.get("duration", "00:00:00.000")
@@ -161,20 +137,20 @@ class UtilityToolkit(Toolkit):
         print(f"asr_artifacts: {asr_artifacts[:2]}")
 
         if not asr_artifacts:
-            return ToolResult(content=f"Error: No ASR data found for video {video_id}")
+            return {"error": f"No ASR data found for video {video_id}"}
 
         segment_start = time_to_seconds(segment_start_time)
         segment_end = time_to_seconds(segment_end_time)
         video_duration = time_to_seconds(duration)
 
         if segment_start < 0:
-            return ToolResult(content=f"Error: start_time must be >= 0, got: {segment_start_time}")
+            return {"error": f"start_time must be >= 0, got: {segment_start_time}"}
 
         if segment_end > video_duration:
-            return ToolResult(content=f"Error: end_time ({segment_end_time}) exceeds video duration ({duration})")
+            return {"error": f"end_time ({segment_end_time}) exceeds video duration ({duration})"}
 
         if segment_start >= segment_end:
-            return ToolResult(content=f"Error: start_time ({segment_start_time}) must be < end_time ({segment_end_time})")
+            return {"error": f"start_time ({segment_start_time}) must be < end_time ({segment_end_time})"}
 
         window_start = segment_start - window_seconds
         window_end = segment_end + window_seconds
@@ -190,29 +166,26 @@ class UtilityToolkit(Toolkit):
             if time_range_overlap(window_start, window_end, start_sec, end_sec):
                 text = metadata['text']
                 start_frame, end_frame = metadata['frame_num']
-                matching_asr.append((start_sec, start_time, start_frame, end_time, end_frame, text))
+                matching_asr.append({
+                    "start_time": start_time,
+                    "start_frame": start_frame,
+                    "end_time": end_time,
+                    "end_frame": end_frame,
+                    "text": text,
+                })
 
-        matching_asr.sort(key=lambda x: x[0])
+        matching_asr.sort(key=lambda x: x["start_time"])
 
-        context_parts = []
-        for _, start_time, start_frame, end_time, end_frame, text in matching_asr:
-            context_parts.append(ASR_TOKEN_TEMPLATE.format(
-                start=start_time,
-                start_frame=start_frame,
-                end=end_time,
-                end_frame=end_frame,
-                text=text,
-            ).strip())
-
-
-        return ToolResult(content=SNIPPET_TEMPLATE.format(
-            segment_start_time=segment_start_time,
-            segment_end_time=segment_end_time,
-            segment_start_frame=convert_time_to_frame(segment_start_time, video_fps),
-            segment_end_frame=convert_time_to_frame(segment_end_time, video_fps),
-            window_seconds=window_seconds,
-            context="\n\n".join(context_parts),
-        ))
+        return {
+            "video_id": video_id,
+            "segment_start_time": segment_start_time,
+            "segment_end_time": segment_end_time,
+            "segment_start_frame": convert_time_to_frame(segment_start_time, video_fps),
+            "segment_end_frame": convert_time_to_frame(segment_end_time, video_fps),
+            "window_seconds": window_seconds,
+            "total_asr_segments": len(matching_asr),
+            "asr_context": matching_asr,
+        }
 
     @tool(
         description=(
@@ -241,20 +214,10 @@ class UtilityToolkit(Toolkit):
         video_id: str,
         image_timestamp: str,
         window_seconds: float = 10.0,
-    ) -> ToolResult:
-        """Retrieve ASR transcript context around an image/frame.
-
-        Args:
-            video_id: Video ID
-            image_timestamp: Image timestamp (HH:MM:SS.sss)
-            window_seconds: Time window around image (±seconds, default 10)
-
-        Returns:
-            ToolResult with ASR transcript context
-        """
+    ) -> dict[str, Any]:
         video_artifact = await self.postgres.get_artifact(artifact_id=video_id)
         if video_artifact is None:
-            return ToolResult(content=f"Error: Video ID {video_id} does not exist")
+            return {"error": f"Video ID {video_id} does not exist"}
 
         video_fps = video_artifact.artifact_metadata.get("fps", 30.0)
 
@@ -264,13 +227,12 @@ class UtilityToolkit(Toolkit):
         )
 
         if not asr_artifacts:
-            return ToolResult(content=f"Error: No ASR data found for video {video_id}")
+            return {"error": f"No ASR data found for video {video_id}"}
 
         ts_center = time_to_seconds(image_timestamp)
         window_start = ts_center - window_seconds
         window_end = ts_center + window_seconds
 
-        # Collect matching ASR entries with their start time for sorting
         matching_asr = []
 
         for artifact in asr_artifacts:
@@ -282,29 +244,26 @@ class UtilityToolkit(Toolkit):
             if time_range_overlap(window_start, window_end, start_sec, end_sec):
                 text = metadata['text']
                 start_frame, end_frame = metadata['frame_num']
-                matching_asr.append((start_sec, start_time, start_frame, end_time, end_frame, text))
+                matching_asr.append({
+                    "start_time": start_time,
+                    "start_frame": start_frame,
+                    "end_time": end_time,
+                    "end_frame": end_frame,
+                    "text": text,
+                })
 
-        # Sort by start time
-        matching_asr.sort(key=lambda x: x[0])
-
-        context_parts = []
-        for _, start_time, start_frame, end_time, end_frame, text in matching_asr:
-            context_parts.append(ASR_TOKEN_TEMPLATE.format(
-                start=start_time,
-                start_frame=start_frame,
-                end=end_time,
-                end_frame=end_frame,
-                text=text,
-            ).strip())
+        matching_asr.sort(key=lambda x: x["start_time"])
 
         frame_index = convert_time_to_frame(image_timestamp, video_fps)
 
-        return ToolResult(content=IMAGE_ASR_TEMPLATE.format(
-            image_timestamp=image_timestamp,
-            image_frame_index=frame_index,
-            window_seconds=window_seconds,
-            context="\n\n".join(context_parts),
-        ))
+        return {
+            "video_id": video_id,
+            "image_timestamp": image_timestamp,
+            "image_frame_index": frame_index,
+            "window_seconds": window_seconds,
+            "total_asr_segments": len(matching_asr),
+            "asr_context": matching_asr,
+        }
 
     @tool(
         description=(
@@ -349,20 +308,7 @@ class UtilityToolkit(Toolkit):
         hop: int = 1,
         direction: Literal["forward", "backward"] = "forward",
         include_range: bool = True,
-    ) -> ToolResult:
-        """Get adjacent video segments for temporal navigation.
-
-        Args:
-            video_id: Video ID
-            pivot_start_frame: Reference segment start frame
-            pivot_end_frame: Reference segment end frame
-            hop: Number of segments to hop (default 1)
-            direction: 'forward' or 'backward' navigation
-            include_range: If True, include all segments within hop range
-
-        Returns:
-            ToolResult with adjacent segments
-        """
+    ) -> dict[str, Any]:
         segment_artifacts = await self.postgres.get_children_artifact(
             artifact_id=video_id,
             filter_artifact_type=["SegmentCaptionArtifact"],
@@ -406,7 +352,7 @@ class UtilityToolkit(Toolkit):
             else:
                 result_segments = segments[:1] if segments else []
 
-        return ToolResult(content=format_interface_list(result_segments, "segment"))
+        return format_interface_list(result_segments, "segment")
 
     @tool(
         description=(
@@ -448,19 +394,7 @@ class UtilityToolkit(Toolkit):
         hop: int = 1,
         direction: Literal["forward", "backward"] = "forward",
         include_range: bool = True,
-    ) -> ToolResult:
-        """Get adjacent images/frames for temporal navigation.
-
-        Args:
-            video_id: Video ID
-            image_frame_index: Reference image frame index
-            hop: Number of images to hop (default 1)
-            direction: 'forward' or 'backward' navigation
-            include_range: If True, include all images within hop range
-
-        Returns:
-            ToolResult with adjacent images
-        """
+    ) -> dict[str, Any]:
         image_artifacts = await self.postgres.get_children_artifact(
             artifact_id=video_id,
             filter_artifact_type=["ImageCaptionArtifact"],
@@ -503,7 +437,7 @@ class UtilityToolkit(Toolkit):
             else:
                 result_images = images[:1] if images else []
 
-        return ToolResult(content=format_interface_list(result_images, "image"))
+        return format_interface_list(result_images, "image")
 
     
 

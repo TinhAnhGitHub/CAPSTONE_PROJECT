@@ -7,7 +7,6 @@ from agno.tools import Toolkit, Function
 
 @dataclass
 class ToolDocumentation:
-    """Documentation for a single tool."""
     name: str
     toolkit_name: str
     description: str
@@ -18,41 +17,16 @@ class ToolDocumentation:
 
 
 class ToolRegistry:
-    """Registry that collects and documents all available tools.
-
-    This registry introspects all toolkits and extracts tool metadata
-    (descriptions, parameters, instructions) to provide as documentation
-    to planning agents.
-
-    Usage:
-        registry = ToolRegistry()
-        registry.register_toolkit(video_search_toolkit)
-        registry.register_toolkit(utility_toolkit)
-
-        # Get documentation for planning agent
-        docs = registry.generate_planning_context()
-    """
-
     def __init__(self):
         self._toolkits: dict[str, Toolkit] = {}
         self._tools: dict[str, ToolDocumentation] = {}
 
     def register_toolkit(self, toolkit: Toolkit, alias: str | None = None) -> None:
-        """Register a toolkit and extract all its tools.
-
-        Args:
-            toolkit: The Toolkit instance to register
-            alias: Optional alias for the toolkit (defaults to class name)
-        """
         toolkit_name = alias or toolkit.__class__.__name__
         self._toolkits[toolkit_name] = toolkit
         self._extract_tools_from_toolkit(toolkit=toolkit, toolkit_name=toolkit_name)
 
     def _extract_tools_from_toolkit(self, toolkit: Toolkit, toolkit_name: str) -> None:
-        """Extract tool documentation from a toolkit instance.
-
-        Uses agno's internal functions dict for registered tools.
-        """
         if hasattr(toolkit, 'functions') and toolkit.functions:
             
             for func in toolkit.tools:
@@ -62,7 +36,6 @@ class ToolRegistry:
             self._extract_via_introspection(toolkit, toolkit_name)
 
     def _register_function(self, func: Function, toolkit_name: str) -> None:
-        """Register a tool function from agno's internal registry."""
         func_name = func.name
         description = func.description or ""
         instructions = func.instructions or ""
@@ -79,7 +52,6 @@ class ToolRegistry:
         self._tools[f"{toolkit_name}.{func_name}"] = tool_doc
 
     def _extract_parameters_from_func(self, func: Any) -> dict[str, Any]:
-        """Extract parameter info from agno Function object."""
         parameters = {}
         if hasattr(func, 'parameters_schema') and func.parameters_schema:
             schema = func.parameters_schema
@@ -95,13 +67,11 @@ class ToolRegistry:
         return parameters
 
     def _extract_via_introspection(self, toolkit: Toolkit, toolkit_name: str) -> None:
-        """Fallback: extract tools via Python introspection."""
         for name, method in inspect.getmembers(toolkit, predicate=inspect.ismethod):
             if hasattr(method, '_is_tool') or hasattr(method, 'description'):
                 self._register_method(method, toolkit_name, name)
 
     def _register_method(self, method: Any, toolkit_name: str, method_name: str) -> None:
-        """Register a tool method via introspection."""
         sig = inspect.signature(method)
         docstring = inspect.getdoc(method) or ""
         description = getattr(method, 'description', '')
@@ -128,35 +98,28 @@ class ToolRegistry:
         self._tools[f"{toolkit_name}.{method_name}"] = tool_doc
 
     def _extract_return_doc(self, func: Any) -> str:
-        """Extract return documentation from function."""
         if hasattr(func, 'returns') and func.returns:
             return func.returns
         return "ToolResult with content"
 
     def _parse_returns(self, docstring: str) -> str:
-        """Parse Returns section from docstring."""
         if 'Returns:' in docstring:
             return docstring.split('Returns:')[-1].split('\n\n')[0].strip()
         return "ToolResult with content"
 
     def get_tool_documentation(self, tool_name: str) -> ToolDocumentation | None:
-        """Get documentation for a specific tool."""
         return self._tools.get(tool_name)
 
     def get_all_tools(self) -> list[ToolDocumentation]:
-        """Get all registered tool documentation."""
         return list(self._tools.values())
 
     def get_tools_by_toolkit(self, toolkit_name: str) -> list[ToolDocumentation]:
-        """Get all tools for a specific toolkit."""
         return [t for t in self._tools.values() if t.toolkit_name == toolkit_name]
 
     def list_tool_names(self) -> list[str]:
-        """List all registered tool names."""
         return list(self._tools.keys())
 
     def generate_documentation(self, format: str = "markdown") -> str:
-        """Generate comprehensive documentation for all tools."""
         if format == "markdown":
             return self._generate_markdown_docs()
         elif format == "json":
@@ -165,7 +128,6 @@ class ToolRegistry:
         return self._generate_text_docs()
 
     def _generate_markdown_docs(self) -> str:
-        """Generate markdown documentation."""
         lines = ["# Available Tools Documentation\n"]
         by_toolkit: dict[str, list[ToolDocumentation]] = {}
         for tool in self._tools.values():
@@ -190,7 +152,6 @@ class ToolRegistry:
         return "\n".join(lines)
 
     def _generate_text_docs(self) -> str:
-        """Generate plain text documentation for LLM context."""
         lines = ["AVAILABLE TOOLS\n===============\n"]
         for tool in self._tools.values():
             lines.append(f"\n{tool.toolkit_name}.{tool.name}")
@@ -206,7 +167,6 @@ class ToolRegistry:
         return "\n".join(lines)
 
     def generate_planning_context(self) -> str:
-        """Generate optimized context for planning agents."""
         lines = [
             "## Available Tools\n",
             "You have access to the following tool categories:\n",
@@ -229,7 +189,6 @@ _registry: ToolRegistry | None = None
 
 
 def get_tool_registry() -> ToolRegistry:
-    """Get or create the global tool registry."""
     global _registry
     if _registry is None:
         _registry = ToolRegistry()
@@ -237,6 +196,5 @@ def get_tool_registry() -> ToolRegistry:
 
 
 def reset_registry() -> None:
-    """Reset the global registry (useful for testing)."""
     global _registry
     _registry = None

@@ -15,6 +15,7 @@ import { useVideos } from '@/api/services/hooks/query';
 import SendButton from './SendButton';
 import AppBar from '../Appbar';
 import { XMarkIcon } from '@heroicons/react/16/solid';
+import toast from 'react-hot-toast';
 
 export default function Chat() {
   const {
@@ -55,12 +56,17 @@ export default function Chat() {
   const selectedVideosIds = videos.filter(video => video.selected).map(video => video._id);
   const [querying, setQuerying] = useState(false);
   const isStreamingRef = useRef(false); // Track if we received continue_stream
+  const previousSessionIdRef = useRef(session_id);
 
   // chạy khi chuyển session
   useEffect(() => {
     isStreamingRef.current = false;
     setQuerying(false); // Reset querying state - will be set to true by continue_stream if needed
-    setChatMessages([]); // Clear messages to prevent accumulation when switching
+    // Only clear when session actually changes, not on initial mount/remount.
+    if (previousSessionIdRef.current && previousSessionIdRef.current !== session_id) {
+      setChatMessages([]); // Clear messages to prevent accumulation when switching
+    }
+    previousSessionIdRef.current = session_id;
     // Scroll to bottom after messages are rendered
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: 'instant' });
@@ -147,6 +153,8 @@ export default function Chat() {
       // Ignore messages from other sessions
       if (media.session_id && media.session_id !== getSessionId()) return;
 
+      console.log("media chunk received", media);
+
       const prev = useStoreChat.getState().chatMessages;
       if (!media || !media.media_type) return;
       const media_type = media.media_type;
@@ -196,7 +204,7 @@ export default function Chat() {
     const handleToolCallResult = (data) => {
       // Ignore messages from other sessions
       if (data.session_id && data.session_id !== getSessionId()) return;
-
+      console.log("tool call result", data);
       // find the tool name
       const prev = useStoreChat.getState().chatMessages;
       const finished_tool_name = data.tool_name;
@@ -245,6 +253,11 @@ export default function Chat() {
       setQuerying(false);
     }
 
+    const handleError = () => {
+      toast.error('Failed to reach agent');
+      stopStreaming();
+    }
+
     socket.on('message_received', handleMessageReceived);
     // handle answer
     socket.on('response', handleResponse);
@@ -255,6 +268,7 @@ export default function Chat() {
     socket.on('stream_end', handleStreamEnd);
 
     socket.on('continue_stream', handleContinueStream);
+    socket.on('error', handleError);
 
     return () => {
       socket.off('message_received', handleMessageReceived);
@@ -266,6 +280,7 @@ export default function Chat() {
       socket.off('tool_result', handleToolCallResult);
       socket.off('stream_end', handleStreamEnd);
       socket.off('continue_stream', handleContinueStream);
+      socket.off('error', handleError);
     };
   }, []); // 
 

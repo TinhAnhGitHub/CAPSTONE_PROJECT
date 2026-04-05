@@ -9,9 +9,9 @@ from fastapi import FastAPI
 from loguru import logger
 from sqlalchemy import text
 from agno.db.postgres import AsyncPostgresDb
-from agno.models.openrouter import OpenRouter, OpenRouterResponses
+from agno.models.openrouter import OpenRouter
 
-from videodeepsearch.agent.member.worker.spawn_toolkit import WorkerModel
+from videodeepsearch.agent.supervisor.orchestrator.spawn_toolkit import WorkerModel
 from videodeepsearch.clients.inference import (
     MMBertClient,
     MMBertConfig,
@@ -26,6 +26,8 @@ from videodeepsearch.clients.storage.postgre import PostgresClient
 from videodeepsearch.clients.storage.qdrant import AudioQdrantClient, ImageQdrantClient, SegmentQdrantClient
 from videodeepsearch.core.settings import settings
 
+from dotenv import load_dotenv
+load_dotenv()
 
 def _init_mlflow():
     if not settings.mlflow.enabled:
@@ -39,6 +41,22 @@ def _init_mlflow():
     mlflow.agno.autolog() #type:ignore
     logger.info(f"MLflow tracing enabled: {settings.mlflow.tracking_uri}, experiment: {settings.mlflow.experiment_name}")
 
+
+def _build_model_kwargs(cfg, parallel_tool_calls: bool = False) -> dict:
+    kwargs = {
+        "id": cfg.model_id,
+        "api_key": settings.llm_provider.api_key,
+        "base_url": settings.llm_provider.base_url,
+    }
+    if cfg.temperature is not None:
+        kwargs["temperature"] = cfg.temperature
+    if cfg.top_p is not None:
+        kwargs["top_p"] = cfg.top_p
+    if cfg.max_completion_tokens is not None:
+        kwargs["max_completion_tokens"] = cfg.max_completion_tokens
+    if parallel_tool_calls:
+        kwargs["parallel_tool_calls"] = True
+    return kwargs
 
 
 @asynccontextmanager
@@ -56,7 +74,6 @@ async def lifespan(app: FastAPI):
         version = result.scalar_one()
         logger.info(f"PostgreSQL connected: {version}")
 
-    # Initialize agno AsyncPostgresDb for Team session storage
     app.state.agno_db = AsyncPostgresDb(
         db_url=settings.storage.postgres.connection_url,
         create_schema=True,
@@ -149,55 +166,38 @@ async def lifespan(app: FastAPI):
     logger.info(f"SPLADE client initialized: {inf_cfg.splade.url}")
 
     llm_cfg = settings.llm_provider
-    api_key = llm_cfg.api_key
 
     app.state.models = {}
     
     greeter_cfg = llm_cfg.agents.greeter
-    app.state.models["greeter"] = OpenRouterResponses(
-        id=greeter_cfg.model_id,
-        api_key=api_key,
-        base_url=llm_cfg.base_url,
-    )
+    app.state.models["greeter"] = OpenRouter(**_build_model_kwargs(greeter_cfg))
     
     orchestrator_cfg = llm_cfg.agents.orchestrator
-    app.state.models["orchestrator"] = OpenRouterResponses(
-        id=orchestrator_cfg.model_id,
-        api_key=api_key,
-        base_url=llm_cfg.base_url,
-        parallel_tool_calls=True, 
-    )
+    app.state.models["orchestrator"] = OpenRouter(**_build_model_kwargs(orchestrator_cfg))
     
     planning_cfg = llm_cfg.agents.planning
-    app.state.models["planning"] = OpenRouterResponses(
-        id=planning_cfg.model_id,
-        api_key=api_key,
-        base_url=llm_cfg.base_url,
-        parallel_tool_calls=True, 
-    )
+    app.state.models["planning"] = OpenRouter(**_build_model_kwargs(planning_cfg))
     
     llm_tool_cfg = llm_cfg.agents.llm_tool
     if llm_tool_cfg:
-        app.state.models["llm_tool"] = OpenRouterResponses(
-            id=llm_tool_cfg.model_id,
-            api_key=api_key,
-            base_url=llm_cfg.base_url,
-        )
+        app.state.models["llm_tool"] = OpenRouter(**_build_model_kwargs(llm_tool_cfg))
     else:
         app.state.models["llm_tool"] = app.state.models["planning"]
         logger.info("llm_tool model not configured, using planning model as fallback")
+        
+    summarizer_cfg = llm_cfg.agents.summarizer
+    if summarizer_cfg:
+        app.state.models["summarizer"] = OpenRouter(**_build_model_kwargs(summarizer_cfg))
+    else:
+        app.state.models["summarizer"] = app.state.models["planning"]
+        logger.info("summarizer model not configured, using planning model as fallback")
     
     logger.info(f"Agent models initialized: {list(app.state.models.keys())}")
 
     app.state.worker_models = {}
     for worker_cfg in llm_cfg.workers:
         app.state.worker_models[worker_cfg.name] = WorkerModel(
-            model=OpenRouterResponses(
-                id=worker_cfg.model_id,
-                api_key=api_key,
-                base_url=llm_cfg.base_url,
-                parallel_tool_calls=True, 
-            ),
+            model=OpenRouter(**_build_model_kwargs(worker_cfg)),
             description=worker_cfg.description,
             strengths=worker_cfg.strengths,
         )

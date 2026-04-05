@@ -51,9 +51,6 @@ class KGSearchToolkit(Toolkit):
                 self.view_kg_result,
             ],
         )
-        
-
-
 
     async def _encode_query_async(self, query: str) -> list[float] | None:
         if not self.mmbert:
@@ -87,7 +84,6 @@ class KGSearchToolkit(Toolkit):
         return {}
 
     def _execute_aql(self, aql: str, bind_vars: dict[str, Any]) -> list[dict[str, Any]]:
-        """Execute AQL query and return results."""
         return list(self.db.aql.execute(aql, bind_vars=bind_vars)) #type:ignore
 
     def _get_effective_context(
@@ -105,7 +101,6 @@ class KGSearchToolkit(Toolkit):
         kwargs: dict[str, Any],
         results: list[dict[str, Any]],
     ) -> ToolResult:
-        """Store results in memory and return ToolResult."""
         handle_id = hashlib.md5(
             json.dumps({"tool": tool_name, "args": kwargs}, sort_keys=True).encode()
         ).hexdigest()[:8]
@@ -122,7 +117,6 @@ class KGSearchToolkit(Toolkit):
         return ToolResult(content=content)
 
     def _get_brief(self, results: list[dict[str, Any]], top_n: int = 5) -> str:
-        """Get brief representation of top N results."""
         sorted_results = sorted(
             results, key=lambda x: x.get("score", x.get("rrf_score", 0)), reverse=True
         )[:top_n]
@@ -201,18 +195,6 @@ class KGSearchToolkit(Toolkit):
         user_id: str | None = None,
         min_score: float = 0.5,
     ) -> ToolResult:
-        """Search entities using semantic similarity.
-
-        Args:
-            query: Search query text
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter (uses bound context if not provided)
-            user_id: Optional user ID to filter (uses bound context if not provided)
-            min_score: Minimum similarity score threshold (default 0.5)
-
-        Returns:
-            ToolResult with matching entities
-        """
         effective_user_id, effective_video_ids = self._get_effective_context(user_id, video_ids)
 
         logger.info(f"{effective_user_id=}, {effective_video_ids=}")
@@ -313,19 +295,6 @@ class KGSearchToolkit(Toolkit):
         user_id: str | None = None,
         min_score: float = 0.5,
     ) -> ToolResult:
-        """Search events using semantic similarity.
-
-        Args:
-            query: Search query text
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter (uses bound context if not provided)
-            user_id: Optional user ID to filter (uses bound context if not provided)
-            min_score: Minimum similarity score threshold (default 0.5)
-
-        Returns:
-            ToolResult with matching events
-        """
-        # Use bound context as defaults
         effective_user_id, effective_video_ids = self._get_effective_context(user_id, video_ids)
 
         kwargs = {
@@ -421,18 +390,6 @@ class KGSearchToolkit(Toolkit):
         user_id: str | None = None,
         min_score: float = 0.5,
     ) -> ToolResult:
-        """Search micro-events using semantic similarity.
-
-        Args:
-            query: Search query text
-            top_k: Number of results to return (default 10)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-            min_score: Minimum similarity score threshold (default 0.5)
-
-        Returns:
-            ToolResult with matching micro-events
-        """
         kwargs = {
             "query": query,
             "top_k": top_k,
@@ -528,18 +485,6 @@ class KGSearchToolkit(Toolkit):
         user_id: str | None = None,
         min_score: float = 0.4,
     ) -> ToolResult:
-        """Search communities using semantic similarity.
-
-        Args:
-            query: Search query text
-            top_k: Number of results to return (default 5)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-            min_score: Minimum similarity score threshold (default 0.4)
-
-        Returns:
-            ToolResult with matching communities
-        """
         kwargs = {
             "query": query,
             "top_k": top_k,
@@ -633,17 +578,6 @@ class KGSearchToolkit(Toolkit):
         video_ids: list[str] | None = None,
         user_id: str | None = None,
     ) -> ToolResult:
-        """Traverse the knowledge graph from a seed entity.
-
-        Args:
-            entity_key: The _key of the seed entity
-            max_depth: Maximum traversal depth (default 2)
-            video_ids: Optional list of video IDs to filter results
-            user_id: Optional user ID to filter results
-
-        Returns:
-            ToolResult with connected nodes
-        """
         kwargs = {
             "entity_key": entity_key,
             "max_depth": max_depth,
@@ -842,23 +776,6 @@ class KGSearchToolkit(Toolkit):
         user_id: str | None = None,
         min_score: float = 0.1,
     ) -> ToolResult:
-        """Search using BM25 full-text search across KG collections.
-
-        Uses ArangoSearch view with inverted indexes for fast keyword matching.
-        Searches across entities, events, micro_events, and communities.
-
-        Args:
-            query: Search query text (keywords/phrases)
-            collections: Optional list of collections to search (default: all)
-                Valid values: ['entities', 'events', 'micro_events', 'communities']
-            top_k: Number of results per collection (default 10)
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-            min_score: Minimum BM25 score threshold (default 0.1)
-
-        Returns:
-            ToolResult with matching documents from specified collections
-        """
         kwargs = {
             "query": query,
             "collections": collections,
@@ -998,15 +915,6 @@ class KGSearchToolkit(Toolkit):
         seed_entities: list[str] | None = None,
         search_all_collections: bool = False,
     ) -> list[dict[str, Any]]:
-        """Internal implementation of triple hybrid search returning raw results.
-
-        Combines three retrieval methods:
-        1. BM25 keyword search
-        2. Semantic vector search
-        3. Graph-based retrieval from seed entities
-
-        Uses Reciprocal Rank Fusion (RRF) to combine results.
-        """
         query_emb = await self._encode_query_async(query)
         if query_emb is None:
             raise ValueError("MMBert client required for semantic search")
@@ -1310,7 +1218,6 @@ class KGSearchToolkit(Toolkit):
         seed_entities: list[str] | None = None,
         search_all_collections: bool = False,
     ) -> ToolResult:
-        """Triple hybrid search combining BM25, semantic, and graph retrieval with RRF."""
         kwargs = {
             "query": query,
             "video_ids": video_ids,
@@ -1394,30 +1301,6 @@ class KGSearchToolkit(Toolkit):
         traversal_depth: int = 1,
         use_triple_hybrid: bool = True,
     ) -> ToolResult:
-        """Combined RAG retrieval from the knowledge graph.
-
-        Performs comprehensive retrieval across all graph elements:
-        - Entities (via triple-hybrid or semantic search)
-        - Events
-        - Micro-events
-        - Communities
-        - Graph context via traversal
-
-        Args:
-            query: Search query text
-            video_ids: Optional list of video IDs to filter
-            user_id: Optional user ID to filter
-            top_k_entities: Number of entities to retrieve (default 10)
-            top_k_events: Number of events to retrieve (default 5)
-            top_k_micro: Number of micro-events to retrieve (default 5)
-            top_k_communities: Number of communities to retrieve (default 3)
-            enable_traversal: Enable graph traversal from top entities (default True)
-            traversal_depth: Graph traversal depth (default 1)
-            use_triple_hybrid: Use triple-hybrid for entity search (default True)
-
-        Returns:
-            ToolResult with comprehensive RAG context
-        """
         kwargs = {
             "query": query,
             "video_ids": video_ids,
@@ -1676,16 +1559,6 @@ class KGSearchToolkit(Toolkit):
         view_mode: Literal["brief", "detailed", "full"] = "brief",
         top_n: int = 5,
     ) -> ToolResult:
-        """View cached KG search results.
-
-        Args:
-            handle_id: Handle ID from previous search
-            view_mode: 'brief' (top N), 'detailed' (top N detailed), 'full' (all)
-            top_n: Number of results to show in brief/detailed mode
-
-        Returns:
-            ToolResult with formatted view of cached results
-        """
         if handle_id not in self._result_store:
             return ToolResult(
                 content=f"No cached results found for handle_id '{handle_id}'. "
