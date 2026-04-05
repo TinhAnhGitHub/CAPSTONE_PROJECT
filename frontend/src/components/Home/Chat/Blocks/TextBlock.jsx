@@ -1,6 +1,7 @@
 import { useState } from "react";
 import clsx from "clsx";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { ClipboardDocumentIcon, CheckIcon } from "@heroicons/react/24/outline";
@@ -126,6 +127,7 @@ export default function TextBlock({ block, role }) {
             <div className="prose prose-sm prose-invert max-w-full prose-code:before:content-none prose-code:after:content-none">
                 <Markdown
                     key={block.text}
+                    remarkPlugins={[remarkGfm]}
                     components={{
                         code: ({ inline, className, children, ...props }) => {
                             // If it has a className with language-, it's a code block (handled by pre)
