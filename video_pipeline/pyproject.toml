@@ -1,0 +1,105 @@
+[project]
+name = "video_pipeline"
+version = "1.0.0"
+description = "Video Pipeline Ingestion"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "aiohttp>=3.13.3",
+    "asyncpg>=0.31.0",
+    "dotenv>=0.9.9",
+    "fastapi>=0.129.0",
+    "gensim>=4.4.0",
+    "httpx>=0.28.1",
+    "llama-index-core>=0.14.15",
+    "llama-index-llms-google-genai>=0.8.7",
+    "llama-index-llms-openrouter>=0.4.4",
+    "loguru>=0.7.3",
+    "prefect>=3.6.18",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "setuptools>=82.0.1",
+    "sqlalchemy>=2.0.46",
+    "urllib3>=2.6.3",
+    "qdrant-client>=1.17.0",
+    "uvicorn>=0.41.0",
+    "python-arango>=8.3.0",
+    "elasticsearch>=9.3.0",
+    "minio>=7.2.20",
+]
+
+
+[project.optional-dependencies]
+worker = [
+    "av>=16.1.0",
+    "ffmpeg-python>=0.2.0",
+    "llm-json>=0.1.5",
+    "minio>=7.2.20",
+    "numpy>=2.3",
+    "openai>=2.21.0",
+    "opencv-python>=4.11.0.86",
+    "pillow>=10.3.0,<12.0.0",
+    "prefect[dask]>=3.6.18",
+    "prefect-aws>=0.7.5",
+    "requests>=2.32.5",
+    "qdrant-client[fastembed]>=1.17.0",
+    "tritonclient>=2.65.0",
+    "setuptools>=82.0.1",
+    "langchain-openai>=1.1.11",
+    "langchain-core>=1.2.19",
+    "elasticsearch>=9.3.0",
+    "python-arango>=8.3.0",
+    "scipy>=1.17.1",
+    "scikit-learn>=1.8.0",
+    "tqdm>=4.67.3",
+    "python-igraph>=1.0.0",
+    "networkx>=3.6.1",
+    "leidenalg>=0.11.0",
+    "torch==2.6.0",
+    "torch-geometric==2.7.0",
+    "gensim>=4.4.0",
+    "bokeh>=3.9.0",
+]
+
+[project.scripts]
+video-pipeline-api = "video_pipeline.api.app:main"
+
+[build-system]
+requires = ["setuptools>=82.0.1"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",      # correctness
+  "I",               # imports
+  "UP",              # pyupgrade
+  "B",               # bugbear
+  "SIM",             # simplifications
+  "C4",              # comprehensions
+  "ANN",             # type annotations
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+]

@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@plugin 'tailwind-scrollbar';
+@plugin '@tailwindcss/typography';
+
+html {
+    padding: 0;
+    margin: 0;
+}
+
+body {
+    font-family: var(ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+@layer components {
+    .btn-icon {
+        @apply border border-gray-800 rounded-full size-8 flex items-center justify-center text-xl hover:bg-gray-100 cursor-pointer transition select-none;
+    }
+}
+
+pre {
+    @apply whitespace-pre-wrap break-words overflow-x-auto max-w-full;
+}
+
+code {
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+@theme {
+    /* Dark Theme Palette
+     * #222831 - Background (dark charcoal)
+     * #393E46 - Surface (medium gray)
+     * #00ADB5 - Accent (teal/cyan)
+     * #EEEEEE - Text (light gray)
+     */
+
+    /* Base colors */
+    --color-darker-background: #191919;
+    --color-background: #212121;
+    --color-surface: #303030;
+    --color-accent: #00ADB5;
+    --color-text: #EEEEEE;
+
+    /* Accent variations */
+    --color-accent-hover: #00c9d4;
+    --color-accent-muted: #008b92;
+
+    /* Surface variations */
+    --color-surface-hover: #454b54;
+    --color-surface-light: #4a515c;
+
+    /* Text variations */
+    --color-text-muted: #a0a0a0;
+    --color-text-dim: #6b7280;
+
+    /* Animations */
+    --animate-highlight-pulse: highlight-pulse 1.5s ease-in-out;
+}
+
+@keyframes highlight-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(0, 173, 181, 0.4);
+    }
+
+    25% {
+        opacity: 1;
+        box-shadow: 0 0 0 8px rgba(0, 173, 181, 0.3);
+    }
+
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 0 4px rgba(0, 173, 181, 0.2);
+    }
+
+    75% {
+        opacity: 1;
+        box-shadow: 0 0 0 8px rgba(0, 173, 181, 0.3);
+    }
+}

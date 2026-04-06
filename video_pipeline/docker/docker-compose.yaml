@@ -1,0 +1,231 @@
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: admin123
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: video-pipeline
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/postgres:/var/lib/postgresql
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U admin123"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+    ports:
+    - "5432:5432"
+    networks: [shared]
+
+  redis:
+    image: redis:latest
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks: [shared]
+
+
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://admin123:admin123@postgres:5432/admin123
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_UI_API_URL: http://${DOCKER_HOST}:4200/api
+      PREFECT_MESSAGING_BROKER: prefect_redis.messaging
+      PREFECT_MESSAGING_CACHE: prefect_redis.messaging
+      PREFECT_REDIS_MESSAGING_HOST: redis
+      PREFECT_REDIS_MESSAGING_PORT: 6379
+      PREFECT_REDIS_MESSAGING_DB: 0
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/prefect:/root/.prefect
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:4200/api/health', timeout=1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command: prefect server start --no-services
+    ports:
+      - "4200:4200"
+    networks: [shared]
+
+
+  prefect-services:
+    image: prefecthq/prefect:3-latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://admin123:admin123@postgres:5432/admin123
+      PREFECT_MESSAGING_BROKER: prefect_redis.messaging
+      PREFECT_MESSAGING_CACHE: prefect_redis.messaging
+      PREFECT_REDIS_MESSAGING_HOST: redis
+      PREFECT_REDIS_MESSAGING_PORT: 6379
+      PREFECT_REDIS_MESSAGING_DB: 0
+    command: prefect server services start
+    networks: [shared]
+  
+  prefect-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      prefect-services:
+        condition: service_started
+    ports:
+      - "8787:8787"
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      FASTEMBED_CACHE_PATH: /models/fastembed
+    env_file: .env
+    volumes:
+      - ..:/app
+    working_dir: /app
+    entrypoint: >
+      bash -c "
+      cd /app && ./scripts/prefect-init.sh &&
+      prefect worker start --pool local-pool
+      "
+    restart: "on-failure"
+    networks: [shared]
+
+  # prefect-worker-poc:
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile.worker
+  #   depends_on:
+  #     prefect-server:
+  #       condition: service_healthy
+  #     prefect-services:
+  #       condition: service_started
+  #   ports:
+  #     - "8788:8787"
+  #   environment:
+  #     PREFECT_API_URL: http://prefect-server:4200/api
+  #   volumes:
+  #     - ..:/app
+  #   working_dir: /app
+  #   entrypoint: >
+  #     bash -c "
+  #     cd /app && ./scripts/prefect-init.poc.sh &&
+  #     prefect worker start --pool poc-pool
+  #     "
+  #   restart: "on-failure"
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks: [shared]
+
+
+  video-pipeline-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    ports:
+      - "8050:8050"
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      # APP_ENV: ${APP_ENV:-dev}
+      # PREFECT_DEPLOYMENT_NAME: ${PREFECT_DEPLOYMENT_NAME:-poc-deployment}
+    env_file: .env
+    restart: on-failure
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [shared]
+
+
+  minio:
+    image: minio/minio:latest
+    container_name: video_pipeline-minio
+    ports:
+      - "${DOCKER_MINIO_API_PORT:-9000}:9000"
+      - "${DOCKER_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/minio:/data
+    environment:
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin"
+      MINIO_SERVER_URL: "http://${DOCKER_HOST}:${DOCKER_MINIO_API_PORT:-9000}"
+      MINIO_BROWSER_REDIRECT_URL: "http://${DOCKER_HOST}:${DOCKER_MINIO_CONSOLE_PORT:-9001}"
+    command: minio server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    
+    networks: [shared]
+
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: always
+    container_name: qdrant
+    ports:
+      - 6333:6333
+      - 6334:6334
+    expose:
+      - 6333
+      - 6334
+      - 6335
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/qdrant_data:/qdrant/storage
+    
+    networks: [shared]
+      
+  arangodb:
+    image: arangodb:latest
+    container_name: arangodb
+    restart: unless-stopped
+    ports:
+      - "8529:8529"
+    environment:
+      ARANGO_NO_AUTH: 1
+    command: >
+      arangod --experimental-vector-index
+
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/arangodb_data:/var/lib/arangodb3
+
+    networks: [shared]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.1
+    container_name: elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME}/elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [shared]
+
+networks:
+  shared:
+    external: true
+    name: video_shared_net
+
+  

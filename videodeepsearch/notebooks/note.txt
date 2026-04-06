@@ -1,0 +1,853 @@
+DEBUG Based on my exploration of the three videos, I will now generate 25 diverse question-answer pairs with       
+      precise ground truth annotations.                                                                            
+                                                                                                                   
+      ```json                                                                                                      
+      {                                                                                                            
+        "qa_pairs": [                                                                                              
+          {                                                                                                        
+            "question_id": 1,                                                                                      
+            "question_type": "visual",                                                                             
+            "question": "What physical characteristic of a football throwing spiral causes it to experience a      
+      wobble during flight even when thrown perfectly?",                                                           
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:20:17.016", "end": "00:20:49.014"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_9", "start_frame": 36474, "end_frame": 41173}                              
+              ],                                                                                                   
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "What we're seeing is it starting out aligning itself about three degrees off, you  
+      know, because that's how we spin it up. But as the airflow starts, it's pointing itself in the direction that
+      minimizes drag. If you look at a real football in flight, you'll notice that it spends more time I'm angled  
+      slightly to the right when thrown by a right hander. That is what creates the force, which through procession
+      gradually pitches the nose downward. It creates the turnover effect",                                        
+              "answer": "The wobble is caused by the ball's natural tilt (angled slightly to the right for         
+      right-handed throws), which creates aerodynamic torque through gyroscopic precession, resulting in a wobble  
+      that's actually essential for the ball to follow its intended parabolic path."                               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 2,                                                                                      
+            "question_type": "audio",                                                                              
+            "question": "According to the historical example in the video, what specific improvement did Claude    
+      Etienne Minier make to bullets that revolutionized accuracy in the mid-1800s?",                              
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:07:05.959", "end": "00:07:46.533"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_4", "start_frame": 9200, "end_frame": 14595}                               
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "He developed a conical bullet with a hollow base and an iron plug that would fit   
+      into it. So when fired, the gas pressure drove the plug into the base, which expanded the bullet, pressing it
+      firmly against the barrel walls so no gas could escape. This made the bullet's muzzle velocity much more     
+      predictable, but it also enabled something else: the expanded bullet could grip spiral grooves carved into   
+      the inside of the barrel, called rifling. This imparted spin to the bullet as it shot out",                  
+              "answer": "He developed a conical bullet with a hollow base and iron plug that, when fired, expanded 
+      to grip the rifling grooves in the barrel, imparting spin to the bullet which stabilized its trajectory      
+      through angular momentum."                                                                                   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 3,                                                                                      
+            "question_type": "temporal",                                                                           
+            "question": "What sequence of events led from Nick Leeson's initial $40,000 trading error to his losses
+      ballooning to over $30 million?",                                                                            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:05:12.812", "end": "00:07:01.796"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_4", "start_frame": 7500, "end_frame": 11075}                               
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Leeson's plan to cover his team's loss was to bet that the Japanese stock market   
+      would go up. The Nikkei had been dropping from thirty-eight thousand to sixteen thousand. And he was         
+      confident the market would soon bottom out and start rising, but it continued to fall. Over the next few     
+      weeks, it dropped to a low of fourteen thousand, and the whole time Nick was betting the wrong way with ever 
+      bigger and riskier bets. He would double down, betting double his losses... his losses ballooned from forty  
+      thousand dollars to around three million dollars... eventually, his luck turned around. In the spring of     
+      nineteen ninety-three, the market rebounded... But on Monday morning, he made another trading error on the   
+      futures market. A damaging loss that Leeson didn't want to admit. So he put the loss back into account eight 
+      eight eight eight eight... By the end of 1993, his losses reached thirty million dollars",                   
+              "answer": "Leeson initially made a $40,000 error, hid it in account 88888, then bet the market would 
+      rise (it continued falling). He doubled down on losing bets, accumulating $3 million in losses. After a      
+      market rebound temporarily put him in credit, he made another error, hid it again in the same account, and   
+      continued making riskier trades to cover previous losses, ultimately reaching $30 million by end of 1993."   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 4,                                                                                      
+            "question_type": "multi_hop",                                                                          
+            "question": "How did the prediction of negative energy states in the Dirac equation lead to the        
+      discovery of antimatter, and who experimentally confirmed this prediction?",                                 
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:25:35.659", "end": "00:27:54.756"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_7", "start_frame": 35359, "end_frame": 40154}                              
+              ],                                                                                                   
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "So negative energy solutions are baked right into the Dirac equation... If         
+      electrons can have a negative energy, then that means that they could continually radiate positive           
+      energy—that is, emit photons. Drop into lower and lower negative energy states... That this equation, it got 
+      the And the magnetic moment of the electron. Yes, but on the other hand, it predicts this ridiculous         
+      situation where they have negative energy... Then, in nineteen thirty-one, he proposed something radical to  
+      explain the negative energy solution. A new kind of particle, unknown to experimental physics, having the    
+      same mass and opposite charge to an electron—we may call such a particle an anti-electron... In 1932, a      
+      Caltech postdoc named Carl Anderson was working on a project trying to identify the charged particles        
+      produced by cosmic rays. He photographed the tracks these particles left in a cloud chamber... Anderson      
+      noticed several instances of a similar track. It looked a lot like the tracks he'd seen left by electrons,   
+      only it curved in the opposite direction in the magnetic field... It had to be something with around the same
+      mass as an electron, but opposite charge.",                                                                  
+              "answer": "The Dirac equation predicted negative energy states for electrons, which would allow them 
+      to continuously radiate energy and fall into negative energy states (physically impossible). In 1931, Dirac  
+      proposed this meant a new particle existed—the anti-electron (positron)—with same mass but opposite charge.  
+      Carl Anderson experimentally confirmed this in 1932 at Caltech when he observed cosmic ray particles in a    
+      cloud chamber that curved opposite to electrons in a magnetic field, had similar mass to electrons, and were 
+      protons."                                                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 5,                                                                                      
+            "question_type": "descriptive",                                                                        
+            "question": "Describe the experimental setup shown in the video for testing Tom Brady's throwing       
+      technique in a wind tunnel.",                                                                                
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:20:17.016", "end": "00:20:39.505"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_9", "start_frame": 36474, "end_frame": 41173}                              
+              ],                                                                                                   
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "You can see this in the wind tunnel. We've tilted the ball up by three degrees, and
+      it's free to pivot in any direction. What we're seeing is it starting out aligning itself about three degrees
+      off, you know, because that's how we spin it up. But as the airflow starts, it's pointing itself in the      
+      direction that minimizes drag. That's so cool.",                                                             
+              "answer": "The wind tunnel experiment involved tilting a football by three degrees and mounting it so
+      it was free to pivot in any direction. As airflow began, the ball would start at the 3-degree angle (how it  
+      was spun up) but then gradually realign itself to point in the direction that minimized drag, demonstrating  
+      the ball's natural aerodynamic self-alignment."                                                              
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 6,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "What specific percentage of people who claimed 90% confidence in their answers were       
+      actually correct in the overconfidence research mentioned?",                                                 
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:03:33.839", "end": "00:03:45.892"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_3", "start_frame": 2069, "end_frame": 7499}                                
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The results revealed a surprising disparity between how accurate someone thinks    
+      they are and how accurate they actually are. When people are ninety percent certain, they are right. Eight.  
+      Only seventy-five percent of the time... Our results showed that those who were the most confident describing
+      themselves. Ninety-one to a hundred percent sure, we're only correct fifty-one percent of the time.",        
+              "answer": "75% (the original research found that people claiming 90% confidence were only correct 75%
+      of the time, and a replication showed those claiming 91-100% confidence were only correct 51% of the time)." 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 7,                                                                                      
+            "question_type": "visual",                                                                             
+            "question": "What visual evidence in the video shows that Tom Brady's throws have a subtle rightward   
+      drift even when thrown straight?",                                                                           
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:21:30.222", "end": "00:22:01.587"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_10", "start_frame": 36474, "end_frame": 41173}                             
+              ],                                                                                                   
+              "evidence_type": "visual",                                                                           
+              "evidence_text": "We got Tom to throw straight down one of the lines on the field. The drone set.    
+      From ground level, his passes looked amazingly straight. But from the drone. If you watch closely, just at   
+      the end of the pass, the ball does drift off to the right. This is because up until now, we've been ignoring 
+      a very important aerodynamic effect, which is lift. When the ball is tilted to the right. It generates lift  
+      out in that direction.",                                                                                     
+              "answer": "The video shows drone footage of Tom Brady throwing a football straight down a field line.
+      From ground level the throws appeared straight, but the drone footage revealed that just at the end of the   
+      pass, the ball drifted to the right due to aerodynamic lift generated by the ball's natural rightward tilt." 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 8,                                                                                      
+            "question_type": "audio",                                                                              
+            "question": "According to Paul Dirac's 1931 proposal, how many states are described in the             
+      four-component wave function of the Dirac equation?",                                                        
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:27:09.294", "end": "00:27:19.930"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_7", "start_frame": 35359, "end_frame": 40154}                              
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "So. Dirac was proposing that those four states described in his four-component wave
+      function are a spin-up electron, a spin-down electron, a spin-up antielectron, and a spin-down               
+      antielectron.",                                                                                              
+              "answer": "The four states are: a spin-up electron, a spin-down electron, a spin-up antielectron     
+      (positron), and a spin-down antielectron (positron)."                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 9,                                                                                      
+            "question_type": "temporal",                                                                           
+            "question": "What was the chronological sequence from Franz Reichelt's initial interest in aviation    
+      safety to his fatal jump from the Eiffel Tower?",                                                            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "946330031ead69b21354d038",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:08:04.025", "end": "00:08:19.124"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_5", "start_frame": 11076, "end_frame": 11967}                              
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Franz Reichelt was a tailor with no formal scientific or engineering training, but 
+      he was obsessed with aviation safety and designed a parachute suit. After multiple failed tests, he became   
+      convinced the issue was that he didn't have enough height for it to work. So in February nineteen twelve, he 
+      took it to the Eiffel Tower. Rather than using a dummy to test it, he jumped himself—tragic, but also really 
+      dumb.",                                                                                                      
+              "answer": "Reichelt, a tailor with no engineering training, became obsessed with aviation safety and 
+      designed a parachute suit. After multiple failed tests, he concluded he needed more height. In February 1912,
+      he went to the Eiffel Tower and, instead of using a dummy for the final test, jumped himself, resulting in   
+      his death."                                                                                                  
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 10,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "How did the aerodynamic properties of a spinning football (wobble and tilt) create both   
+      the 'turnover effect' that Tom Brady mentioned and the rightward drift that affected Jerry Rice's catches    
+      from left-handed quarterbacks?",                                                                             
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                {"start": "00:20:44.276", "end": "00:22:53.806"}                                                   
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                {"segment_id": "segment_10", "start_frame": 36474, "end_frame": 41173}                             
+              ],                                                                                                   
+              "e                                                                                                   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    DEBUG Now I have comprehensive information across all four videos. Let me generate the Q&A pairs.                  
+                                                                                                                   
+      ```json                                                                                                      
+      {                                                                                                            
+        "qa_pairs": [                                                                                              
+          {                                                                                                        
+            "question_id": 1,                                                                                      
+            "question_type": "visual",                                                                             
+            "question": "What unexpected result occurs when the green rope is cut in the spring mechanism          
+      experiment?",                                                                                                
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:01:50.000", "end": "00:02:09.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_3", "start_frame": 1295, "end_frame": 6707 }                                  
+              ],                                                                                                   
+              "evidence_type": "both",                                                                             
+              "evidence_text": "Here it is in slow motion. So even though the ropes on the side were slack and we  
+      cut the only rope in tension, the weight somehow went up.",                                                  
+              "answer": "The weight goes up instead of falling down, which is counterintuitive since the green rope
+      was the only one under tension holding the system together."                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 2,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "How many Super Bowls has Tom Brady won according to the video?",                          
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:00:10.000", "end": "00:00:11.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_1", "start_frame": 0, "end_frame": 1897 }                                     
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "He's won seven Super Bowls.",                                                      
+              "answer": "Seven Super Bowls"                                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 3,                                                                                      
+            "question_type": "temporal",                                                                           
+            "question": "What happens in the spring experiment after the green rope is cut — describe the          
+      transition that occurs?",                                                                                    
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:03:52.000", "end": "00:04:12.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_3", "start_frame": 1295, "end_frame": 6707 }                                  
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "By cutting the green rope, you're actually forcing the springs to go from a series 
+      to a parallel, and that change is what causes the contraction to happen.",                                   
+              "answer": "The springs transition from a series configuration to a parallel configuration, causing   
+      the springs to contract and the weight to rise."                                                             
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 4,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "What is the drag coefficient of a football when it is aligned straight in the direction of
+      motion?",                                                                                                    
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:04:17.000", "end": "00:04:30.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_4", "start_frame": 9199, "end_frame": 14595 }                                 
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Straight in the direction of motion, a football is pretty streamlined with a drag  
+      coefficient of just zero point one four. That's better than a bullet.",                                      
+              "answer": "0.14, which is better than a bullet"                                                      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 5,                                                                                      
+            "question_type": "multi_hop",                                                                          
+            "question": "Why is the spin on a thrown football important? Connect the concepts of angular momentum  
+      and drag to explain.",                                                                                       
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:07:46.000", "end": "00:08:07.000" },                                                
+                { "start": "00:03:44.000", "end": "00:04:07.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_5", "start_frame": 14596, "end_frame": 19187 },                               
+                { "segment_id": "seg_4", "start_frame": 9199, "end_frame": 14595 }                                 
+              ],                                                                                                   
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "All spinning objects have a fundamental quantity they conserve: angular momentum.  
+      This helps them resist changes in their orientation. An unspinning ball can end up going sideways, meaning it
+      decelerates up to ten times faster.",                                                                        
+              "answer": "Spin creates angular momentum which resists changes to the football's orientation. Without
+      spin, even slight disturbances cause the ball to turn sideways, exposing a much larger cross-section to      
+      airflow and increasing drag by up to 10 times, causing it to decelerate rapidly and become unpredictable."   
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 6,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "What French army officer developed the conical bullet with a hollow base that enabled     
+      rifling to work effectively?",                                                                               
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:07:05.000", "end": "00:07:12.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_5", "start_frame": 14596, "end_frame": 19187 }                                
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Eight years earlier, an enterprising French army officer, Claude Etienne Minier,   
+      made a breakthrough. He developed a conical bullet with a hollow base and an iron plug that would fit into   
+      it.",                                                                                                        
+              "answer": "Claude Etienne Minier"                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 7,                                                                                      
+            "question_type": "descriptive",                                                                        
+            "question": "Describe what Tom Brady's throws look like in slow motion according to the video          
+      analysis.",                                                                                                  
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:00:42.000", "end": "00:01:03.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_1", "start_frame": 0, "end_frame": 1897 }                                     
+              ],                                                                                                   
+              "evidence_type": "both",                                                                             
+              "evidence_text": "Even Tom Brady can't throw a perfect spiral. Just look. That on his deep passes, no
+      matter how hard he tries to spin the ball cleanly around its long axis. If you look closely enough, you'll   
+      notice this little wobble. Not only that. There's a slight drift to the ball. Virtually all his long passes  
+      curve to the right.",                                                                                        
+              "answer": "Even Tom Brady cannot throw a perfect spiral. His deep passes exhibit a slight wobble and 
+      a drift to the right — virtually all his long passes curve slightly to the right rather than traveling       
+      perfectly straight."                                                                                         
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 8,                                                                                      
+            "question_type": "factoid",                                                                            
+            "question": "In what year did a young Paul Dirac give his famous lecture in Germany that unsettled     
+      prominent physicists?",                                                                                      
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:00:00.000", "end": "00:00:01.877" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_1", "start_frame": 0, "end_frame": 4619 }                                     
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "In nineteen twenty-eight, a young. A man shuffled onto a stage in Germany to       
+      present a lecture.",                                                                                         
+              "answer": "1928"                                                                                     
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 9,                                                                                      
+            "question_type": "multi_hop",                                                                          
+            "question": "What was the connection between Braess's Paradox observed in New York City's 42nd Street  
+      closure and the spring experiment? Explain the analogy.",                                                    
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:06:11.000", "end": "00:06:21.000" },                                                
+                { "start": "00:10:32.000", "end": "00:10:52.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_4", "start_frame": 6708, "end_frame": 15627 },                                
+                { "segment_id": "seg_5", "start_frame": 15628, "end_frame": 18069 }                                
+              ],                                                                                                   
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "To everyone's surprise, the traffic in the surrounding area actually got better.   
+      The number of cars was reduced by twenty percent. It's just like cutting the green rope from before. The     
+      springs are like the narrow city roads. The more weight or cars you add, the longer they get, and the ropes  
+      are like the highways.",                                                                                     
+              "answer": "When NYC closed 42nd Street, traffic improved by 20%. This is analogous to cutting the    
+      green rope in the spring experiment. The springs represent narrow city streets (congestion increases with    
+      load), while the slack ropes represent highways (constant transit time). Removing a path (the green rope/42nd
+      Street) forces a reconfiguration that improves overall flow, demonstrating Braess's Paradox — removing       
+      capacity can paradoxically improve performance."                                                             
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 10,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What Russian mathematician predicted the counterintuitive traffic result in NYC more than 
+      20 years before 42nd Street was closed?",                                                                    
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:06:33.000", "end": "00:06:39.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_4", "start_frame": 6708, "end_frame": 15627 }                                 
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "His name was Dietrich Braess, a German mathematician, and back in nineteen         
+      sixty-eight, Braess was studying road networks.",                                                            
+              "answer": "Dietrich Braess (a German mathematician)"                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 11,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What poem did Markov use to demonstrate that dependent events could still follow the law  
+      of large numbers?",                                                                                          
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:05:11.000", "end": "00:05:19.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_3", "start_frame": 2584, "end_frame": 12537 }                                 
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "He took the first twenty thousand letters of the poem, stripped out all punctuation
+      and spaces. Markov turned to a poem at the heart of Russian literature: Eugene Onegin by Alexander Pushkin.",
+              "answer": "Eugene Onegin by Alexander Pushkin"                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 12,                                                                                     
+            "question_type": "temporal",                                                                           
+            "question": "What sequence of events led to the development of the Monte Carlo method? Describe how it 
+      evolved from Ulam's solitaire games.",                                                                       
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:11:50.000", "end": "00:13:00.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_4", "start_frame": 12539, "end_frame": 23827 }                                
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "Ulam played with all fifty-two cards. Fifty-two factorial, or about eight times ten
+      to the sixty-seven. Solving this analytically was hopeless. But then Ulam had a flash of insight: What if I  
+      just play hundreds of games and count how many could be won? He shared this idea with von Neumann, who       
+      immediately recognized its power.",                                                                          
+              "answer": "While recovering from encephalitis in 1946, Stanislaw Ulam played solitaire and wondered  
+      about the probability of winning. Since 52! is impossibly large, he realized he could simulate hundreds of   
+      games instead of calculating analytically. He then shared this statistical sampling idea with John von       
+      Neumann, who adapted it using Markov chains for neutron behavior in nuclear cores, running simulations on the
+      ENIAC computer. The method was named the Monte Carlo method after Ulam's gambling uncle who frequented the   
+      Monte Carlo Casino."                                                                                         
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 13,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What was Tom Brady's maximum spin rate measured by the sensors in the footballs?",        
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:15:30.000", "end": "00:15:36.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_9", "start_frame": 25935, "end_frame": 29419 }                                
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "The sensors show Brady's maximum spin rate on this day was six hundred and         
+      twenty-eight revolutions per minute.",                                                                       
+              "answer": "628 revolutions per minute (rpm)"                                                         
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 14,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "What is the Dirac equation and how does it differ from the Schrödinger equation?",        
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:21:45.000", "end": "00:22:30.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_7", "start_frame": 30717, "end_frame": 35357 }                                
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "It's relativistic, so it works at really high speeds. Unlike the Schrödinger       
+      equation, which breaks down there. It's also first order in spatial derivatives whereas the Schrödinger      
+      equation was second order in spatial derivatives. It treats time and space symmetrically.",                  
+              "answer": "The Dirac equation is a relativistic equation for the electron that uses first-order      
+      derivatives in both time and space (unlike Schrödinger's equation which is second-order in space). It treats 
+      time and space symmetrically, works at very high speeds using Einstein's energy-momentum relationship, and   
+      naturally incorporates spin — requiring a four-component wave function that describes both spin-up and       
+      spin-down states as well as antiparticle states."                                                            
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 15,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "Who accidentally discovered the positron in 1932, and where?",                            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:27:54.000", "end": "00:28:27.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_8", "start_frame": 40156, "end_frame": 45166 }                                
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "In 1932, a Caltech postdoc named Carl Anderson was working on a project trying to  
+      identify the charged particles produced by cosmic rays. He photographed the tracks these particles left in a 
+      cloud chamber. A positive electron, or as he named it, a positron.",                                         
+              "answer": "Carl Anderson, a Caltech postdoc, discovered the positron accidentally in 1932 while      
+      photographing cosmic ray particle tracks in a cloud chamber."                                                
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 16,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "In the fictional town traffic model from Braess's paradox, what was the original travel   
+      time, what did it become after adding the new road, and why couldn't drivers return to the original routes?",
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:07:34.000", "end": "00:09:09.000" },                                                
+                { "start": "00:09:50.000", "end": "00:10:32.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_4", "start_frame": 6708, "end_frame": 15627 }                                 
+              ],                                                                                                   
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "The total time on both routes is ten minutes for the narrow street plus twenty-five
+      minutes for the highway—a total of thirty-five minutes. The total journey time for everyone increases to a   
+      whopping forty-one minutes. If any one driver goes back to route one or two, their journey time will be the  
+      twenty-five minutes on the highway plus twenty minutes on the now congested city streets, or forty-five      
+      minutes in total, which is even worse.",                                                                     
+              "answer": "Originally the travel time was 35 minutes (25 min highway + 10 min narrow street). After  
+      adding the connecting road, it increased to 41 minutes because all 2000 drivers selfishly chose the new      
+      shortcut, congesting the narrow streets. Drivers couldn't return to original routes because any single driver
+      switching back would face 45 minutes (25 min highway + 20 min congested narrow street), which is worse than  
+      41 minutes."                                                                                                 
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 17,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What phenomenon did Heisenberg call 'the saddest chapter in modern physics'?",            
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:00:28.000", "end": "00:00:41.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_1", "start_frame": 0, "end_frame": 4619 }                                     
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "After the lecture, Werner Heisenberg described the man's theory as the saddest     
+      chapter in modern physics.",                                                                                 
+              "answer": "Dirac's 1928 theory that revealed the existence of negative energy states for particles,  
+      which implied particles with negative energy that deeply unsettled prominent physicists."                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 18,                                                                                     
+            "question_type": "visual",                                                                             
+            "question": "What happens to the camera's plexiglass protection when Tom Brady throws the football at  
+      it?",                                                                                                        
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:14:47.000", "end": "00:14:58.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_9", "start_frame": 25935, "end_frame": 29419 }                                
+              ],                                                                                                   
+              "evidence_type": "both",                                                                             
+              "evidence_text": "Is that plexi or is that real glass? It's plexiglass. That's incredible. Oh my god!
+      Now we're broke. It went right there.",                                                                      
+              "answer": "The camera's plexiglass protection cracks and breaks when Tom Brady throws the football at
+      it."                                                                                                         
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 19,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What percentage reduction in traffic was observed when 42nd Street was closed for Earth   
+      Day in 1990?",                                                                                               
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:06:18.000", "end": "00:06:22.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_4", "start_frame": 6708, "end_frame": 15627 }                                 
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "To everyone's surprise, the traffic in the surrounding area actually got better.   
+      The number of cars was reduced by twenty percent.",                                                          
+              "answer": "20 percent"                                                                               
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 20,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "In the Markov chain analysis of Pushkin's poem, what percentage of vowel-vowel pairs did  
+      Markov actually find?",                                                                                      
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:05:19.000", "end": "00:05:30.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_3", "start_frame": 2584, "end_frame": 12537 }                                 
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "If the letters were independent, the probability of a vowel-vowel pair would just  
+      be the probability of a vowel twice, which is about zero point one eight. But when Markov actually counted,  
+      he found vowel-vowel pairs only show up six percent of the time.",                                           
+              "answer": "6 percent (compared to the 18% expected if letters were independent)"                     
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 21,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "How does the concept of gyroscopic precession explain why a spinning football's nose      
+      pitches downward during flight, even though air resistance pushes up on the bottom?",                        
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "0e64f1c0da591ca67f07b7f9",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:17:40.000", "end": "00:18:43.000" },                                                
+                { "start": "00:19:17.000", "end": "00:19:40.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_10", "start_frame": 29421, "end_frame": 36472 }                               
+              ],                                                                                                   
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "When you push up, it actually tilts to the right. Due to gyroscopic precession. The
+      ball pitches downward. It's this that gradually pitches the nose of the football down. Keeping it aligned    
+      with its parabolic path.",                                                                                   
+              "answer": "Due to gyroscopic precession, when air hits the underside of the spinning football        
+      (pushing up), the response is delayed by 90 degrees in the direction of rotation, causing the ball to tilt to
+      the right instead of pitching up. This tilt then causes more air to hit that side, which through precession  
+      again causes the nose to pitch downward. This cycle gradually keeps the football's nose aligned with its     
+      parabolic trajectory."                                                                                       
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 22,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What is the purpose of the 'Dirac sea' theory proposed by Paul Dirac?",                   
+            "difficulty": "medium",                                                                                
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:29:00.000", "end": "00:29:20.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_8", "start_frame": 40156, "end_frame": 45166 }                                
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "He theorized something called the Dirac sea, describing a vacuum as an infinite sea
+      of electrons occupying all available negative energy states. And since no two electrons can occupy the same  
+      state, this prevents observable positive-energy electrons from falling into the negative energy states.",    
+              "answer": "The Dirac sea theory was proposed to solve the negative energy problem. It describes the  
+      vacuum as an infinite sea of electrons filling all negative energy states, preventing observable             
+      positive-energy electrons from cascading down into negative energy states. A vacancy or hole in this sea     
+      represents a positron."                                                                                      
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 23,                                                                                     
+            "question_type": "descriptive",                                                                        
+            "question": "Describe how the 'countersnapping' mechanical system switches between configurations and  
+      what practical application it enables.",                                                                     
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "c510fac771767405c891bf64",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:19:43.000", "end": "00:20:40.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_8", "start_frame": 28385, "end_frame": 32499 }                                
+              ],                                                                                                   
+              "evidence_type": "both",                                                                             
+              "evidence_text": "A novel mechanical system capable of switching between series and parallel         
+      configurations, altering its stiffness and natural frequency without changing its length. This               
+      countersnapping mechanism is shown to resist resonance and excessive vibrations.",                           
+              "answer": "The countersnapping mechanism switches between series and parallel spring configurations, 
+      changing its stiffness and natural frequency without altering its length. When driven at certain frequencies,
+      it automatically switches states to avoid resonance. This enables practical applications like preventing     
+      structures from vibrating excessively, similar to but potentially more effective than traditional tuned mass 
+      dampers."                                                                                                    
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 24,                                                                                     
+            "question_type": "factoid",                                                                            
+            "question": "What famous equation did Albert Einstein publish in 1905 that links mass and energy?",    
+            "difficulty": "easy",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "3636d10a2ad4787733c9700d",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:02:08.000", "end": "00:02:16.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_1", "start_frame": 0, "end_frame": 4619 }                                     
+              ],                                                                                                   
+              "evidence_type": "audio",                                                                            
+              "evidence_text": "In other words, he found that energy must be equal to mc squared, e equals mc      
+      squared.",                                                                                                   
+              "answer": "E = mc² (mass-energy equivalence)"                                                        
+            }                                                                                                      
+          },                                                                                                       
+          {                                                                                                        
+            "question_id": 25,                                                                                     
+            "question_type": "multi_hop",                                                                          
+            "question": "How did the debate between Nekrasov and Markov about independence in probability connect  
+      to free will? What was Markov's clever demonstration using Pushkin's poem?",                                 
+            "difficulty": "hard",                                                                                  
+            "ground_truth": {                                                                                      
+              "video_id": "9b17f473300a5436f0a053be",                                                              
+              "relevant_timestamps": [                                                                             
+                { "start": "00:03:00.000", "end": "00:03:47.000" },                                                
+                { "start": "00:05:03.000", "end": "00:05:19.000" },                                                
+                { "start": "00:08:09.000", "end": "00:08:43.000" }                                                 
+              ],                                                                                                   
+              "relevant_segments": [                                                                               
+                { "segment_id": "seg_3", "start_frame": 2584, "end_frame": 12537 }                                 
+              ],                                                                                                   
+              "evidence_type": "multi_hop",                                                                        
+              "evidence_text": "Nekrasov reasoned that because these statistics follow the law of large numbers,   
+      the decisions causing them must be independent. In other words, he argued that they must be acts of free     
+      will. Markov set out to prove that dependent events could also follow the law of large numbers. He found     
+      vowel-vowel pairs only show up six percent of the time. Markov had built a dependent system—a literal chain  
+      of events—and he showed that it still followed the law of large numbers.",                                   
+              "answer": "Nekrasov argued that if social statistics (marriage rates, crime rates, birth rates)      
+      follow the law of large numbers, then the underlying events must be independent — which he claimed proved    
+      free will existed. Markov disproved this by analyzing Pushkin's poem 'Eugene Onegin': he showed that letter  
+      sequences were dependent (vowel-vowel pairs occurred 6% vs. expected 18%), yet when he built a dependent     
+      predictive model using transition probabilities, it still converged to the original vowel/consonant ratio    
+      (43%/57%). This proved that convergence doesn't require independence, dismantling Nekrasov's free will       
+      argument. Markov concluded: 'Independence isn't even necessary to do probability.'"                          
+            }                                                                                                      
+          }                                                                                                        
+        ],                                                                                                         
+        "generation_metadata": {                                                                                   
+          "videos_explored": [                                                                                     
+            "0e64f1c0da591ca67f07b7f9",                                                                            
+            "3636d10a2ad4787733c9700d",                                                                            
+            "c510fac771767405c891bf64",                                                                            
+            "9b17f473300a5436f0a053be"                                                                             
+          ],                                                                                                       
+          "total_segments_reviewed": 39,                                                                           
+          "generation_timestamp": "2026-03-27T07:30:00.000000"                                                     
+        }                                                                                                          
+      }                                                                                                            
+      ```                                                                                                          

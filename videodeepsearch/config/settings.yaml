@@ -1,0 +1,158 @@
+llm_provider:
+  provider: openrouter
+  base_url: https://openrouter.ai/api/v1
+  agents:
+    greeter:
+      model_id: qwen/qwen3.5-35b-a3b
+      temperature: 0.7
+      top_p: 0.9
+      max_completion_tokens: 4096
+    orchestrator:
+      model_id: minimax/minimax-m2.7
+      temperature: 0.3
+      top_p: 0.95
+      max_completion_tokens: 2048
+    planning:
+      model_id: minimax/minimax-m2.7
+      temperature: 0.2
+      top_p: 0.95
+      max_completion_tokens: 4096
+    llm_tool:
+      model_id: qwen/qwen3.5-9b
+      temperature: 0.3
+      top_p: 0.9
+      max_completion_tokens: 4096
+    summarizer:
+      model_id: google/gemini-2.5-flash-lite
+      temperature: 0.1
+      top_p: 0.9
+      max_completion_tokens: 4096
+
+  workers:
+  - name: qwen/qwen3.5-35b-a3b
+    model_id: qwen/qwen3.5-35b-a3b
+    description: "Qwen3.5-35B-A3B excels in reasoning, coding, and agent/tool use, with strong multimodal (vision + text) capabilities. It offers efficient inference and supports long-context processing (~256K tokens) across 200+ languages, making it well-suited for complex, multilingual, and long-horizon tasks."
+    strengths:
+    - multimodal understanding
+    - efficient inference
+    - multilingual support
+    - long-context reasoning
+    temperature: 0.3
+    top_p: 0.9
+    max_completion_tokens: 2048
+
+  - name: nvidia/nemotron-3-super-120b-a12b
+    model_id: nvidia/nemotron-3-super-120b-a12b
+    description: "NVIDIA Nemotron-3-Super-120B-A12B is optimized for advanced agentic workflows, including complex reasoning, coding, planning, and tool integration. Its hybrid Mamba-Transformer MoE architecture enables high throughput and stability, with support for extremely long contexts (up to ~1M tokens), making it ideal for large-scale automation and RAG systems."
+    strengths:
+    - ultra-long context
+    - complex reasoning
+    - multi-step planning
+    - agent workflows
+    - high-throughput inference
+    temperature: 0.3
+    top_p: 0.95
+    max_completion_tokens: 4096
+
+  - name: xiaomi/mimo-v2-pro
+    model_id: xiaomi/mimo-v2-pro
+    description: "Xiaomi MiMo-V2-Pro is designed for large-scale agentic applications, with a focus on long-context reasoning, coding, and real-world task execution. With its massive scale (~1T parameters) and extended context window (~1M tokens), it enables robust multi-step planning, tool use, and consistent performance across complex workflows."
+    strengths:
+    - large-scale modeling
+    - long-context reasoning
+    - task execution
+    - tool integration
+    - multi-step planning
+    temperature: 0.3
+    top_p: 0.95
+    max_completion_tokens: 4096
+
+  - name: stepfun/step-3.5-flash
+    model_id: stepfun/step-3.5-flash
+    description: "StepFun Step-3.5-Flash is a high-efficiency model optimized for fast reasoning and agentic tasks such as coding, planning, and tool use. Its sparse MoE architecture activates only a small subset of parameters per token, enabling real-time performance (~100-300 tokens/s) while maintaining strong results on coding and math benchmarks."
+    strengths:
+    - low latency
+    - efficient MoE architecture
+    - real-time performance
+    - coding and math proficiency
+    - agent task execution
+    temperature: 0.3
+    top_p: 0.9
+    max_completion_tokens: 2048
+
+storage:
+  postgres:
+    host: localhost
+    port: 5432
+    database: video-pipeline
+    username: admin123
+    password: admin123
+    url: null
+  minio:
+    host: localhost
+    port: '9000'
+    access_key: minioadmin
+    secret_key: minioadmin
+    secure: false
+    buckets:
+      videos: videos
+      artifacts: video-artifacts
+      asr: asr-data
+  qdrant:
+    host: localhost
+    port: 6333
+    grpc_port: 6334
+    prefer_grpc: true
+    collection_name: video_embeddings_dev
+  elasticsearch:
+    host: localhost
+    port: 9200
+    user: null
+    password: null
+    use_ssl: false
+    verify_certs: true
+    request_timeout: 30
+    index_name: video_ocr_docs_dev
+  arangodb:
+    host: http://localhost:8529
+    database: video_kg
+    username: root
+    password: ''
+    graph_name: video_knowledge_graph
+    view_name: video_kg_search_view
+    collections:
+      entities: entities
+      events: events
+      micro_events: micro_events
+      communities: communities
+      relations: relations
+    indexes:
+      semantic_dim: 768
+      structural_dim: 128
+inference:
+  qwenvl:
+    base_url: http://localhost:8010/embedding
+  mmbert:
+    base_url: http://localhost:8009
+    model_name: mmbert
+  splade:
+    url: http://localhost:8001
+    model_name: splade
+    timeout: 30
+    verbose: false
+    max_batch_size: 32
+cache:
+  enabled: true
+  ttl: 1800
+  dir: null
+server:
+  host: 0.0.0.0
+  port: 8080
+  debug: false
+  cors_origins:
+  - http://localhost:3000
+  - http://localhost:5173
+mlflow:
+  enabled: false
+  tracking_uri: http://localhost:5000
+  experiment_name: VideoDeepSearch
