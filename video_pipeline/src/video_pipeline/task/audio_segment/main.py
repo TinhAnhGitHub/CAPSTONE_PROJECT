@@ -268,9 +268,7 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifa
 
         segment_rows = ""
         for i, seg in enumerate(segments):
-            audio_preview = (
-                (seg.audio_text[:80] + "...") if len(seg.audio_text) > 80 else seg.audio_text
-            )
+            audio_preview = seg.audio_text
             segment_rows += (
                 f"| {i + 1} | {seg.start_timestamp} | {seg.end_timestamp} | "
                 f"{seg.end_sec - seg.start_sec:.1f}s | {audio_preview} |\n"
