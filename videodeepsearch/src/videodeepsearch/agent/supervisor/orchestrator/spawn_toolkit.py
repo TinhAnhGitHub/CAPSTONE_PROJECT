@@ -4,8 +4,10 @@ from dataclasses import dataclass
 
 from agno.agent import Agent
 from agno.models.base import Model
+from agno.hooks import hook
 from agno.run.agent import RunOutput, RunOutputEvent
 from agno.tools import tool, Toolkit
+from agno.run import RunContext
 
 from videodeepsearch.agent.member.worker.agent import get_worker_agent
 from videodeepsearch.agent.member.worker.tool_selector import ToolSelector
@@ -49,6 +51,9 @@ class SpawnWorkerToolkit(Toolkit):
                 self.get_available_models,
                 self.spawn_and_run_worker,
             ],
+            async_tools=[
+                (self.aspawn_and_run_worker, "spawn_and_run_worker"), #type:ignore
+            ],
         )
 
     @tool(
@@ -69,7 +74,6 @@ class SpawnWorkerToolkit(Toolkit):
         for alias, tools_dict in sorted(all_tools.items()):
             lines.append(f"### {alias}")
             for name, instructions in tools_dict.items():
-                
                 lines.append(f"  - `{alias}.{name}`: \n{instructions}\n")
             lines.append("")
         lines.append(_TOOL_NAME_FORMAT_HINT)
@@ -104,6 +108,20 @@ class SpawnWorkerToolkit(Toolkit):
         lines.append("\n---\n**Tip:** Match model strengths to task requirements for optimal results.")
         return "\n".join(lines)
 
+    def spawn_and_run_worker(
+        self,
+        run_context: RunContext,
+        agent_name: Annotated[str, "Unique snake_case name for this worker"],
+        description: Annotated[str, "One-sentence description of what this worker does"],
+        task: Annotated[str, "The specific, scoped task this worker must complete"],
+        detail_plan: Annotated[str, "The full step-by-step execution plan"],
+        user_demand: Annotated[str, "The original user message"],
+        model_name: Annotated[str, "Name of the model to use"],
+        tool_names: Annotated[list[str], "Subset of tool names"] = [],
+    ) -> str:
+        """Spawn a Worker Agent (sync fallback - use async version)."""
+        raise NotImplementedError("Use aspawn_and_run_worker instead")
+
     @tool(
         description=(
             "Spawn a Worker Agent, run it on a specific task, and return its result. "
@@ -117,7 +135,7 @@ class SpawnWorkerToolkit(Toolkit):
         ),
         cache_results=False,
     )
-    async def spawn_and_run_worker(
+    async def aspawn_and_run_worker(
         self,
         agent_name: Annotated[
             str,
@@ -157,22 +175,16 @@ class SpawnWorkerToolkit(Toolkit):
             ),
         ] = [],
     ) -> AsyncIterator[Union[RunOutputEvent, str]]:
-        """Spawn a Worker Agent, run it on a specific task, and return its result.
-
-        Events from the worker agent are yielded directly and propagate up
-        to the parent team's stream. The final result is yielded as a string.
-        """
+        
+        func = self.functions.get('spawn_and_run_worker')
+        run_context = func._run_context if func else None
+        
         worker_model = self.worker_models.get(model_name)
         if worker_model is None:
             available = list(self.worker_models.keys())
             yield f"Error: Model '{model_name}' not found. Available: {available}"
             return
-
-        logger.info(
-            f"[SpawnWorkerToolkit] Spawning {agent_name!r} | "
-            f"model={model_name} | tools={tool_names if tool_names else 'ALL'} | task={task[:60]!r}..."
-        )
-
+        
         resolved_tools = self._resolve_tools(tool_names)
 
         worker: Agent = get_worker_agent(
@@ -186,8 +198,6 @@ class SpawnWorkerToolkit(Toolkit):
             functions=resolved_tools,
         )
 
-        # Get parent run_id from the Function's _run_context
-        # This links worker events to the parent team's run
         parent_run_id = None
         func = self.async_functions.get("spawn_and_run_worker")
         if func and func._run_context:
@@ -203,7 +213,6 @@ class SpawnWorkerToolkit(Toolkit):
                 worker_run_output = chunk
                 continue
 
-            
             if parent_run_id and hasattr(chunk, "parent_run_id"):
                 chunk.parent_run_id = chunk.parent_run_id or parent_run_id
 
@@ -211,13 +220,32 @@ class SpawnWorkerToolkit(Toolkit):
 
             if hasattr(chunk, "content") and chunk.content:
                 final_result += str(chunk.content)
-
-        if worker_run_output and worker_run_output.content:
-            result = str(worker_run_output.content)
-        elif final_result:
-            result = final_result
-        else:
-            result = "Worker completed but returned no content."
+        
+        # Store worker metrics in session_state for post-hook aggregation
+        if worker_run_output and worker_run_output.metrics:
+            worker_metrics = worker_run_output.metrics
+            if run_context.session_state:
+                if "worker_metrics" not in run_context.session_state:
+                    run_context.session_state["worker_metrics"] = []
+                
+                # Get model id and provider from RunOutput
+                model_id = worker_run_output.model or ""
+                model_provider = worker_run_output.model_provider or ""
+                
+                run_context.session_state['worker_metrics'].append(
+                    {
+                        "agent_name": agent_name,
+                        "model_name": model_name,
+                        "model_id": model_id,
+                        "model_provider": model_provider,
+                        "input_tokens": worker_metrics.input_tokens or 0,
+                        "output_tokens": worker_metrics.output_tokens or 0,
+                        "total_tokens": worker_metrics.total_tokens or 0,
+                        "cost": worker_metrics.cost or 0.0,
+                    }
+                )
+                
+        result = str(worker_run_output.content) if worker_run_output and worker_run_output.content else final_result or "Worker completed but returned no content."
 
         yield result
 
