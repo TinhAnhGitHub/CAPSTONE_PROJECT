@@ -6,6 +6,7 @@ from loguru import logger
 
 from videodeepsearch.clients.storage.postgre import PostgresClient
 from videodeepsearch.clients.storage.minio import MinioStorageClient
+from videodeepsearch.tracing import traced_tool
 
 
 class VideoInfo:
@@ -164,6 +165,7 @@ class VideoMetadataToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def list_user_videos(
         self,
         user_id: str,
@@ -227,6 +229,7 @@ class VideoMetadataToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_video_metadata(
         self,
         video_id: str,
@@ -297,6 +300,7 @@ class VideoMetadataToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_video_timeline(
         self,
         video_id: str,

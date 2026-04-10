@@ -15,6 +15,7 @@ from videodeepsearch.agent.supervisor.orchestrator.prompt import (
     ORCHESTRATOR_INSTRUCTIONS,
 )
 from videodeepsearch.agent.supervisor.orchestrator.spawn_toolkit import SpawnWorkerToolkit, WorkerModel
+from videodeepsearch.agent.supervisor.orchestrator.metrics import aggregate_worker_metrics
 from videodeepsearch.agent.member.worker.tool_selector import ToolSelector
 from videodeepsearch.agent.member.worker.prompt import WORKER_SYSTEM_PROMPT
 from videodeepsearch.agent.member.planning.agent import get_planning_agent
@@ -84,6 +85,7 @@ def build_orchestrator_team(
         db=db,
         user_id=user_id,
         session_id=session_id,
+        post_hooks=[aggregate_worker_metrics],  # Aggregate worker metrics into session
 
         # learning=LearningMachine(
         #     db=db,
