@@ -192,10 +192,9 @@ class KGSearchToolkit(Toolkit):
         query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         min_score: float = 0.5,
     ) -> ToolResult:
-        effective_user_id, effective_video_ids = self._get_effective_context(user_id, video_ids)
+        effective_user_id, effective_video_ids = self._get_effective_context(None, video_ids)
 
         logger.info(f"{effective_user_id=}, {effective_video_ids=}")
         kwargs = {
@@ -291,11 +290,9 @@ class KGSearchToolkit(Toolkit):
         self,
         query: str,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-        min_score: float = 0.5,
+        video_ids: list[str] | None = None, min_score: float = 0.5,
     ) -> ToolResult:
-        effective_user_id, effective_video_ids = self._get_effective_context(user_id, video_ids)
+        effective_user_id, effective_video_ids = self._get_effective_context(None, video_ids)
 
         kwargs = {
             "query": query,
@@ -387,14 +384,13 @@ class KGSearchToolkit(Toolkit):
         query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         min_score: float = 0.5,
     ) -> ToolResult:
         kwargs = {
             "query": query,
             "top_k": top_k,
             "video_ids": video_ids,
-            "user_id": user_id,
+            "user_id": self._user_id,
             "min_score": min_score,
         }
 
@@ -404,7 +400,7 @@ class KGSearchToolkit(Toolkit):
                 return ToolResult(content="Error: MMBert client required for semantic search")
 
             vf = self._video_filter("m", video_ids)
-            uf = self._user_filter("m", user_id)
+            uf = self._user_filter("m", self._user_id)
 
             aql = f"""
             FOR m IN micro_events
@@ -435,7 +431,7 @@ class KGSearchToolkit(Toolkit):
                     "top_k": top_k,
                     "min_score": min_score,
                     **self._video_bind(video_ids),
-                    **self._user_bind(user_id),
+                    **self._user_bind(self._user_id),
                 },
             )
             return self._store_result("search_micro_events", kwargs, results)
@@ -481,15 +477,13 @@ class KGSearchToolkit(Toolkit):
         self,
         query: str,
         top_k: int = 5,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-        min_score: float = 0.4,
+        video_ids: list[str] | None = None, min_score: float = 0.4,
     ) -> ToolResult:
         kwargs = {
             "query": query,
             "top_k": top_k,
             "video_ids": video_ids,
-            "user_id": user_id,
+            "user_id": self._user_id,
             "min_score": min_score,
         }
 
@@ -499,7 +493,7 @@ class KGSearchToolkit(Toolkit):
                 return ToolResult(content="Error: MMBert client required for semantic search")
 
             vf = self._video_filter("c", video_ids)
-            uf = self._user_filter("c", user_id)
+            uf = self._user_filter("c", self._user_id)
 
             aql = f"""
             FOR c IN communities
@@ -527,7 +521,7 @@ class KGSearchToolkit(Toolkit):
                     "top_k": top_k,
                     "min_score": min_score,
                     **self._video_bind(video_ids),
-                    **self._user_bind(user_id),
+                    **self._user_bind(self._user_id),
                 },
             )
             return self._store_result("search_communities", kwargs, results)
@@ -575,19 +569,17 @@ class KGSearchToolkit(Toolkit):
         self,
         entity_key: str,
         max_depth: int = 2,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-    ) -> ToolResult:
+        video_ids: list[str] | None = None, ) -> ToolResult:
         kwargs = {
             "entity_key": entity_key,
             "max_depth": max_depth,
             "video_ids": video_ids,
-            "user_id": user_id,
+            "user_id": self._user_id,
         }
 
         try:
             vf = self._video_filter("v", video_ids)
-            uf = self._user_filter("v", user_id)
+            uf = self._user_filter("v", self._user_id)
 
             aql = f"""
             WITH entities, events, micro_events, communities
@@ -615,7 +607,7 @@ class KGSearchToolkit(Toolkit):
                     "depth": max_depth,
                     "graph_name": self.graph_name,
                     **self._video_bind(video_ids),
-                    **self._user_bind(user_id),
+                    **self._user_bind(self._user_id),
                 },
             )
             return self._store_result("traverse_from_entity", kwargs, results)
@@ -663,14 +655,13 @@ class KGSearchToolkit(Toolkit):
         self,
         query: str,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         min_score: float = 0.4,
         top_k: int = 5,
     ) -> ToolResult:
         kwargs = {
             "query": query,
             "video_ids": video_ids,
-            "user_id": user_id,
+            "user_id": self._user_id,
             "top_k": top_k,
         }
 
@@ -691,7 +682,7 @@ class KGSearchToolkit(Toolkit):
 
             for coll, emb_field in collections:
                 vf = self._video_filter("doc", video_ids)
-                uf = self._user_filter("doc", user_id)
+                uf = self._user_filter("doc", self._user_id)
                 aql = f"""
                 FOR doc IN {coll}
                 {uf}
@@ -772,16 +763,14 @@ class KGSearchToolkit(Toolkit):
         query: str,
         collections: list[str] | None = None,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-        min_score: float = 0.1,
+        video_ids: list[str] | None = None, min_score: float = 0.1,
     ) -> ToolResult:
         kwargs = {
             "query": query,
             "collections": collections,
             "top_k": top_k,
             "video_ids": video_ids,
-            "user_id": user_id,
+            "user_id": self._user_id,
             "min_score": min_score,
         }
 
@@ -794,7 +783,7 @@ class KGSearchToolkit(Toolkit):
 
         try:
             vf = self._video_filter("doc", video_ids)
-            uf = self._user_filter("doc", user_id)
+            uf = self._user_filter("doc", self._user_id)
             video_bind = self._video_bind(video_ids)
             user_bind = self._user_bind(user_id)
 
@@ -910,7 +899,6 @@ class KGSearchToolkit(Toolkit):
         self,
         query: str,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         top_k: int = 10,
         seed_entities: list[str] | None = None,
         search_all_collections: bool = False,
@@ -920,7 +908,7 @@ class KGSearchToolkit(Toolkit):
             raise ValueError("MMBert client required for semantic search")
 
         vf = self._video_filter("doc", video_ids)
-        uf = self._user_filter("doc", user_id)
+        uf = self._user_filter("doc", self._user_id)
         video_bind = self._video_bind(video_ids)
         user_bind = self._user_bind(user_id)
         seed_bind = {"seeds": seed_entities} if seed_entities else {"seeds": []}
@@ -1212,16 +1200,14 @@ class KGSearchToolkit(Toolkit):
     async def triple_hybrid_search(
         self,
         query: str,
-        video_ids: list[str] | None = None,
-        user_id: str | None = None,
-        top_k: int = 10,
+        video_ids: list[str] | None = None, top_k: int = 10,
         seed_entities: list[str] | None = None,
         search_all_collections: bool = False,
     ) -> ToolResult:
         kwargs = {
             "query": query,
             "video_ids": video_ids,
-            "user_id": user_id,
+            "user_id": self._user_id,
             "top_k": top_k,
             "seed_entities": seed_entities,
             "search_all_collections": search_all_collections,
@@ -1292,7 +1278,6 @@ class KGSearchToolkit(Toolkit):
         self,
         query: str,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         top_k_entities: int = 10,
         top_k_events: int = 5,
         top_k_micro: int = 5,
@@ -1304,7 +1289,7 @@ class KGSearchToolkit(Toolkit):
         kwargs = {
             "query": query,
             "video_ids": video_ids,
-            "user_id": user_id,
+            "user_id": self._user_id,
             "top_k_entities": top_k_entities,
             "top_k_events": top_k_events,
             "top_k_micro": top_k_micro,
@@ -1328,7 +1313,7 @@ class KGSearchToolkit(Toolkit):
                 )
             else:
                 vf = self._video_filter("e", video_ids)
-                uf = self._user_filter("e", user_id)
+                uf = self._user_filter("e", self._user_id)
                 aql = f"""
                 FOR e IN entities
                     {uf}
@@ -1351,7 +1336,7 @@ class KGSearchToolkit(Toolkit):
 
 
             vf = self._video_filter("ev", video_ids)
-            uf = self._user_filter("ev", user_id)
+            uf = self._user_filter("ev", self._user_id)
             events_aql = f"""
             FOR ev IN events
                 {uf}
@@ -1374,7 +1359,7 @@ class KGSearchToolkit(Toolkit):
 
 
             vf = self._video_filter("m", video_ids)
-            uf = self._user_filter("m", user_id)
+            uf = self._user_filter("m", self._user_id)
             micro_aql = f"""
             FOR m IN micro_events
                 {uf}
@@ -1397,7 +1382,7 @@ class KGSearchToolkit(Toolkit):
 
 
             vf = self._video_filter("c", video_ids)
-            uf = self._user_filter("c", user_id)
+            uf = self._user_filter("c", self._user_id)
             communities_aql = f"""
             FOR c IN communities
                 {uf}
@@ -1424,7 +1409,7 @@ class KGSearchToolkit(Toolkit):
                     entity_key = ent.get("_key")
                     if entity_key:
                         vf = self._video_filter("v", video_ids)
-                        uf = self._user_filter("v", user_id)
+                        uf = self._user_filter("v", self._user_id)
                         traversal_aql = f"""
                         WITH entities, events, micro_events, communities
                         FOR v, e, p IN 1..@depth ANY @start

@@ -9,6 +9,8 @@ from agno.tools.function import ToolResult
 from agno.models.openrouter import OpenRouter
 from pydantic import BaseModel, Field
 
+from videodeepsearch.tracing import traced_tool
+
 
 class EnhancedQueryResponse(BaseModel):
     queries: list[str] = Field(
@@ -151,6 +153,7 @@ class LLMToolkit(Toolkit):
             "NOT for event/action queries - use enhance_textual_query instead."
         ),
     )
+    @traced_tool()
     async def enhance_visual_query(
         self,
         raw_query: str,
@@ -224,6 +227,7 @@ class LLMToolkit(Toolkit):
             "NOT for pure visual appearance queries - use enhance_visual_query instead."
         ),
     )
+    @traced_tool()
     async def enhance_textual_query(
         self,
         raw_query: str,

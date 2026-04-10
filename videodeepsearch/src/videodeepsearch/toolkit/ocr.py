@@ -13,6 +13,7 @@ from videodeepsearch.clients.storage.elasticsearch import (
 )
 from videodeepsearch.clients.inference import MMBertClient
 from videodeepsearch.toolkit.common import CacheManager
+from videodeepsearch.tracing import traced_tool
 
 
 class OCRSearchToolkit(Toolkit):
@@ -110,7 +111,6 @@ class OCRSearchToolkit(Toolkit):
             "  query (str): Text to search for - keywords or phrases (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
             "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
-            "  user_id (str | None): Optional user ID to filter\n"
             "  fuzzy (bool): Enable fuzzy matching for OCR error tolerance (default True)"
         ),
         instructions=(
@@ -121,22 +121,21 @@ class OCRSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def search_ocr_text(
         self,
         query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         fuzzy: bool = True,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
         effective_video_ids = video_ids or self._video_ids
 
         kwargs = {
             "query": query,
             "top_k": top_k,
             "video_ids": effective_video_ids,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
             "fuzzy": fuzzy,
         }
 
@@ -145,7 +144,7 @@ class OCRSearchToolkit(Toolkit):
                 query=query,
                 top_k=top_k,
                 video_ids=effective_video_ids,
-                user_id=effective_user_id,
+                user_id=self._user_id,
                 fuzzy=fuzzy,
                 highlight=True,
             )
@@ -172,7 +171,6 @@ class OCRSearchToolkit(Toolkit):
             "  - video.get_video_timeline: Get video structure before OCR review\n\n"
             "Args:\n"
             "  video_id (str): Video ID to retrieve OCR for (REQUIRED)\n"
-            "  user_id (str | None): Optional user ID to filter by\n"
             "  limit (int): Maximum number of results (default 1000)"
         ),
         instructions=(
@@ -184,24 +182,22 @@ class OCRSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_ocr_by_video(
         self,
         video_id: str,
-        user_id: str | None = None,
         limit: int = 1000,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
-
         kwargs = {
             "video_id": video_id,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
             "limit": limit,
         }
 
         try:
             results = await self.es_client.get_ocr_by_video_id(
                 video_id=video_id,
-                user_id=effective_user_id,
+                user_id=self._user_id,
                 limit=limit,
             )
             return self._store_result("get_ocr_by_video", kwargs, results)
