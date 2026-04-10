@@ -61,7 +61,7 @@ tasks:
 
     additional_kwargs:
       model: "google/gemini-2.5-flash-lite"
-      batch_size: 10
+      batch_size: 2
       min_duration_sec: 30
 
   audio_transcript_embedding:

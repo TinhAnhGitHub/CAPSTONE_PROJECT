@@ -9,11 +9,21 @@ from pydantic import BaseModel, Field
 
 class AgentModelConfig(BaseModel):
     model_id: str
+    temperature: float | None = None
+    top_p: float | None = None
+    max_output_tokens: int | None = None
+    max_tool_calls: int | None = None
+    extra_body: dict | None = None
 
 
 class WorkerModelConfig(BaseModel):
     name: str
     model_id: str
+    temperature: float | None = None
+    top_p: float | None = None
+    max_output_tokens: int | None = None
+    max_tool_calls: int | None = None
+    extra_body: dict | None = None
     description: str = ""
     strengths: list[str] = []
 

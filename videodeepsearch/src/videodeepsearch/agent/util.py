@@ -57,6 +57,8 @@ def convert_tool_call_completed_event(event: ToolCallCompletedEvent) -> Optional
     
 
     content = tool.result    
+    
+    print(f"{content=}")
 
     tool_output = ToolOutput(
         tool_name=tool.tool_name or "",
@@ -76,7 +78,6 @@ def convert_tool_call_completed_event(event: ToolCallCompletedEvent) -> Optional
 
 def convert_run_completed_event(event: RunCompletedEvent, agent_name: str = "agent") -> AgentOutput:
     
-    print(f"Event in completed: {event=}")
     content = ""
     if event.content is not None:
         content = str(event.content)

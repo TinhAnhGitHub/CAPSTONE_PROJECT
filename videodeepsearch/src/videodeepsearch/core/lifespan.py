@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from loguru import logger
 from sqlalchemy import text
 from agno.db.postgres import AsyncPostgresDb
-from agno.models.openrouter import OpenRouter
+from agno.models.openrouter import OpenRouterResponses
 
 from videodeepsearch.agent.supervisor.orchestrator.spawn_toolkit import WorkerModel
 from videodeepsearch.clients.inference import (
@@ -29,42 +29,19 @@ from videodeepsearch.core.settings import settings
 from dotenv import load_dotenv
 load_dotenv()
 
-def _init_mlflow():
-    if not settings.mlflow.enabled:
-        logger.info("MLflow tracing disabled")
-        return
 
-    import mlflow
-
-    mlflow.set_tracking_uri(settings.mlflow.tracking_uri)
-    mlflow.set_experiment(settings.mlflow.experiment_name)
-    mlflow.agno.autolog() #type:ignore
-    logger.info(f"MLflow tracing enabled: {settings.mlflow.tracking_uri}, experiment: {settings.mlflow.experiment_name}")
-
-
-def _build_model_kwargs(cfg, parallel_tool_calls: bool = False) -> dict:
-    kwargs = {
+def _build_model_kwargs(cfg) -> dict:
+    return {
         "id": cfg.model_id,
-        "api_key": settings.llm_provider.api_key,
-        "base_url": settings.llm_provider.base_url,
+        "api_key": settings.llm_provider.resolved_api_key,
     }
-    if cfg.temperature is not None:
-        kwargs["temperature"] = cfg.temperature
-    if cfg.top_p is not None:
-        kwargs["top_p"] = cfg.top_p
-    if cfg.max_completion_tokens is not None:
-        kwargs["max_completion_tokens"] = cfg.max_completion_tokens
-    if parallel_tool_calls:
-        kwargs["parallel_tool_calls"] = True
-    return kwargs
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize all clients and models into app.state."""
     logger.info("Initializing VideoDeepSearch...")
-
-    _init_mlflow()
 
     app.state.postgres_client = PostgresClient(
         database_url=settings.storage.postgres.connection_url
@@ -168,36 +145,36 @@ async def lifespan(app: FastAPI):
     llm_cfg = settings.llm_provider
 
     app.state.models = {}
-    
+
     greeter_cfg = llm_cfg.agents.greeter
-    app.state.models["greeter"] = OpenRouter(**_build_model_kwargs(greeter_cfg))
-    
+    app.state.models["greeter"] = OpenRouterResponses(**_build_model_kwargs(greeter_cfg))
+
     orchestrator_cfg = llm_cfg.agents.orchestrator
-    app.state.models["orchestrator"] = OpenRouter(**_build_model_kwargs(orchestrator_cfg))
-    
+    app.state.models["orchestrator"] = OpenRouterResponses(**_build_model_kwargs(orchestrator_cfg))
+
     planning_cfg = llm_cfg.agents.planning
-    app.state.models["planning"] = OpenRouter(**_build_model_kwargs(planning_cfg))
-    
+    app.state.models["planning"] = OpenRouterResponses(**_build_model_kwargs(planning_cfg))
+
     llm_tool_cfg = llm_cfg.agents.llm_tool
     if llm_tool_cfg:
-        app.state.models["llm_tool"] = OpenRouter(**_build_model_kwargs(llm_tool_cfg))
+        app.state.models["llm_tool"] = OpenRouterResponses(**_build_model_kwargs(llm_tool_cfg))
     else:
         app.state.models["llm_tool"] = app.state.models["planning"]
         logger.info("llm_tool model not configured, using planning model as fallback")
-        
+
     summarizer_cfg = llm_cfg.agents.summarizer
     if summarizer_cfg:
-        app.state.models["summarizer"] = OpenRouter(**_build_model_kwargs(summarizer_cfg))
+        app.state.models["summarizer"] = OpenRouterResponses(**_build_model_kwargs(summarizer_cfg))
     else:
         app.state.models["summarizer"] = app.state.models["planning"]
         logger.info("summarizer model not configured, using planning model as fallback")
-    
+
     logger.info(f"Agent models initialized: {list(app.state.models.keys())}")
 
     app.state.worker_models = {}
     for worker_cfg in llm_cfg.workers:
         app.state.worker_models[worker_cfg.name] = WorkerModel(
-            model=OpenRouter(**_build_model_kwargs(worker_cfg)),
+            model=OpenRouterResponses(**_build_model_kwargs(worker_cfg)),
             description=worker_cfg.description,
             strengths=worker_cfg.strengths,
         )

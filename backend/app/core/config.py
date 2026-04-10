@@ -28,8 +28,6 @@ class AppSettings(BaseSettings):
         "chat_messages", description="default chat message collection name"
     )
 
-    # LLM settings
-
     # GOOGLE AUTH CLIENT settings
     GOOGLE_OAUTH_CLIENT_ID: str = Field(..., description="Google OAuth Client ID")
     GOOGLE_OAUTH_CLIENT_SECRET: str = Field(..., description="Google OAuth Client Secret")
@@ -43,7 +41,7 @@ class AppSettings(BaseSettings):
 
     # Server settings
     HOST: str = Field("0.0.0.0", description="Server host")
-    PORT: int = Field(8010, description="Server port")
+    PORT: int = Field(8011, description="Server port")
 
     class Config:
         env_file = ".env"   

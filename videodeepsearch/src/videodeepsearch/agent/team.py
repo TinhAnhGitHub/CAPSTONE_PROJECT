@@ -5,8 +5,6 @@ from collections.abc import AsyncGenerator
 from agno.db.base import AsyncBaseDb, BaseDb
 from agno.models.base import Model
 from agno.run.team import (
-    TeamRunEvent,
-    TeamRunOutput,
     TeamRunOutputEvent,
 )
 from agno.team import Team
@@ -45,8 +43,6 @@ def _build_tool_selector(
     search_factory,
     utility_factory,
     video_metadata_factory,
-    ocr_factory,
-    llm_factory,
     kg_factory,
 ) -> ToolSelector:
     """Register all worker toolkits into a ToolSelector."""
@@ -54,9 +50,9 @@ def _build_tool_selector(
     selector.register("search", search_factory)
     selector.register("utility", utility_factory)
     selector.register("video", video_metadata_factory)
-    selector.register("ocr", ocr_factory)
-    selector.register("llm", llm_factory)
     selector.register("kg", kg_factory)
+    # selector.register("ocr", ocr_factory)
+    # selector.register("llm", llm_factory)
     return selector
 
 
@@ -64,17 +60,17 @@ def _build_tool_registry(
     search_factory,
     utility_factory,
     video_metadata_factory,
-    ocr_factory,
-    llm_factory,
     kg_factory,
+    # ocr_factory,
+    # llm_factory,
 ) -> ToolRegistry:
     registry = get_tool_registry()
     registry.register_toolkit(search_factory(), alias="VideoSearchToolkit")
     registry.register_toolkit(utility_factory(), alias="UtilityToolkit")
     registry.register_toolkit(video_metadata_factory(), alias="VideoMetadataToolkit")
-    registry.register_toolkit(ocr_factory(), alias="OCRSearchToolkit")
-    registry.register_toolkit(llm_factory(), alias="LLMToolkit")
     registry.register_toolkit(kg_factory(), alias="KGSearchToolkit")
+    # registry.register_toolkit(ocr_factory(), alias="OCRSearchToolkit")
+    # registry.register_toolkit(llm_factory(), alias="LLMToolkit")
     return registry
 
 
@@ -122,17 +118,17 @@ def build_video_search_team(
         ),
         utility_factory=make_utility_factory(postgres_client, minio_client),
         video_metadata_factory=make_video_metadata_factory(postgres_client, minio_client),
-        ocr_factory=make_ocr_factory(
-            es_ocr_client, mmbert_client,
-            user_id=user_id,
-            video_ids=list_video_ids,
-        ),
-        llm_factory=make_llm_factory(weak_model),
         kg_factory=make_kg_factory(
             arango_db, mmbert_client,
             user_id=user_id,
             video_ids=list_video_ids,
         ),
+        # ocr_factory=make_ocr_factory(
+        #     es_ocr_client, mmbert_client,
+        #     user_id=user_id,
+        #     video_ids=list_video_ids,
+        # ),
+        # llm_factory=make_llm_factory(weak_model),
     )
 
     tool_selector = _build_tool_selector(**factories)
@@ -179,6 +175,7 @@ async def ignite_workflow(
     arango_db: StandardDatabase,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Main async entry point for the API layer."""
+
     initial_session_state: dict[str, Any] = {
         "list_video_ids": list_video_ids,
         "user_demand": user_demand,
@@ -214,7 +211,7 @@ async def ignite_workflow(
             chunk_yield = None
 
             event_type = chunk.event
-            print(event_type)
+
             match event_type:
                 case 'TeamRunContent' | 'RunContent':
                     chunk_yield = convert_run_content_event_to_agent_stream(chunk) #type:ignore
@@ -237,7 +234,6 @@ async def ignite_workflow(
             exc_info=True,
         )
         raise
-
 
 def _serialize_event(event: Any) -> dict[str, Any]:
     from pydantic import BaseModel as PydanticModel

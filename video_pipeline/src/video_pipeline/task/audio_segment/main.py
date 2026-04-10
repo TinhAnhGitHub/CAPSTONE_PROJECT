@@ -213,6 +213,8 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifa
             logger.warning(f"[AudioSegmentTask] LLM call failed: {e}, using rule-based fallback")
             return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
 
+        llm_reason = llm_result.reason
+        logger.info(f"Reason: {llm_reason=}")
         if not llm_result.new_au_seg:
             logger.info("[AudioSegmentTask] LLM returned empty segments, using rule-based fallback")
             return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
@@ -266,9 +268,7 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifa
 
         segment_rows = ""
         for i, seg in enumerate(segments):
-            audio_preview = (
-                (seg.audio_text[:80] + "...") if len(seg.audio_text) > 80 else seg.audio_text
-            )
+            audio_preview = seg.audio_text
             segment_rows += (
                 f"| {i + 1} | {seg.start_timestamp} | {seg.end_timestamp} | "
                 f"{seg.end_sec - seg.start_sec:.1f}s | {audio_preview} |\n"

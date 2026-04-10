@@ -23,6 +23,8 @@ from videodeepsearch.toolkit.common import (
     convert_time_to_frame,
     timecode_to_frame,
 )
+from videodeepsearch.tracing import traced_tool
+
 
 
 def format_interface_list(items: list[Any], item_type: str) -> dict[str, Any]:
@@ -116,6 +118,7 @@ class UtilityToolkit(Toolkit):
             "Best paired with: search.get_segments_from_event_query_mmbert, search.get_segments_from_qwenvl_query (find segments first). "
         ),
     )
+    @traced_tool()
     async def get_related_asr_from_segment(
         self,
         video_id: str,
@@ -134,7 +137,6 @@ class UtilityToolkit(Toolkit):
             artifact_id=video_id,
             filter_artifact_type=["ASRArtifact"],
         )
-        print(f"asr_artifacts: {asr_artifacts[:2]}")
 
         if not asr_artifacts:
             return {"error": f"No ASR data found for video {video_id}"}
@@ -209,6 +211,7 @@ class UtilityToolkit(Toolkit):
             "Best paired with: search.get_images_from_caption_query_mmbert, search.get_images_from_qwenvl_query (find images first). "
         ),
     )
+    @traced_tool()
     async def get_related_asr_from_image(
         self,
         video_id: str,
@@ -300,6 +303,7 @@ class UtilityToolkit(Toolkit):
             "Follow up with: get_related_asr_from_segment for context on each adjacent segment."
         ),
     )
+    @traced_tool()
     async def get_adjacent_segments(
         self,
         video_id: str,
@@ -387,6 +391,7 @@ class UtilityToolkit(Toolkit):
             "Follow up with: get_related_asr_from_image for ASR context on each adjacent frame."
         ),
     )
+    @traced_tool()
     async def get_adjacent_images(
         self,
         video_id: str,

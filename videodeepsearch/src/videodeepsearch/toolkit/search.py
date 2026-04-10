@@ -16,7 +16,10 @@ from videodeepsearch.schemas import ImageInterface, SegmentInterface, AudioInter
 from videodeepsearch.toolkit.common import (
     CacheManager,
     SearchResultContainer,
+    parse_json_list,
 )
+from videodeepsearch.tracing import traced_tool
+
 
 
 class VideoSearchToolkit(Toolkit):
@@ -92,6 +95,7 @@ class VideoSearchToolkit(Toolkit):
 
         return result_dict
 
+    
     @tool(
         description=(
             "Search images by caption using MMBert text embeddings. "
@@ -110,8 +114,8 @@ class VideoSearchToolkit(Toolkit):
             "Args:\n"
             "  caption_query (str): English text describing image content (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
-            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
-            "  user_id (str | None): Optional user ID to filter\n"
+            "  video_ids (list[str] | str | None): Optional list of video IDs to filter. "
+            "Can be a Python list or a JSON string like '[\"id1\", \"id2\"]' (handles both formats)\n"
             "  use_hybrid (bool): Enable hybrid search with sparse encoder (default False)\n"
             "  dense_weight (float): Weight for dense search in hybrid mode (default 0.7)\n"
             "  sparse_weight (float): Weight for sparse search in hybrid mode (default 0.3)"
@@ -126,24 +130,23 @@ class VideoSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_images_from_caption_query_mmbert(
         self,
         caption_query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         use_hybrid: bool = False,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
-        effective_video_ids = video_ids or self._video_ids
+        effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
         kwargs = {
             "caption_query": caption_query,
             "top_k": top_k,
             "video_ids": effective_video_ids,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
             "use_hybrid": use_hybrid,
             "dense_weight": dense_weight,
             "sparse_weight": sparse_weight,
@@ -161,7 +164,7 @@ class VideoSearchToolkit(Toolkit):
                 dense_vector=dense_vector,
                 sparse_vector=sparse_vector,
                 video_ids=effective_video_ids,
-                user_id=effective_user_id,
+                user_id=self._user_id,
                 limit=top_k,
                 dense_weight=dense_weight,
                 sparse_weight=sparse_weight,
@@ -170,7 +173,7 @@ class VideoSearchToolkit(Toolkit):
             results = await self.image_client.search_image_dense_mmbert(
                 query_vector=dense_vector,
                 video_ids=effective_video_ids,
-                user_id=effective_user_id,
+                user_id=self._user_id,
                 limit=top_k,
             )
 
@@ -194,8 +197,8 @@ class VideoSearchToolkit(Toolkit):
             "  query (str): Text query describing the image (REQUIRED). Can be visual description, "
             "semantic content, objects/scenes, or any combination\n"
             "  top_k (int): Number of results to return (default 10)\n"
-            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
-            "  user_id (str | None): Optional user ID to filter"
+            "  video_ids (list[str] | str | None): Optional list of video IDs to filter. "
+            "Can be a Python list or a JSON string like '[\"id1\", \"id2\"]' (handles both formats)"
         ),
         instructions=(
             "Use for any image search query - visual appearance, semantic content, or mixed. "
@@ -207,21 +210,20 @@ class VideoSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_images_from_qwenvl_query(
         self,
         query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
-        effective_video_ids = video_ids or self._video_ids
+        effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
         kwargs = {
             "query": query,
             "top_k": top_k,
             "video_ids": effective_video_ids,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
         }
 
         embeddings = await self.qwenvl.ainfer_text([query])
@@ -230,7 +232,7 @@ class VideoSearchToolkit(Toolkit):
         results = await self.image_client.search_image_dense_qwenvl(
             query_vector=query_vector,
             video_ids=effective_video_ids,
-            user_id=effective_user_id,
+            user_id=self._user_id,
             limit=top_k,
         )
 
@@ -255,8 +257,8 @@ class VideoSearchToolkit(Toolkit):
             "Args:\n"
             "  event_query (str): English text describing event/scene (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
-            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
-            "  user_id (str | None): Optional user ID to filter\n"
+            "  video_ids (list[str] | str | None): Optional list of video IDs to filter. "
+            "Can be a Python list or a JSON string like '[\"id1\", \"id2\"]' (handles both formats)\n"
             "  use_hybrid (bool): Enable hybrid search with sparse encoder (default False)\n"
             "  dense_weight (float): Weight for dense search in hybrid mode (default 0.7)\n"
             "  sparse_weight (float): Weight for sparse search in hybrid mode (default 0.3)"
@@ -270,24 +272,23 @@ class VideoSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_segments_from_event_query_mmbert(
         self,
         event_query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         use_hybrid: bool = False,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
-        effective_video_ids = video_ids or self._video_ids
+        effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
         kwargs = {
             "event_query": event_query,
             "top_k": top_k,
             "video_ids": effective_video_ids,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
             "use_hybrid": use_hybrid,
             "dense_weight": dense_weight,
             "sparse_weight": sparse_weight,
@@ -305,7 +306,7 @@ class VideoSearchToolkit(Toolkit):
                 dense_vector=query_vector,
                 sparse_vector=sparse_vector,
                 video_ids=effective_video_ids,
-                user_id=effective_user_id,
+                user_id=self._user_id,
                 limit=top_k,
                 dense_weight=dense_weight,
                 sparse_weight=sparse_weight,
@@ -314,7 +315,7 @@ class VideoSearchToolkit(Toolkit):
             results = await self.segment_client.search_segment_dense_mmbert(
                 query_vector=query_vector,
                 video_ids=effective_video_ids,
-                user_id=effective_user_id,
+                user_id=self._user_id,
                 limit=top_k,
             )
 
@@ -339,8 +340,8 @@ class VideoSearchToolkit(Toolkit):
             "  query (str): Text query describing the segment (REQUIRED). Can be visual description, "
             "event/action, scene context, or any combination\n"
             "  top_k (int): Number of results to return (default 10)\n"
-            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
-            "  user_id (str | None): Optional user ID to filter"
+            "  video_ids (list[str] | str | None): Optional list of video IDs to filter. "
+            "Can be a Python list or a JSON string like '[\"id1\", \"id2\"]' (handles both formats)"
         ),
         instructions=(
             "Use for any segment search query - visual appearance, event descriptions, or mixed.\n\n"
@@ -351,21 +352,20 @@ class VideoSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_segments_from_qwenvl_query(
         self,
         query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
-        effective_video_ids = video_ids or self._video_ids
+        effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
         kwargs = {
             "query": query,
             "top_k": top_k,
             "video_ids": effective_video_ids,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
         }
 
         embeddings = await self.qwenvl.ainfer_text([query])
@@ -374,7 +374,7 @@ class VideoSearchToolkit(Toolkit):
         results = await self.segment_client.search_segment_dense_qwenvl(
             query_vector=query_vector,
             video_ids=effective_video_ids,
-            user_id=effective_user_id,
+            user_id=self._user_id,
             limit=top_k,
         )
 
@@ -398,8 +398,8 @@ class VideoSearchToolkit(Toolkit):
             "Args:\n"
             "  audio_query (str): English text describing spoken content to find (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
-            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
-            "  user_id (str | None): Optional user ID to filter"
+            "  video_ids (list[str] | str | None): Optional list of video IDs to filter. "
+            "Can be a Python list or a JSON string like '[\"id1\", \"id2\"]' (handles both formats)"
         ),
         instructions=(
             "Use when query is about SPOKEN CONTENT, SPEECH, or AUDIO.\n\n"
@@ -410,21 +410,20 @@ class VideoSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_audio_from_query_dense(
         self,
         audio_query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
-        effective_video_ids = video_ids or self._video_ids
+        effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
         kwargs = {
             "audio_query": audio_query,
             "top_k": top_k,
             "video_ids": effective_video_ids,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
         }
 
         embeddings = await self.mmbert.ainfer([audio_query])
@@ -436,7 +435,7 @@ class VideoSearchToolkit(Toolkit):
         results = await self.audio_client.search_audio_dense(
             query_vector=dense_vector,
             video_ids=effective_video_ids,
-            user_id=effective_user_id,
+            user_id=self._user_id,
             limit=top_k,
         )
 
@@ -459,8 +458,8 @@ class VideoSearchToolkit(Toolkit):
             "Args:\n"
             "  audio_query (str): English text describing spoken content to find (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
-            "  video_ids (list[str] | None): Optional list of video IDs to filter\n"
-            "  user_id (str | None): Optional user ID to filter\n"
+            "  video_ids (list[str] | str | None): Optional list of video IDs to filter. "
+            "Can be a Python list or a JSON string like '[\"id1\", \"id2\"]' (handles both formats)\n"
             "  dense_weight (float): Weight for dense search (default 0.7)\n"
             "  sparse_weight (float): Weight for sparse search (default 0.3)"
         ),
@@ -473,23 +472,22 @@ class VideoSearchToolkit(Toolkit):
         cache_results=True,
         cache_ttl=1800,
     )
+    @traced_tool()
     async def get_audio_from_query_hybrid(
         self,
         audio_query: str,
         top_k: int = 10,
         video_ids: list[str] | None = None,
-        user_id: str | None = None,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
     ) -> dict[str, Any]:
-        effective_user_id = user_id or self._user_id
-        effective_video_ids = video_ids or self._video_ids
+        effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
         kwargs = {
             "audio_query": audio_query,
             "top_k": top_k,
             "video_ids": effective_video_ids,
-            "user_id": effective_user_id,
+            "user_id": self._user_id,
             "dense_weight": dense_weight,
             "sparse_weight": sparse_weight,
         }
@@ -505,7 +503,7 @@ class VideoSearchToolkit(Toolkit):
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
             video_ids=effective_video_ids,
-            user_id=effective_user_id,
+            user_id=self._user_id,
             limit=top_k,
             dense_weight=dense_weight,
             sparse_weight=sparse_weight,

@@ -19,7 +19,7 @@ agent/keyframes/
 # Extra file
 script.sh
 local/*
-
+**logs/
 
 **.spec-workflow/
 
