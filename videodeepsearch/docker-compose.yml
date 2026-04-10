@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: mlflow
       POSTGRES_DB: mlflow
     volumes:
-      - ${DOCKER_LOCAL_VOLUME:-./data}/mlflow-postgres:/var/lib/postgresql
+      - ${DOCKER_LOCAL_VOLUME:-./data}/mlflow-postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
       interval: 5s
@@ -63,7 +63,7 @@ services:
     networks: [default]
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.20.0
+    image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow-server
     depends_on:
       mlflow-postgres:
@@ -80,6 +80,8 @@ services:
       AWS_SECRET_ACCESS_KEY: mlflowadmin
       AWS_DEFAULT_REGION: us-east-1
       MLFLOW_S3_IGNORE_TLS: "true"
+      MLFLOW_HOST: 100.113.186.28
+      MLFLOW_ALLOWED_DNS_REBINDING_HOSTS: 100.113.186.28
     command:
       - /bin/bash
       - -c
@@ -88,7 +90,8 @@ services:
         mlflow server \
           --backend-store-uri "postgresql://mlflow:mlflow@mlflow-postgres:5432/mlflow" \
           --artifacts-destination "s3://mlflow-artifacts/" \
-          --serve-artifacts \
+          --allowed-hosts "100.113.186.28:5000"\
+          --cors-allowed-origins "http://100.113.186.28:5000" \
           --host 0.0.0.0 \
           --port 5000
     ports:
