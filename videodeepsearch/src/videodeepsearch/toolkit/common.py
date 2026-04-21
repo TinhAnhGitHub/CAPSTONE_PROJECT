@@ -1,18 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from datetime import datetime
-from pathlib import Path
-from tempfile import gettempdir
-from typing import Any, Literal
 from urllib.parse import urlparse
 from loguru import logger
-from pydantic import BaseModel
-
-from videodeepsearch.schemas import ImageInterface, SegmentInterface, AudioInterface
-from mlflow.entities import SpanType
 
 RESULT_TYPE_TO_SOCKET = {
     "image": "image_search",
@@ -47,10 +39,15 @@ def extract_s3_minio_url(s3_link: str) -> tuple[str, str]:
     return bucket, key
 
 def time_to_seconds(time_str: str) -> float:
-    t = datetime.strptime(time_str, "%H:%M:%S.%f")
+    """Convert time string to seconds. Handles both 'HH:MM:SS' and 'HH:MM:SS.ffffff' formats."""
+    try:
+        t = datetime.strptime(time_str, "%H:%M:%S.%f")
+    except ValueError:
+        t = datetime.strptime(time_str, "%H:%M:%S")
     return t.hour * 3600 + t.minute * 60 + t.second + t.microsecond / 1e6
 
 def parse_time_safe(time_str: str) -> datetime:
+    """Parse time string, handling both 'HH:MM:SS' and 'HH:MM:SS.ffffff' formats."""
     try:
         return datetime.strptime(time_str, "%H:%M:%S.%f")
     except ValueError:
@@ -82,125 +79,3 @@ def format_duration(seconds: float) -> str:
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-class CacheManager:
-    def __init__(self, cache_dir: str | None = None):
-        self.cache_dir = Path(cache_dir) if cache_dir else Path(gettempdir()) / "agno_cache" / "functions"
-
-    def _generate_cache_key(self, function_name: str, args: dict[str, Any]) -> str:
-        args_str = json.dumps(args, sort_keys=True, default=str)
-        return hashlib.md5(f"{function_name}:{args_str}".encode()).hexdigest()
-
-    def _get_cache_file_path(self, function_name: str, cache_key: str) -> Path:
-        return self.cache_dir / function_name / f"{cache_key}.json"
-
-    def get_cached_result(self, function_name: str, args: dict[str, Any]) -> tuple[Any | None, bool]:
-        try:
-            cache_key = self._generate_cache_key(function_name, args)
-            cache_file = self._get_cache_file_path(function_name, cache_key)
-
-            if not cache_file.exists():
-                return None, False
-
-            with open(cache_file, "r") as f:
-                cache_data = json.load(f)
-
-            return cache_data.get("result"), True
-
-        except Exception as e:
-            logger.warning(f"Failed to read cache for {function_name}: {e}")
-            return None, False
-
-class SearchResultContainer(BaseModel):
-    tool_name: str
-    tool_kwargs: dict[str, Any]
-    results: list[ImageInterface | SegmentInterface | AudioInterface]
-    result_type: Literal["image", "segment", "audio"]
-
-    def get_brief(self, top_n: int = 5) -> dict[str, Any]:
-        """Return brief results as JSON dict for frontend consumption.
-        
-        Uses socket-compatible format:
-        - result_type mapped to socket-recognized values
-        - top_matches instead of results
-        - to_socket_format() for each item
-        """
-        sorted_results = sorted(self.results, key=lambda x: x.score, reverse=True)[:top_n]
-        socket_result_type = RESULT_TYPE_TO_SOCKET.get(self.result_type, self.result_type) # bad design btw
-        
-        return {
-            "view_mode": "brief",
-            "tool_name": self.tool_name,
-            "tool_kwargs": self.tool_kwargs,
-            "result_type": socket_result_type,
-            "total": len(self.results),
-            "top_n": min(top_n, len(sorted_results)),
-            "top_matches": [item.to_socket_format() for item in sorted_results],
-        }
-
-    def get_detailed(self, top_n: int = 5) -> dict[str, Any]:
-        """Return detailed results as JSON dict for frontend consumption."""
-        sorted_results = sorted(self.results, key=lambda x: x.score, reverse=True)[:top_n]
-        socket_result_type = RESULT_TYPE_TO_SOCKET.get(self.result_type, self.result_type)
-        
-        return {
-            "view_mode": "detailed",
-            "tool_name": self.tool_name,
-            "tool_kwargs": self.tool_kwargs,
-            "result_type": socket_result_type,
-            "total": len(self.results),
-            "top_n": min(top_n, len(sorted_results)),
-            "top_matches": [item.to_socket_format() for item in sorted_results],
-        }
-
-    def get_statistics(self, group_by: str = "video_id") -> dict[str, Any]:
-        """Return statistics as JSON dict for frontend consumption."""
-        if self.result_type == "image":
-            return ImageInterface.statistic_format(
-                tool_name=self.tool_name,
-                tool_kwargs=self.tool_kwargs,
-                handle_id="local",
-                items=self.results,
-                group_by=group_by,
-            )
-        elif self.result_type == "audio":
-            return AudioInterface.statistic_format(
-                tool_name=self.tool_name,
-                tool_kwargs=self.tool_kwargs,
-                handle_id="local",
-                items=self.results,
-                group_by=group_by,
-            )
-        else:
-            return SegmentInterface.statistic_format(
-                tool_name=self.tool_name,
-                tool_kwargs=self.tool_kwargs,
-                handle_id="local",
-                items=self.results,
-                group_by=group_by,
-            )
-
-    def get_full(self) -> dict[str, Any]:
-        """Return full results as JSON dict for frontend consumption."""
-        socket_result_type = RESULT_TYPE_TO_SOCKET.get(self.result_type, self.result_type)
-        
-        return {
-            "view_mode": "full",
-            "tool_name": self.tool_name,
-            "tool_kwargs": self.tool_kwargs,
-            "result_type": socket_result_type,
-            "total": len(self.results),
-            "top_matches": [item.to_socket_format() for item in self.results],
-        }
-
-__all__ = [
-    "parse_json_list",
-    "extract_s3_minio_url",
-    "time_to_seconds",
-    "parse_time_safe",
-    "time_range_overlap",
-    "convert_time_to_frame",
-    "timecode_to_frame",
-    "format_duration",
-    "CacheManager",
-    "SearchResultContainer",
-]
