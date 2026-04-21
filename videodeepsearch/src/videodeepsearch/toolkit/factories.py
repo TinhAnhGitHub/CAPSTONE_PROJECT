@@ -26,8 +26,8 @@ def make_search_factory(
     qwenvl_client,
     mmbert_client,
     splade_client,
-    user_id: str | None = None,
-    video_ids: list[str] | None = None,
+    user_id: str,
+    video_ids: list[str],
 ) -> ToolkitFactory:
     def factory() -> VideoSearchToolkit:
         return VideoSearchToolkit(
@@ -70,8 +70,8 @@ def make_video_metadata_factory(
 def make_ocr_factory(
     es_ocr_client: ElasticsearchOCRClient,
     mmbert_client,
-    user_id: str | None = None,
-    video_ids: list[str] | None = None,
+    user_id: str,
+    video_ids: list[str],
 ) -> ToolkitFactory:
     def factory() -> OCRSearchToolkit:
         return OCRSearchToolkit(
@@ -92,8 +92,8 @@ def make_llm_factory(llm_client) -> ToolkitFactory:
 def make_kg_factory(
     arango_db: StandardDatabase,
     mmbert_client,
-    user_id: str | None = None,
-    video_ids: list[str] | None = None,
+    user_id: str,
+    video_ids: list[str],
 ) -> ToolkitFactory:
     def factory() -> KGSearchToolkit:
         return KGSearchToolkit(
