@@ -4,3 +4,7 @@ keyframes/
 service_data/
 local/
 local2/
+
+tr-*.txt
+analysis_*.txt
+*.png
