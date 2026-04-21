@@ -317,7 +317,10 @@ class UtilityToolkit(Toolkit):
             artifact_id=video_id,
             filter_artifact_type=["SegmentCaptionArtifact"],
         )
-        print(segment_artifacts[0])
+        
+        if not segment_artifacts:
+            return {"total": 0, "item_type": "segment", "results": [], "error": "No segments found for video"}
+        
         segments: list[SegmentInterface] = []
 
         for artifact in segment_artifacts:

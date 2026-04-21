@@ -74,7 +74,6 @@ class VideoMetadataToolkit(Toolkit):
         super().__init__(
             name="Video Metadata Tools",
             tools=[
-                self.list_user_videos,
                 self.get_video_metadata,
                 self.get_video_timeline,
             ],
@@ -130,74 +129,6 @@ class VideoMetadataToolkit(Toolkit):
         children = await self.postgres.get_children_artifact(video_id)
         return {child.artifact_type for child in children}
 
-
-    @tool(
-        description=(
-            "List all videos for a user with basic metadata. "
-            "Returns video IDs, filenames, duration, fps, and resolution. "
-            "Use this to discover what videos are available for search.\n\n"
-            "Typical workflow - Discovery phase (START HERE):\n"
-            "  1. This tool - find available videos for the user\n"
-            "  2. get_video_metadata - get details on a specific video\n"
-            "  3. get_video_timeline - understand video structure\n"
-            "  4. search.get_* tools - search for content in the videos\n\n"
-            "When to use:\n"
-            "  - Starting a new search session (find video IDs)\n"
-            "  - User wants to see what videos they have\n"
-            "  - Need to identify which videos to search\n\n"
-            "Related tools:\n"
-            "  - get_video_metadata: Get detailed info on a specific video\n"
-            "  - get_video_timeline: See temporal structure of a video\n"
-            "  - search.get_images_from_qwenvl_query: Search for visual content\n"
-            "  - search.get_segments_from_event_query_mmbert: Search for events\n\n"
-            "Args:\n"
-            "  user_id (str): User ID to list videos for (REQUIRED)\n"
-            "  limit (int): Maximum number of videos to return (default 50)\n"
-            "  offset (int): Offset for pagination (default 0)"
-        ),
-        instructions=(
-            "Use when: user wants to see available videos, "
-            "need to find video IDs for further operations, "
-            "starting a new search session.\n\n"
-            "Best paired with: get_video_metadata, get_video_timeline (drill down into specific videos). "
-            "Follow up with: search tools to find content within the videos."
-        ),
-        cache_results=True,
-        cache_ttl=1800,
-    )
-    @traced_tool()
-    async def list_user_videos(
-        self,
-        user_id: str,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> dict[str, Any]:
-        try:
-            videos = await self._get_video_artifacts(
-                user_id=user_id,
-                limit=limit,
-                offset=offset,
-            )
-
-            if not videos:
-                return {
-                    "user_id": user_id,
-                    "total": 0,
-                    "videos": [],
-                }
-
-            return {
-                "user_id": user_id,
-                "total": len(videos),
-                "offset": offset,
-                "limit": limit,
-                "videos": [video.to_dict() for video in videos],
-            }
-
-        except Exception as e:
-            logger.error(f"[VideoMetadataToolkit] list_user_videos failed: {e}")
-            return {"error": f"Failed to list videos - {str(e)}"}
-
     @tool(
         description=(
             "Get detailed metadata for a specific video. "
@@ -226,8 +157,6 @@ class VideoMetadataToolkit(Toolkit):
             "Best paired with: list_user_videos (find videos), get_video_timeline (see structure). "
             "Follow up with: search tools to find content within this video."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_video_metadata(
@@ -297,8 +226,6 @@ class VideoMetadataToolkit(Toolkit):
             "Best paired with: list_user_videos, get_video_metadata (find and inspect video first). "
             "Follow up with: search tools or utility.get_adjacent_segments for navigation."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_video_timeline(

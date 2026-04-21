@@ -24,8 +24,9 @@ def build_videodeepsearch_team(
     user_id: str,
     model: Model,
     summary_model: Model,
-    members: list,  
+    members: list,
     db: AsyncBaseDb | BaseDb,
+    respond_directly: bool = False,
 ) -> Team:
     """Build the VideoDeepSearch Team - the main entry point for video search.
 
@@ -41,22 +42,22 @@ def build_videodeepsearch_team(
 
     Returns:
         Team: The VideoDeepSearch Team instance
-    """
-    memory_manager = MemoryManager(
-        model=model,
-        db=db,
-        add_memories=True,
-        update_memories=True,
-        delete_memories=False,
-        clear_memories=False,
-    )
+    # """
+    # memory_manager = MemoryManager(
+    #     model=model,
+    #     db=db,
+    #     add_memories=True,
+    #     update_memories=True,
+    #     delete_memories=False,
+    #     clear_memories=False,
+    # )
     
-    session_summarizer = SessionSummaryManager(
-        model=summary_model,
-        session_summary_prompt=SESSION_SUMMARY_PROMPT,
-        summary_request_message=SESSION_SUMMARY_REQUEST_MESSAGE
+    # session_summarizer = SessionSummaryManager(
+    #     model=summary_model,
+    #     session_summary_prompt=SESSION_SUMMARY_PROMPT,
+    #     summary_request_message=SESSION_SUMMARY_REQUEST_MESSAGE
         
-    )
+    # )
 
     return Team(
         name="VideoDeepSearch",
@@ -73,6 +74,8 @@ def build_videodeepsearch_team(
         determine_input_for_members=True,
         add_session_state_to_context=False,
         enable_agentic_state=False,
+        respond_directly=respond_directly,
+        store_member_responses=True,
 
         # memory_manager=memory_manager,
         # enable_agentic_memory=True,
@@ -98,7 +101,6 @@ def build_videodeepsearch_team(
         stream_events=True,
         debug_mode=False,
         debug_level=1,
-        
         events_to_skip=[
             TeamRunEvent.session_summary_started,
             TeamRunEvent.session_summary_completed

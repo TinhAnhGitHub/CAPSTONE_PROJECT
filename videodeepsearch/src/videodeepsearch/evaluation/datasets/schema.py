@@ -22,8 +22,7 @@ class EvalInput(BaseModel):
     total_video_haystack_ids: list[str] = Field(default_factory=list, description="List of all video IDs in the haystack")
     user_demand: str = Field(description="User's question or request")
     session_id: str = Field(
-        default_factory=lambda: str(uuid4()),
-        description="Session ID (auto-generated)"
+        ...
     )
 
 class ExpectedFact(BaseModel):
@@ -102,6 +101,7 @@ class EvalRecord(BaseModel):
                 "ground_truth_video_ids": self.inputs.ground_truth_video_ids,
                 "total_video_haystack_ids": self.inputs.total_video_haystack_ids,
                 "user_demand": self.inputs.user_demand,
+                "session_id": self.inputs.session_id
             }
         }
 
@@ -133,7 +133,6 @@ class EvalRecord(BaseModel):
         """Create EvalRecord from dictionary."""
         inputs_data = data.get("inputs", {})
         expectations_data = data.get("expectations")
-        guidelines_data = data.get("guidelines")
         metadata = data.get("metadata")
 
         
@@ -142,6 +141,7 @@ class EvalRecord(BaseModel):
             'ground_truth_video_ids': inputs_data.get("ground_truth_video_ids", []),
             'total_video_haystack_ids': inputs_data.get("total_video_haystack_ids", []),
             'user_demand': inputs_data.get("user_demand", ""),
+            "session_id": inputs_data.get("session_id")
         }
         print(eval_input_args)
         if inputs_data.get("session_id"):

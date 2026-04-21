@@ -42,13 +42,13 @@ llm_provider:
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "Qwen3.6-Plus is a next-generation general-purpose model with improved reasoning, coding, and multimodal capabilities. It supports extended context and enhanced agent workflows, making it suitable for complex, long-horizon tasks."
+      description: "Qwen 3.6 Plus builds on a hybrid architecture combining efficient linear attention with sparse mixture-of-experts routing, enabling strong scalability and high-performance inference with 1M context length."
       strengths:
-        - advanced reasoning
-        - coding proficiency
-        - multimodal capabilities
+        - complex reasoning
+        - multi-step planning
         - long-context understanding
-        - agent workflows
+        - scalability
+        - high-performance inference
 
     - name: google/gemma-4-31b-it
       model_id: google/gemma-4-31b-it
@@ -56,54 +56,13 @@ llm_provider:
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "Gemma 4 31B IT is an instruction-tuned model from Google optimized for conversational AI, reasoning, and efficient deployment. It balances strong performance with relatively lower compute requirements."
+      description: "Gemma 4 31B Instruct is Google DeepMind's 30.7B dense multimodal model supporting text and image input with 256K context window, configurable thinking/reasoning mode, and native function calling."
       strengths:
+        - multimodal understanding
+        - reasoning mode
+        - function calling
+        - vision tasks
         - instruction following
-        - efficient deployment
-        - conversational performance
-        - reasoning capabilities
-
-    - name: openai/gpt-5.4-mini
-      model_id: openai/gpt-5.4-mini
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "GPT-5.4 Mini is a lightweight, high-efficiency model optimized for fast responses, strong reasoning, and tool use. It is ideal for real-time applications and scalable agent systems."
-      strengths:
-        - low latency
-        - strong reasoning
-        - tool use
-        - scalable deployment
-        - real-time applications
-
-    - name: qwen/qwen3.5-27b
-      model_id: qwen/qwen3.5-27b
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "Qwen3.5-27B is a mid-sized model offering a balance between performance and efficiency. It performs well on reasoning, coding, and multilingual tasks while being more cost-effective than larger variants."
-      strengths:
-        - balanced performance
-        - cost efficiency
-        - multilingual support
-        - reasoning and coding
-
-    - name: qwen/qwen3.5-35b-a3b
-      model_id: qwen/qwen3.5-35b-a3b
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      extra_body:
-        top_k: 40
-        repeat_penalty: 1.05
-      description: "Qwen3.5-35B-A3B excels in reasoning, coding, and agent/tool use, with strong multimodal (vision + text) capabilities. It offers efficient inference and supports long-context processing (~256K tokens) across 200+ languages, making it well-suited for complex, multilingual, and long-horizon tasks."
-      strengths:
-      - multimodal understanding
-      - efficient inference
-      - multilingual support
 
     - name: xiaomi/mimo-v2-pro
       model_id: xiaomi/mimo-v2-pro
@@ -111,41 +70,13 @@ llm_provider:
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "Xiaomi MiMo-V2-Pro is designed for large-scale agentic applications, with a focus on long-context reasoning, coding, and real-world task execution. With its massive scale (~1T parameters) and extended context window (~1M tokens), it enables robust multi-step planning, tool use, and consistent performance across complex workflows."
+      description: "MiMo-V2-Pro is Xiaomi's flagship foundation model with 1T+ parameters and 1M context length, deeply optimized for agentic scenarios and multi-step tool execution."
       strengths:
-      - large-scale modeling
-      - long-context reasoning
-      - task execution
-      - tool integration
-      - multi-step planning
-
-    - name: stepfun/step-3.5-flash
-      model_id: stepfun/step-3.5-flash
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "StepFun Step-3.5-Flash is a high-efficiency model optimized for fast reasoning and agentic tasks such as coding, planning, and tool use. Its sparse MoE architecture activates only a small subset of parameters per token, enabling real-time performance (~100-300 tokens/s) while maintaining strong results on coding and math benchmarks."
-      strengths:
-      - low latency
-      - efficient MoE architecture
-      - real-time performance
-      - coding and math proficiency
-      - agent task execution
-
-    - name: kwaipilot/kat-coder-pro-v2
-      model_id: kwaipilot/kat-coder-pro-v2
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "KAT-Coder-Pro V2 is a high-performance enterprise-grade coding model in the KwaiKAT series, optimized for complex software engineering workflows and SaaS integration. It excels in large-scale production environments, enabling robust multi-system coordination, advanced agentic coding, and seamless interoperability across modern tech stacks. Additionally, it supports web aesthetics generation, allowing the creation of production-ready landing pages and presentation decks."
-      strengths:
-      - enterprise-grade software engineering
-      - multi-system coordination
-      - agentic coding workflows
-      - production-ready web generation
-      - scalable architecture support
+        - large-scale modeling
+        - multi-step planning
+        - complex agentic workflows
+        - long-context reasoning
+        - tool integration
 
     - name: qwen/qwen3.5-plus-02-15
       model_id: qwen/qwen3.5-plus-02-15
@@ -153,41 +84,13 @@ llm_provider:
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "KAT-Coder-Pro V2 is a high-performance enterprise-grade coding model in the KwaiKAT series, optimized for complex software engineering workflows and SaaS integration. It excels in large-scale production environments, enabling robust multi-system coordination, advanced agentic coding, and seamless interoperability across modern tech stacks. Additionally, it supports web aesthetics generation, allowing the creation of production-ready landing pages and presentation decks."
+      description: "Qwen3.5 Plus vision-language model with hybrid linear attention + sparse MoE architecture, delivering high inference efficiency with 1M context for diverse multimodal tasks."
       strengths:
-      - enterprise-grade software engineering
-      - multi-system coordination
-      - agentic coding workflows
-      - production-ready web generation
-      - scalable architecture support
-
-    - name: arcee-ai/trinity-large-thinking
-      model_id: arcee-ai/trinity-large-thinking
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "Trinity Large Thinking is a high-performance open-source reasoning model from Arcee AI, optimized for complex reasoning, agentic tasks, and structured problem-solving. It performs well on benchmarks like PinchBench and supports multi-step workflows."
-      strengths:
-        - advanced reasoning
-        - agentic workflows
-        - structured problem solving
-        - strong benchmark performance
-        - multi-step planning
-
-    - name: google/gemma-4-26b-a4b-it
-      model_id: google/gemma-4-26b-a4b-it
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "Gemma 4 26B A4B IT is a Mixture-of-Experts (MoE) model from Google DeepMind, delivering strong reasoning and multimodal performance with only ~4B active parameters per token. It supports text, image, and short video inputs, a 256K context window, and native tool/function calling, offering near-30B quality at much lower compute cost."
-      strengths:
-        - efficient MoE architecture
-        - strong reasoning performance
-        - multimodal input (text, image, video)
-        - long-context understanding (256K)
-        - cost-efficient deployment
+        - cost efficiency
+        - tool use
+        - multimodal tasks
+        - efficient inference
+        - large context window
 
     - name: google/gemini-3.1-flash-lite-preview
       model_id: google/gemini-3.1-flash-lite-preview
@@ -195,13 +98,14 @@ llm_provider:
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "Gemini 3.1 Flash Lite Preview is a lightweight, ultra-fast model optimized for low-latency and high-throughput applications. It is designed for simple reasoning, real-time interactions, and cost-sensitive workloads, offering large context windows with minimal compute overhead."
+      description: "Gemini 3.1 Flash Lite Preview is Google's high-efficiency model for high-volume use cases, approaching Gemini 2.5 Flash performance at lower cost with 1M context."
       strengths:
-        - ultra-low latency
+        - ultra cost efficiency
         - high throughput
-        - cost efficiency
-        - real-time applications
-        - large context window
+        - fast response
+        - tool use
+        - search and retrieval
+        - simple reasoning
 
     - name: qwen/qwen3.5-flash-02-23
       model_id: qwen/qwen3.5-flash-02-23
@@ -209,13 +113,14 @@ llm_provider:
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "Qwen3.5 Flash is a fast, lightweight variant optimized for low-latency inference and high-throughput agent workloads. It delivers strong performance in real-time applications, tool use, and structured tasks while maintaining efficiency."
+      description: "Qwen3.5 Flash vision-language model with hybrid architecture achieving higher inference efficiency. Ideal for real-time applications and cost-sensitive workloads with 1M context."
       strengths:
-        - low latency
-        - high throughput
-        - efficient inference
-        - agent workflows
+        - ultra cost efficiency
+        - fast inference
         - tool use
+        - search and retrieval
+        - agent workflows
+        - high throughput
 
     - name: minimax/minimax-m2.5
       model_id: minimax/minimax-m2.5
@@ -223,13 +128,13 @@ llm_provider:
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "MiniMax M2.5 is a high-performance, cost-efficient model designed for real-world productivity, agent workflows, and enterprise applications. It performs strongly on coding and task automation benchmarks while maintaining competitive pricing and efficiency."
+      description: "MiniMax-M2.5 is a SOTA model designed for real-world productivity and coding expertise, trained in diverse complex digital working environments."
       strengths:
         - cost efficiency
-        - strong coding performance
-        - agent workflows
+        - coding tasks
+        - real-world productivity
         - task automation
-        - enterprise use cases
+        - agent workflows
 
     - name: qwen/qwen3-coder-next
       model_id: qwen/qwen3-coder-next
@@ -240,13 +145,13 @@ llm_provider:
       extra_body:
         top_k: 40
         repeat_penalty: 1.05
-      description: "Qwen3-Coder-Next is a specialized coding model optimized for agentic software engineering tasks. It uses efficient sparse activation (~3B active parameters) and is trained with reinforcement learning on executable coding environments, enabling strong performance on real-world coding benchmarks."
+      description: "Qwen3-Coder-Next is optimized for coding agents with sparse MoE design (80B total, 3B active per token), perfect for autonomous programming and tool calling workflows."
       strengths:
-        - advanced coding capabilities
-        - agentic coding workflows
-        - efficient sparse architecture
-        - strong benchmark performance (SWE-Bench)
-        - tool and environment interaction
+        - coding tasks
+        - autonomous programming
+        - tool calling
+        - repository understanding
+        - code generation
 
 storage:
   postgres:
