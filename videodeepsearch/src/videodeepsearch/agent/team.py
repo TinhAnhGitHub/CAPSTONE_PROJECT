@@ -1,6 +1,9 @@
 import logging
 from typing import Any, cast
 from collections.abc import AsyncGenerator
+from datetime import datetime
+
+import mlflow
 
 from agno.db.base import AsyncBaseDb, BaseDb
 from agno.models.base import Model
@@ -200,34 +203,39 @@ async def ignite_workflow(
         arango_db=arango_db,
     )
 
+    mlflow.set_tracking_uri("http://100.113.186.28:5000")
+    mlflow.set_experiment("videodeepsearch-api-application")
+    mlflow.agno.autolog()  # type: ignore
+
     try:
-        async for chunk in team.arun(
-            input=user_demand,
-            session_state=initial_session_state,
-            stream=True,
-            stream_events=True,
-        ):
-            chunk = cast(TeamRunOutputEvent, chunk)
-            chunk_yield = None
+        with mlflow.start_run(run_name=f"workflow-{session_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"):
+            async for chunk in team.arun(
+                input=user_demand,
+                session_state=initial_session_state,
+                stream=True,
+                stream_events=True,
+            ):
+                chunk = cast(TeamRunOutputEvent, chunk)
+                chunk_yield = None
 
-            event_type = chunk.event
+                event_type = chunk.event
 
-            match event_type:
-                case 'TeamRunContent' | 'RunContent':
-                    chunk_yield = convert_run_content_event_to_agent_stream(chunk) #type:ignore
-                case 'TeamToolCallStarted' | 'ToolCallStarted': 
-                    chunk_yield = convert_tool_call_started_event(chunk) #type:ignore
-                case 'TeamToolCallCompleted' | 'ToolCallCompleted':
-                    chunk_yield = convert_tool_call_completed_event(chunk) #type:ignore
-                case 'TeamRunContentCompleted' | 'RunContentCompleted':
-                    chunk_yield = convert_run_completed_event(chunk) #type:ignore
-                case _:
-                    chunk_yield = None
-            
-            if chunk_yield is None:
-                continue
+                match event_type:
+                    case 'TeamRunContent' | 'RunContent':
+                        chunk_yield = convert_run_content_event_to_agent_stream(chunk) #type:ignore
+                    case 'TeamToolCallStarted' | 'ToolCallStarted': 
+                        chunk_yield = convert_tool_call_started_event(chunk) #type:ignore
+                    case 'TeamToolCallCompleted' | 'ToolCallCompleted':
+                        chunk_yield = convert_tool_call_completed_event(chunk) #type:ignore
+                    case 'TeamRunContentCompleted' | 'RunContentCompleted':
+                        chunk_yield = convert_run_completed_event(chunk) #type:ignore
+                    case _:
+                        chunk_yield = None
                 
-            yield _serialize_event(chunk_yield)
+                if chunk_yield is None:
+                    continue
+                    
+                yield _serialize_event(chunk_yield)
     except Exception as e:
         logger.error(
             f"ignite_workflow error: session={session_id} user={user_id} — {e}",
