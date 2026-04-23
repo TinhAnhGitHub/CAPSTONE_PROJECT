@@ -202,12 +202,14 @@ async def ignite_workflow(
         es_ocr_client=es_ocr_client,
         arango_db=arango_db,
     )
-
+    
     mlflow.set_tracking_uri("http://100.113.186.28:5000")
-    mlflow.set_experiment("videodeepsearch-api-application")
+    mlflow.set_experiment("videodeepsearch-api")
     mlflow.agno.autolog()  # type: ignore
 
     try:
+        
+        final_output = []
         with mlflow.start_run(run_name=f"workflow-{session_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"):
             async for chunk in team.arun(
                 input=user_demand,
@@ -227,8 +229,9 @@ async def ignite_workflow(
                         chunk_yield = convert_tool_call_started_event(chunk) #type:ignore
                     case 'TeamToolCallCompleted' | 'ToolCallCompleted':
                         chunk_yield = convert_tool_call_completed_event(chunk) #type:ignore
-                    case 'TeamRunContentCompleted' | 'RunContentCompleted':
-                        chunk_yield = convert_run_completed_event(chunk) #type:ignore
+                    case 'TeamRunContentCompleted' :
+                        # chunk_yield = convert_run_completed_event(chunk) #type:ignore
+                        final_output.append(chunk)
                     case _:
                         chunk_yield = None
                 
@@ -236,6 +239,10 @@ async def ignite_workflow(
                     continue
                     
                 yield _serialize_event(chunk_yield)
+            
+            if final_output:
+                print("Do have final output")
+                yield _serialize_event(final_output[-1]) 
     except Exception as e:
         logger.error(
             f"ignite_workflow error: session={session_id} user={user_id} — {e}",
