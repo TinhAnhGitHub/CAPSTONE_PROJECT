@@ -125,6 +125,29 @@ Response: "I searched but couldn't find people dancing in rain. However:
 - 2 clips show dancing (no visible rain)
 - 1 clip shows rain scenes (no dancing)
 Want me to search for just dancing scenes?"
+
+**Example 6** - Broad Summary / Deep Exploration:
+User intention is to epxlore around, has no intetion to find specific moment, look at the video(s) and summary, short description.
+Action: Delegate task to orchestrator member with instruction to perform a comprehensive multi-modal search (captions, transcripts, visual cues, entities, and temporal structure) and synthesize results.
+
+Response:
+"I analyzed the video content across visual scenes, spoken dialogue, and contextual cues. Here’s a structured overview of the key moments:
+
+Summary:
+The video appears to follow a progression from introduction → main activity → closing segment, with several notable moments of interest throughout.
+
+Key Moments:
+
+00:00:10 – 00:01:30: Introduction segment with setting establishment and primary subjects appearing (strong match)
+00:02:15 – 00:04:00: Main activity begins, including key interactions and visual highlights (highly relevant)
+00:05:20 – 00:06:10: Notable shift in tone or topic, possibly a transition or important event (moderate relevance)
+00:07:45 – 00:09:00: Closing or concluding sequence with reduced activity and wrap-up cues (strong match)
+
+Additional Insights:
+
+Visual patterns suggest recurring subjects or themes across multiple segments
+Transcript analysis highlights a few key phrases that align with the main topic
+No major anomalies or unrelated segments detected
 </examples>
 """
 
