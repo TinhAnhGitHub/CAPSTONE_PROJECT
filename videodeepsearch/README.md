@@ -225,9 +225,9 @@ Evaluation follows the AVHaystacksQA paradigm from [MAGNET](https://arxiv.org/ab
 | Answer format | Enumerated steps: `1) ... 2) ... 3) ...` |
 | Ground truth | Expected video IDs + step-wise answers |
 
-### Custom Judges
+### Custom Judges & Programmatic Metrics
 
-Two primary metrics evaluated via LLM-as-judge (Gemini 3 Flash Lite Preview, minimal reasoning effort):
+Three primary metrics are evaluated (two via LLM-as-judge using Gemini 3 Flash Lite Preview, and one programmatically):
 
 **VideoRecall** -- Checks whether each ground-truth video appears in the agent response.
 
@@ -242,3 +242,9 @@ Two primary metrics evaluated via LLM-as-judge (Gemini 3 Flash Lite Preview, min
 - LLM evaluates each ground-truth point independently: is it addressed in the agent response?
 - Final score: `satisfied_points / total_ground_truth_points` (0-100%)
 - Example: 2/3 points satisfied -> 66.7%, 1/1 -> 100%
+
+**MTGS (Mean Temporal Grounding Score)** -- Evaluates the temporal accuracy of retrieved video segments.
+
+- Input: predicted segment timestamps + ground-truth segment timestamps
+- Programmatically calculates the Intersection over Union (IoU) of predicted segments versus ground-truth segments for each retrieved video
+- Aggregated and logged to MLflow along with other evaluation metrics
