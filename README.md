@@ -204,8 +204,8 @@ docker compose up -d
 
 ## Authors
 
-- **Tinh Anh** — [@your-github](https://github.com/your-github)
-- **Gia Phuc** — [@your-github](https://github.com/your-github)
+- **Tinh Anh** — [TinhAnhGitHub](https://github.com/TinhAnhGitHub)
+- **Gia Phuc** — [phucnguyenlamp](https://github.com/phucnguyenlamp)
 
 ---
 
