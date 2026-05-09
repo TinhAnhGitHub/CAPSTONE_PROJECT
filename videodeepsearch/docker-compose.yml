@@ -1,4 +1,43 @@
 services:
+  videodeepsearch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: videodeepsearch
+    env_file:
+      - .env
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - CONFIG_PATH=/app/config/settings.yaml
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=video-pipeline
+      - POSTGRES_USER=admin123
+      - POSTGRES_PASSWORD=admin123
+      - MINIO_HOST=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - QDRANT_HOST=qdrant
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ARANGO_HOST=http://arangodb:8529
+      - ARANGO_DB=video_kg
+      - ARANGO_PASSWORD=
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME:-./data}:/app/data
+      - ./src:/app/src
+      - ./config:/app/config
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - mlflow-network
+      - video_shared_net
+
   mlflow-postgres:
     image: postgres:15
     container_name: mlflow-postgres
@@ -108,7 +147,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
-
+      
 networks:
   mlflow-network:
     external: true
+  video_shared_net:
+    external: true
+    name: video_shared_net
