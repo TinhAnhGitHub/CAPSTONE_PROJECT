@@ -1,4 +1,43 @@
 services:
+  videodeepsearch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: videodeepsearch
+    env_file:
+      - .env
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - CONFIG_PATH=/app/config/settings.yaml
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=video-pipeline
+      - POSTGRES_USER=admin123
+      - POSTGRES_PASSWORD=admin123
+      - MINIO_HOST=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - QDRANT_HOST=qdrant
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ARANGO_HOST=http://arangodb:8529
+      - ARANGO_DB=video_kg
+      - ARANGO_PASSWORD=
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${DOCKER_LOCAL_VOLUME:-./data}:/app/data
+      - ./src:/app/src
+      - ./config:/app/config
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - mlflow-network
+      - video_shared_net
+
   mlflow-postgres:
     image: postgres:15
     container_name: mlflow-postgres
@@ -13,7 +52,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-    networks: [default]
+    networks: 
+      - mlflow-network
 
   mlflow-storage:
     image: rustfs/rustfs:1.0.0-alpha.83
@@ -37,7 +77,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    networks: [default]
+    networks: 
+      - mlflow-network
 
   mlflow-create-bucket:
     image: amazon/aws-cli:2.33.25
@@ -60,7 +101,8 @@ services:
       AWS_ACCESS_KEY_ID: mlflowadmin
       AWS_SECRET_ACCESS_KEY: mlflowadmin
       AWS_DEFAULT_REGION: us-east-1
-    networks: [default]
+    networks: 
+      - mlflow-network
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
@@ -73,10 +115,12 @@ services:
       mlflow-create-bucket:
         condition: service_completed_successfully
     environment:
+      MLFLOW_SERVER_ALLOWED_HOSTS: "100.113.186.28,127.0.0.1,localhost,host.docker.internal,qwen_36_server"
       MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@mlflow-postgres:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://mlflow-storage:9000
       MLFLOW_ARTIFACTS_DESTINATION: s3://mlflow-artifacts/
       AWS_ACCESS_KEY_ID: mlflowadmin
+      MLFLOW_SERVER_DISABLE_SECURITY_MIDDLEWARE: "true"
       AWS_SECRET_ACCESS_KEY: mlflowadmin
       AWS_DEFAULT_REGION: us-east-1
       MLFLOW_S3_IGNORE_TLS: "true"
@@ -90,15 +134,23 @@ services:
         mlflow server \
           --backend-store-uri "postgresql://mlflow:mlflow@mlflow-postgres:5432/mlflow" \
           --artifacts-destination "s3://mlflow-artifacts/" \
-          --allowed-hosts "100.113.186.28:5000"\
-          --cors-allowed-origins "http://100.113.186.28:5000" \
+          --allowed-hosts "100.113.186.28:5000,127.0.0.1,localhost,qwen_36_server" \
+          --cors-allowed-origins "*" \
           --host 0.0.0.0 \
           --port 5000
     ports:
       - "5000:5000"
+    networks:
+      - mlflow-network
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 10s
       timeout: 5s
       retries: 30
-    networks: [default]
+      
+networks:
+  mlflow-network:
+    external: true
+  video_shared_net:
+    external: true
+    name: video_shared_net

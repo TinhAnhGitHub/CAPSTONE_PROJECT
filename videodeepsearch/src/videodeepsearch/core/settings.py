@@ -57,6 +57,15 @@ class PostgresConfig(BaseModel):
     password: str = "admin123"
     url: str | None = None
 
+    def model_post_init(self, __context) -> None:
+        self.host = os.environ.get("POSTGRES_HOST", self.host)
+        self.port = int(os.environ.get("POSTGRES_PORT", str(self.port)))
+        self.database = os.environ.get("POSTGRES_DB", self.database)
+        self.username = os.environ.get("POSTGRES_USER", self.username)
+        self.password = os.environ.get("POSTGRES_PASSWORD", self.password)
+        if os.environ.get("POSTGRES_URL"):
+            self.url = os.environ["POSTGRES_URL"]
+
     @property
     def connection_url(self) -> str:
         if self.url:
@@ -78,6 +87,13 @@ class MinioConfig(BaseModel):
     secure: bool = False
     buckets: MinioBucketsConfig = Field(default_factory=MinioBucketsConfig)
 
+    def model_post_init(self, __context) -> None:
+        self.host = os.environ.get("MINIO_HOST", self.host)
+        self.port = os.environ.get("MINIO_PORT", self.port)
+        self.access_key = os.environ.get("MINIO_ACCESS_KEY", self.access_key)
+        self.secret_key = os.environ.get("MINIO_SECRET_KEY", self.secret_key)
+        self.secure = os.environ.get("MINIO_SECURE", "false").lower() == "true"
+
 
 class QdrantConfig(BaseModel):
     host: str = "localhost"
@@ -85,6 +101,13 @@ class QdrantConfig(BaseModel):
     grpc_port: int = 6334
     prefer_grpc: bool = True
     collection_name: str = "video_embeddings"
+
+    def model_post_init(self, __context) -> None:
+        self.host = os.environ.get("QDRANT_HOST", self.host)
+        self.port = int(os.environ.get("QDRANT_PORT", str(self.port)))
+        self.grpc_port = int(os.environ.get("QDRANT_GRPC_PORT", str(self.grpc_port)))
+        if os.environ.get("QDRANT_COLLECTION"):
+            self.collection_name = os.environ["QDRANT_COLLECTION"]
 
 
 class ElasticsearchConfig(BaseModel):
@@ -96,6 +119,14 @@ class ElasticsearchConfig(BaseModel):
     verify_certs: bool = True
     request_timeout: int = 30
     index_name: str = "video_ocr_docs_dev"
+
+    def model_post_init(self, __context) -> None:
+        self.host = os.environ.get("ELASTICSEARCH_HOST", self.host)
+        self.port = int(os.environ.get("ELASTICSEARCH_PORT", str(self.port)))
+        self.user = os.environ.get("ELASTICSEARCH_USER", self.user)
+        self.password = os.environ.get("ELASTICSEARCH_PASSWORD", self.password)
+        if os.environ.get("ELASTICSEARCH_INDEX"):
+            self.index_name = os.environ["ELASTICSEARCH_INDEX"]
 
     @property
     def url(self) -> str:
@@ -125,6 +156,12 @@ class ArangoConfig(BaseModel):
     view_name: str = "video_kg_search_view"
     collections: ArangoCollectionsConfig = Field(default_factory=ArangoCollectionsConfig)
     indexes: ArangoIndexesConfig = Field(default_factory=ArangoIndexesConfig)
+
+    def model_post_init(self, __context) -> None:
+        self.host = os.environ.get("ARANGO_HOST", self.host)
+        self.database = os.environ.get("ARANGO_DB", self.database)
+        self.username = os.environ.get("ARANGO_USERNAME", self.username)
+        self.password = os.environ.get("ARANGO_PASSWORD", self.password)
 
 
 class StorageConfig(BaseModel):
@@ -189,7 +226,13 @@ class Settings(BaseModel):
 
 def load_settings(config_path: str | Path | None = None) -> Settings:
     if config_path is None:
-        config_path = Path(__file__).parent.parent.parent.parent / "config" / "settings.yaml"
+        env_path = os.environ.get("CONFIG_PATH")
+        if env_path:
+            config_path = Path(env_path)
+        else:
+            config_path = Path(__file__).parent.parent.parent.parent / "config" / "settings.yaml"
+            if not config_path.exists():
+                config_path = Path("/app/config/settings.yaml")
     else:
         config_path = Path(config_path)
 

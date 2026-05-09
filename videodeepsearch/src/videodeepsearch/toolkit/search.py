@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any, Literal
 
 from agno.tools import tool, Toolkit
@@ -14,8 +12,6 @@ from videodeepsearch.clients.storage.qdrant import (
 from videodeepsearch.clients.inference import MMBertClient, QwenVLEmbeddingClient, SpladeClient
 from videodeepsearch.schemas import ImageInterface, SegmentInterface, AudioInterface
 from videodeepsearch.toolkit.common import (
-    CacheManager,
-    SearchResultContainer,
     parse_json_list,
 )
 from videodeepsearch.tracing import traced_tool
@@ -32,10 +28,8 @@ class VideoSearchToolkit(Toolkit):
         qwenvl_client: QwenVLEmbeddingClient,
         mmbert_client: MMBertClient,
         splade_client: SpladeClient,
-        user_id: str | None = None,
-        video_ids: list[str] | None = None,
-        cache_ttl: int = 1800,
-        cache_dir: str | None = None,
+        user_id: str ,
+        video_ids: list[str],
     ):
         self.image_client = image_qdrant_client
         self.segment_client = segment_qdrant_client
@@ -43,13 +37,10 @@ class VideoSearchToolkit(Toolkit):
         self.qwenvl = qwenvl_client
         self.mmbert = mmbert_client
         self.splade = splade_client
-        self.cache_ttl = cache_ttl
-        self.cache_manager = CacheManager(cache_dir)
 
         self._user_id = user_id
         self._video_ids = video_ids
 
-        self._result_store: dict[str, SearchResultContainer] = {}
 
         super().__init__(
             name="Video Search Tools",
@@ -60,40 +51,18 @@ class VideoSearchToolkit(Toolkit):
                 self.get_segments_from_qwenvl_query,
                 self.get_audio_from_query_dense,
                 self.get_audio_from_query_hybrid,
-                self.view_search_result,
             ],
         )
-
-    def _store_result(
-        self,
-        tool_name: str,
-        kwargs: dict[str, Any],
-        results: list[ImageInterface] | list[SegmentInterface] | list[AudioInterface],
-    ) -> dict[str, Any]:
-        if results and isinstance(results[0], ImageInterface):
-            result_type = "image"
-        elif results and isinstance(results[0], AudioInterface):
-            result_type = "audio"
-        else:
-            result_type = "segment"
-
-        container = SearchResultContainer(
-            tool_name=tool_name,
-            tool_kwargs=kwargs,
-            results=results,  # type:ignore
-            result_type=result_type,
-        )
-
-        handle_id = hashlib.md5(
-            json.dumps({"tool": tool_name, "args": kwargs}, sort_keys=True).encode()
-        ).hexdigest()[:8]
-
-        self._result_store[handle_id] = container
-
-        result_dict = container.get_brief(5)
-        result_dict["handle_id"] = handle_id
-
-        return result_dict
+        
+    def get_full(self, socket_result_type: Literal['image_search', 'segment_caption_search'], tool_name: str, tool_kwargs: dict[str, Any], result: list[ImageInterface] | list[SegmentInterface] | list[AudioInterface]) -> dict[str, Any]:        
+        return {
+            "view_mode": "full",
+            "tool_name": tool_name,
+            "tool_kwargs": tool_kwargs,
+            "result_type": socket_result_type,
+            "total": len(result),
+            "top_matches": [item.to_socket_format() for item in result],
+        }
 
     
     @tool(
@@ -109,7 +78,6 @@ class VideoSearchToolkit(Toolkit):
             "  - get_images_from_qwenvl_query: Alternative using unified visual embeddings\n"
             "  - get_segments_from_event_query_mmbert: For multi-frame sequences\n"
             "  - get_audio_from_query_dense: For audio/spoken content search\n"
-            "  - view_search_result: Inspect cached results by handle_id\n"
 
             "Args:\n"
             "  caption_query (str): English text describing image content (REQUIRED)\n"
@@ -124,18 +92,15 @@ class VideoSearchToolkit(Toolkit):
             "Use when query describes EVENTS, ACTIONS, or SCENES. "
             "Query must be in English.\n\n"
             "Best paired with: llm.enhance_textual_query (before), utility.get_related_asr_from_image (after). "
-            "Follow up with: view_search_result for detailed inspection. "
             "Alternative: get_images_from_qwenvl_query for unified visual/semantic search."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_images_from_caption_query_mmbert(
         self,
         caption_query: str,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
+        video_ids: list[str] | str | None = None,
         use_hybrid: bool = False,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
@@ -177,7 +142,12 @@ class VideoSearchToolkit(Toolkit):
                 limit=top_k,
             )
 
-        return self._store_result("get_images_from_caption_query_mmbert", kwargs, results)
+        return self.get_full(
+            socket_result_type="image_search",
+            tool_name="get_images_from_caption_query_mmbert",
+            tool_kwargs=kwargs,
+            result=results 
+        )
 
     @tool(
         description=(
@@ -192,7 +162,6 @@ class VideoSearchToolkit(Toolkit):
             "  - get_images_from_caption_query_mmbert: For caption/event-based semantic search\n"
             "  - get_segments_from_qwenvl_query: For segment instead of image search\n"
             "  - get_audio_from_query_dense: For audio/spoken content search\n"
-            "  - view_search_result: Inspect cached results by handle_id\n\n"
             "Args:\n"
             "  query (str): Text query describing the image (REQUIRED). Can be visual description, "
             "semantic content, objects/scenes, or any combination\n"
@@ -204,18 +173,15 @@ class VideoSearchToolkit(Toolkit):
             "Use for any image search query - visual appearance, semantic content, or mixed. "
             "Query can describe what the image LOOKS LIKE or what's HAPPENING in it.\n\n"
             "Best paired with: llm.enhance_visual_query (before), utility.get_related_asr_from_image (after). "
-            "Follow up with: view_search_result for detailed inspection. "
             "Alternative: get_images_from_caption_query_mmbert for caption/event-based search."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_images_from_qwenvl_query(
         self,
         query: str,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
+        video_ids: list[str] | str | None = None,
     ) -> dict[str, Any]:
         effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
@@ -236,7 +202,9 @@ class VideoSearchToolkit(Toolkit):
             limit=top_k,
         )
 
-        return self._store_result("get_images_from_qwenvl_query", kwargs, results)
+        return self.get_full(
+            "image_search", 
+            "get_images_from_qwenvl_query", kwargs, results)
 
     @tool(
         description=(
@@ -252,7 +220,6 @@ class VideoSearchToolkit(Toolkit):
             "  - utility.get_adjacent_segments: Navigate to neighboring segments\n"
             "  - get_images_from_caption_query_mmbert: For single-frame image search\n"
             "  - get_audio_from_query_dense: For audio/spoken content search\n"
-            "  - view_search_result: Inspect cached results by handle_id\n"
 
             "Args:\n"
             "  event_query (str): English text describing event/scene (REQUIRED)\n"
@@ -266,18 +233,15 @@ class VideoSearchToolkit(Toolkit):
         instructions=(
             "Use when query describes an EVENT, ACTION, or SCENE (multi-frame sequences).\n\n"
             "Best paired with: llm.enhance_textual_query (before), utility.get_related_asr_from_segment (after). "
-            "Follow up with: view_search_result for detailed inspection. "
             "Alternative: get_segments_from_qwenvl_query for unified visual/semantic search."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_segments_from_event_query_mmbert(
         self,
         event_query: str,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
+        video_ids: list[str] | str | None = None,
         use_hybrid: bool = False,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
@@ -319,7 +283,7 @@ class VideoSearchToolkit(Toolkit):
                 limit=top_k,
             )
 
-        return self._store_result("get_segments_from_event_query_mmbert", kwargs, results)
+        return self.get_full("segment_caption_search", "get_segments_from_event_query_mmbert", kwargs, results)
 
     @tool(
         description=(
@@ -335,7 +299,6 @@ class VideoSearchToolkit(Toolkit):
             "  - utility.get_adjacent_segments: Navigate to neighboring segments\n"
             "  - get_images_from_qwenvl_query: For image instead of segment search\n"
             "  - get_audio_from_query_dense: For audio/spoken content search\n"
-            "  - view_search_result: Inspect cached results by handle_id\n\n"
             "Args:\n"
             "  query (str): Text query describing the segment (REQUIRED). Can be visual description, "
             "event/action, scene context, or any combination\n"
@@ -346,18 +309,15 @@ class VideoSearchToolkit(Toolkit):
         instructions=(
             "Use for any segment search query - visual appearance, event descriptions, or mixed.\n\n"
             "Best paired with: llm.enhance_visual_query (before), utility.get_related_asr_from_segment (after). "
-            "Follow up with: view_search_result for detailed inspection. "
             "Alternative: get_segments_from_event_query_mmbert for caption/event-based search."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_segments_from_qwenvl_query(
         self,
         query: str,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
+        video_ids: list[str] | str | None = None,
     ) -> dict[str, Any]:
         effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
@@ -378,7 +338,7 @@ class VideoSearchToolkit(Toolkit):
             limit=top_k,
         )
 
-        return self._store_result("get_segments_from_qwenvl_query", kwargs, results)
+        return self.get_full("segment_caption_search", "get_segments_from_qwenvl_query", kwargs, results)
 
     @tool(
         description=(
@@ -394,7 +354,6 @@ class VideoSearchToolkit(Toolkit):
             "  - get_images_from_caption_query_mmbert: For visual search based on spoken content\n"
             "  - kg.search_entities_semantic: For entity-based visual search\n"
             "  - ocr.search_ocr_text: For text visible in frames\n"
-            "  - view_search_result: Inspect cached results by handle_id\n\n"
             "Args:\n"
             "  audio_query (str): English text describing spoken content to find (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
@@ -404,18 +363,15 @@ class VideoSearchToolkit(Toolkit):
         instructions=(
             "Use when query is about SPOKEN CONTENT, SPEECH, or AUDIO.\n\n"
             "Best paired with: llm.enhance_textual_query (before), utility.get_related_asr_from_segment (after). "
-            "Follow up with: view_search_result for detailed inspection. "
             "Alternative: get_audio_from_query_hybrid for keyword+semantic hybrid search."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_audio_from_query_dense(
         self,
         audio_query: str,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
+        video_ids: list[str] | str | None = None,
     ) -> dict[str, Any]:
         effective_video_ids = parse_json_list(video_ids) or self._video_ids
 
@@ -439,7 +395,7 @@ class VideoSearchToolkit(Toolkit):
             limit=top_k,
         )
 
-        return self._store_result("get_audio_from_query_dense", kwargs, results)
+        return self.get_full("audio_search", "get_audio_from_query_dense", kwargs, results) #type:ignore
 
     @tool(
         description=(
@@ -454,7 +410,6 @@ class VideoSearchToolkit(Toolkit):
             "  - get_audio_from_query_dense: For pure semantic search (simpler, faster)\n"
             "  - kg.search_entities_semantic: For entity-based visual search\n"
             "  - ocr.search_ocr_text: For text visible in frames\n"
-            "  - view_search_result: Inspect cached results by handle_id\n\n"
             "Args:\n"
             "  audio_query (str): English text describing spoken content to find (REQUIRED)\n"
             "  top_k (int): Number of results to return (default 10)\n"
@@ -467,17 +422,14 @@ class VideoSearchToolkit(Toolkit):
             "Use when query contains SPECIFIC KEYWORDS or PHRASES that must be matched exactly.\n\n"
             "Hybrid search combines semantic understanding with keyword precision. "
             "Best paired with: get_audio_from_query_dense (simpler alternative), utility.get_related_asr_from_segment (context). "
-            "Follow up with: view_search_result for detailed inspection."
         ),
-        cache_results=True,
-        cache_ttl=1800,
     )
     @traced_tool()
     async def get_audio_from_query_hybrid(
         self,
         audio_query: str,
         top_k: int = 10,
-        video_ids: list[str] | None = None,
+        video_ids: list[str] | str | None = None,
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
     ) -> dict[str, Any]:
@@ -509,63 +461,7 @@ class VideoSearchToolkit(Toolkit):
             sparse_weight=sparse_weight,
         )
 
-        return self._store_result("get_audio_from_query_hybrid", kwargs, results)
-
-    @tool(
-        description=(
-            "View cached search results by handle_id with different view modes.\n\n"
-            "This tool is the companion to all search tools in this toolkit:\n"
-            "  - get_images_from_caption_query_mmbert\n"
-            "  - get_images_from_qwenvl_query\n"
-            "  - get_segments_from_event_query_mmbert\n"
-            "  - get_segments_from_qwenvl_query\n"
-            "  - get_audio_from_query_dense\n"
-            "  - get_audio_from_query_hybrid\n\n"
-            "Typical workflow:\n"
-            "  1. Call any search tool (results are automatically cached, handle_id is returned)\n"
-            "  2. This tool - inspect cached results using the handle_id\n"
-            "  3. If satisfied, proceed to context tools (ASR, frame extraction)\n"
-            "  4. If not, refine your query and re-run search\n\n"
-            "Related tools:\n"
-            "  - view_kg_result (KG toolkit): For knowledge graph result inspection\n"
-            "  - view_ocr_result (OCR toolkit): For OCR result inspection\n"
-            "Args:\n"
-            "  handle_id (str): The 8-character handle ID returned by search tools (REQUIRED)\n"
-            "  view_mode (str): 'brief', 'detailed', 'statistics', or 'full' (default 'brief')\n"
-            "  top_n (int): Number of results to show in brief/detailed mode (default 5)\n"
-            "  group_by (str): Grouping strategy for statistics mode: 'video_id' or 'score_bucket' (default 'video_id')"
-        ),
-        instructions=(
-            "Use this to inspect cached results by handle_id without re-running the search.\n\n"
-            "The handle_id is returned by all search tools - just copy it and pass it here. "
-            "Best paired with: all other search tools (they return handle_ids). "
-            "Alternative view tools: view_kg_result (KG), view_ocr_result (OCR)."
-        ),
-        cache_results=False,
-    )
-    def view_search_result(
-        self,
-        handle_id: str,
-        view_mode: Literal["brief", "detailed", "statistics", "full"] = "brief",
-        top_n: int = 5,
-        group_by: Literal["video_id", "score_bucket"] = "video_id",
-    ) -> dict[str, Any]:
-        container = self._result_store.get(handle_id)
-        if not container:
-            return {
-                "error": f"No cached results found for handle_id '{handle_id}'",
-                "available_handle_ids": list(self._result_store.keys()),
-                "message": "Run a search tool first to generate results.",
-            }
-
-        if view_mode == "brief":
-            return container.get_brief(top_n)
-        elif view_mode == "detailed":
-            return container.get_detailed(top_n)
-        elif view_mode == "statistics":
-            return container.get_statistics(group_by)
-        else:
-            return container.get_full()
+        return self.get_full("audio_search", "get_audio_from_query_hybrid", kwargs, results) #type:ignore
 
 
 __all__ = ["VideoSearchToolkit"]

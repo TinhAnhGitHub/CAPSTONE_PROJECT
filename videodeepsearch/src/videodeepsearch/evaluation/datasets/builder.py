@@ -48,69 +48,6 @@ class DatasetBuilder:
         self.version = version
         self.records: list[EvalRecord] = []
 
-    def add_record(
-        self,
-        user_id: str,
-        ground_truth_video_ids: list[str],
-        total_video_haystack_ids: list[str],
-        user_demand: str,
-        session_id: str | None = None,
-        expected_response: str | None = None,
-        expected_facts: list[dict[str, str] | ExpectedFact] | None = None,
-        expected_video_ids: list[str] | None = None,
-        notes: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> EvalRecord:
-        """Add a single evaluation record.
-
-        Args:
-            user_id: User identifier
-            video_ids: List of video IDs to search
-            user_demand: User's question or request
-            session_id: Optional session ID (auto-generated if None)
-            expected_response: Expected response text
-            expected_facts: List of expected facts (dict or ExpectedFact)
-            expected_video_ids: Expected related video IDs
-            notes: Notes for evaluation reference
-            guidelines: Custom guidelines for this record
-            metadata: Additional context
-
-        Returns:
-            The created EvalRecord
-        """
-
-        inputs = EvalInput(
-            user_id=user_id,
-            ground_truth_video_ids=ground_truth_video_ids,
-            total_video_haystack_ids=total_video_haystack_ids,
-            user_demand=user_demand,
-            session_id=session_id, #type:ignore
-        )
-
-        
-        exp_facts = None
-        if expected_facts:
-            exp_facts = [
-                ExpectedFact(**f) if isinstance(f, dict) else f
-                for f in expected_facts
-            ]
-
-        expectations = EvalExpectation(
-            expected_response=expected_response,
-            expected_facts=exp_facts,
-            expected_video_ids=expected_video_ids,
-            notes=notes,
-        )
-
-
-        record = EvalRecord(
-            inputs=inputs,
-            expectations=expectations,
-            metadata=metadata,
-        )
-        self.records.append(record)
-        return record
-
     def add_record_from_dict(self, data: dict[str, Any]) -> EvalRecord:
         record = EvalRecord.from_dict(data)
         self.records.append(record)
