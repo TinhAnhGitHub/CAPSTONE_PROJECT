@@ -25,7 +25,6 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
         initialValue: video.name,
         onSave: (value) => onEdit?.(video._id, value),
     });
-
     const queryClient = useQueryClient();
     const session_id = useStore((state) => state.session_id);
     const selectMutation = useMutation({

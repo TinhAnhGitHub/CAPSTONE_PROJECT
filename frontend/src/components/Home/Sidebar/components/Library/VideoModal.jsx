@@ -2,7 +2,7 @@ import VideoJS from '@/components/common/components/VideoPlayer/VideoJS'
 import Modal from '@/components/Modal/modal'
 import React from 'react'
 
-export default function VideoModal({ isModalOpen, closeModal, title="Video name", video }) {
+export default function VideoModal({ isModalOpen, closeModal, video }) {
   if (!video) return null;
       const videoJsOptions = {
         autoplay: false,
@@ -28,7 +28,7 @@ export default function VideoModal({ isModalOpen, closeModal, title="Video name"
       }
     
   return (
-    <Modal isOpen={isModalOpen} onClose={closeModal} title={title} zIndex='z-60'>
+    <Modal isOpen={isModalOpen} onClose={closeModal} title={video.name} zIndex='z-60'>
       <div className=''>
         <VideoJS options={videoJsOptions} />
       </div>

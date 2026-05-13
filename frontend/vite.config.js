@@ -15,7 +15,7 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ['capstone.departmentofcodingknight.site'],
+    allowedHosts: ['capstone.departmentofcodingknight.site','tinhanhnguyen-z790-aorus-elite-ax.tail1d91ec.ts.net'],
   },
   test: {
     globals: true,

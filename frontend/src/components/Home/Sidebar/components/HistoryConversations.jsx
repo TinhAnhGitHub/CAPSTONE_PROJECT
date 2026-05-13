@@ -31,7 +31,12 @@ export default function HistoryConversations() {
       onSuccess: (data) => {
         setChatHistory(data);
         if (data.length > 0) {
-          if (!session_id) {
+          // Always read live state — closure-captured session_id can be stale
+          const currentSessionId = useStoreChat.getState().session_id;
+          const sessionStillValid = currentSessionId &&
+            data.some(chat => chat._id === currentSessionId);
+          if (!sessionStillValid) {
+            // Switch to first session (covers login, logout-login, different user)
             setSessionId(data[0]._id);
           }
         }

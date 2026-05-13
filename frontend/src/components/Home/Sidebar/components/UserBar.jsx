@@ -1,4 +1,5 @@
 import { useStore } from '@/stores/user';
+import { useStore as useChatStore } from '@/stores/chat';
 
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +10,15 @@ export default function UserBar() {
     const logout = useStore.getState().logout;
     const logoutConfirm = () => {
         if (confirm("Are you sure you want to logout?")) {
+            // Reset chat store state (session_id lives here, not in user store)
+            useChatStore.setState({
+                session_id: null,
+                chatMessages: [],
+                chatHistory: [],
+                workspaceVideos: [],
+                overrideVideos: [],
+                currentGroup: null,
+            });
             logout();
         }
     }
