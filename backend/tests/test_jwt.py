@@ -94,8 +94,9 @@ class TestVerifyToken:
         assert payload["user_id"] == "abc123"
         assert payload["email"] == "alice@example.com"
 
-    def test_tc_jwt_09_expired_token_returns_fallback(self):
-        """TC-JWT-09: Expired token returns fallback payload instead of raising."""
+    def test_tc_jwt_09_expired_token_raises_401(self):
+        """TC-JWT-09: Expired token raises HTTP 401 with 'Token expired' detail."""
+        from fastapi import HTTPException
         expired_token = jwt.encode(
             {"user_id": "x", "exp": 1},  # exp=1 → definitely expired
             SECRET_KEY,
@@ -103,15 +104,17 @@ class TestVerifyToken:
         )
         creds = MagicMock()
         creds.credentials = expired_token
-        result = verify_token(credentials=creds)
-        # Should fall back gracefully, not raise
-        assert isinstance(result, dict)
-        assert "user_id" in result
+        with pytest.raises(HTTPException) as exc_info:
+            verify_token(credentials=creds)
+        assert exc_info.value.status_code == 401
+        assert "expired" in exc_info.value.detail.lower()
 
-    def test_tc_jwt_10_invalid_token_returns_fallback(self):
-        """TC-JWT-10: Garbage token returns fallback payload instead of raising."""
+    def test_tc_jwt_10_invalid_token_raises_401(self):
+        """TC-JWT-10: Garbage token raises HTTP 401 with 'Invalid token' detail."""
+        from fastapi import HTTPException
         creds = MagicMock()
         creds.credentials = "not.a.real.token"
-        result = verify_token(credentials=creds)
-        assert isinstance(result, dict)
-        assert "user_id" in result
+        with pytest.raises(HTTPException) as exc_info:
+            verify_token(credentials=creds)
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail  # some detail message present

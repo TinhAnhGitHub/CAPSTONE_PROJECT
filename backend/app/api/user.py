@@ -47,20 +47,22 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         "iat": 1763113291,
         "exp": 1763242891,
     }
+
+    # No token provided → fall back to tester payload (dev mode)
+    if credentials is None or not credentials.credentials:
+        return tester_payload
+
     try:
         payload = jwt.decode(
             credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
         )
-        # print("Decoded JWT payload:", payload)
         return payload  # contains user_id, email, etc.
     except jwt.ExpiredSignatureError:
-        return tester_payload
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
-        return tester_payload
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
-        return tester_payload
+        raise HTTPException(status_code=401, detail=f"Unauthorized: {str(e)}")
 
 
 @router.get("/secure-endpoint")

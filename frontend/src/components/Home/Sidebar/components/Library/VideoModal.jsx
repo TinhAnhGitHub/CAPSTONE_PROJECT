@@ -1,36 +1,78 @@
 import VideoJS from '@/components/common/components/VideoPlayer/VideoJS'
 import Modal from '@/components/Modal/modal'
-import React from 'react'
+import { useStore as useChatStore } from '@/stores/chat'
+import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
+import React, { useMemo } from 'react'
 
 export default function VideoModal({ isModalOpen, closeModal, video }) {
+  // ALL hooks must run unconditionally — before any early return
+  const overrideVideos = useChatStore((s) => s.overrideVideos);
+  const setOverrideVideos = useChatStore((s) => s.setOverrideVideos);
+
+  // Normalise: chip videos use _id/id; VideoPlayer uses video_id
+  const videoId = video?._id ?? video?.id ?? video?.video_id;
+  const isAdded = overrideVideos.some(v => (v.video_id ?? v._id ?? v.id) === videoId);
+
+  // Memoised so VideoJS never sees a new options object on re-render (prevents reload)
+  const videoJsOptions = useMemo(() => ({
+    autoplay: false,
+    controls: true,
+    responsive: true,
+    fluid: true,
+    aspectRatio: '16:9',
+    controlBar: {
+      children: [
+        'playToggle',
+        'volumePanel',
+        'currentTimeDisplay',
+        'timeDivider',
+        'durationDisplay',
+        'progressControl',
+        'fullscreenToggle',
+      ],
+    },
+    sources: [{ src: video?.url, type: 'video/mp4' }],
+  }), [video?.url]); // only rebuild if the URL changes
+
+  // Guard after hooks
   if (!video) return null;
-      const videoJsOptions = {
-        autoplay: false,
-        controls: true,
-        responsive: true,
-        fluid: true,
-        aspectRatio: '16:9',
-        controlBar: {
-          children: [
-            'playToggle',
-            'volumePanel',
-            'currentTimeDisplay',
-            'timeDivider',
-            'durationDisplay',
-            'progressControl',
-            'fullscreenToggle',
-          ],
-        },
-        sources: [{
-          src: video.url,
-          type: 'video/mp4'
-        }]
-      }
-    
+
+  const toggleContext = () => {
+    if (isAdded) {
+      setOverrideVideos(overrideVideos.filter(v => (v.video_id ?? v._id ?? v.id) !== videoId));
+    } else {
+      setOverrideVideos([...overrideVideos, {
+        video_id: videoId,
+        url: video.url,
+        title: video.name ?? video.title ?? videoId,
+        thumbnail: video.thumbnail ?? null,
+      }]);
+    }
+  };
+
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal} title={video.name} zIndex='z-60'>
-      <div className=''>
-        <VideoJS options={videoJsOptions} />
+      <VideoJS options={videoJsOptions} />
+
+      {/* Add-to-context button */}
+      <div className="flex items-center justify-end mt-3">
+        <button
+          onClick={toggleContext}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer hover:bg-surface-light"
+          title={isAdded ? 'Remove from chat context' : 'Add to chat context'}
+        >
+          {isAdded ? (
+            <>
+              <CheckCircleIcon className="w-5 h-5 text-accent" />
+              <span className="text-accent">Added to context</span>
+            </>
+          ) : (
+            <>
+              <PlusCircleIcon className="w-5 h-5 text-text-muted hover:text-accent transition-colors" />
+              <span className="text-text-muted">Add to context</span>
+            </>
+          )}
+        </button>
       </div>
     </Modal>
   )

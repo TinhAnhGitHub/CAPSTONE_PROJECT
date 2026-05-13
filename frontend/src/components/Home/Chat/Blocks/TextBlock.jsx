@@ -8,7 +8,6 @@ import { ClipboardDocumentIcon, CheckIcon } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import { useStore as useChatStore } from "@/stores/chat";
 import { useVideoModalStore } from "@/stores/videoModal";
-import VideoModal from "@/components/Home/Sidebar/components/Library/VideoModal";
 
 // Matches a 24-char hex ObjectId whether bare, in "quotes", or `backtick` spans.
 // Capture group 1 = the raw ID (no surrounding punctuation).
@@ -167,7 +166,6 @@ function PreBlock({ children, ...props }) {
 
 export default function TextBlock({ block, role }) {
     const [copied, setCopied] = useState(false);
-    const { video: modalVideo, isOpen, close } = useVideoModalStore();
 
     return (
         <div
@@ -232,12 +230,6 @@ export default function TextBlock({ block, role }) {
                 </button>
             )}
 
-            {/* Video modal — driven by the global useVideoModalStore */}
-            <VideoModal
-                isModalOpen={isOpen}
-                closeModal={close}
-                video={modalVideo}
-            />
         </div>
     );
 }

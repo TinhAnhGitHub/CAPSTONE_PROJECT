@@ -268,8 +268,26 @@ export default function VideoPlayer({ video }) {
           <div className='flex-1 lg:flex-2 max-lg:max-h-[50%] lg:h-full'>
             <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
             {/* settings like, save allkeyframes, save all images from keyframe */}
-            <div className='m-2'>
+            <div className='m-2 flex items-center justify-between'>
               <SaveKeyframes segments={video.segments} videoId={video.video_id} videoName={video.title} />
+              {/* Add-to-context toggle — same as the + button on the video block */}
+              <button
+                onClick={addVideoToChatSession}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer hover:bg-surface-light"
+                title={overrideVideos.find(v => v.video_id === video.video_id) ? 'Remove from chat context' : 'Add to chat context'}
+              >
+                {overrideVideos.find(v => v.video_id === video.video_id) ? (
+                  <>
+                    <CheckCircleIcon className="w-5 h-5 text-accent" />
+                    <span className="text-accent">Added to context</span>
+                  </>
+                ) : (
+                  <>
+                    <PlusCircleIcon className="w-5 h-5 text-text-muted" />
+                    <span className="text-text-muted">Add to context</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
           {/* 1 part */}

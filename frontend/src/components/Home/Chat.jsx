@@ -16,6 +16,8 @@ import SendButton from './SendButton';
 import AppBar from '../Appbar';
 import { XMarkIcon } from '@heroicons/react/16/solid';
 import toast from 'react-hot-toast';
+import VideoModal from '@/components/Home/Sidebar/components/Library/VideoModal';
+import { useVideoModalStore } from '@/stores/videoModal';
 
 export default function Chat() {
   const {
@@ -361,8 +363,12 @@ export default function Chat() {
     });
   };
 
+  const { video: modalVideo, isOpen: isVideoModalOpen, close: closeVideoModal } = useVideoModalStore();
+
   return (
     <div className='h-screen w-full flex flex-col justify-between bg-background'>
+      {/* Single VideoModal instance for chip-opened videos */}
+      <VideoModal isModalOpen={isVideoModalOpen} closeModal={closeVideoModal} video={modalVideo} />
       <AppBar />
       <div className='sticky top-0 border-b flex-shrink-0 max-md:hidden border-surface-light h-14'>
       </div>
