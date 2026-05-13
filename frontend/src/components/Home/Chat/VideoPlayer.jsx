@@ -70,7 +70,7 @@ export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const playerRef = useRef(null)
 
-  console.log(video)
+  // console.log(video)
 
   const setOverrideVideos = useStore((state) => state.setOverrideVideos)
   const overrideVideos = useStore((state) => state.overrideVideos)

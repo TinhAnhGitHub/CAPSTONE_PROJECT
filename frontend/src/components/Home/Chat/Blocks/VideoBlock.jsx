@@ -26,13 +26,15 @@ export default function VideoBlock({ block }) {
         }))
         : block.segments;
 
+    // console.log(block);
+
     return (
         <div className="grid max-md:grid-cols-2 grid-cols-3 gap-2 py-2 px-4">
             <VideoPlayer
                 video={{
                     video_id: block.video_id,
                     url: block.url,
-                    title: 'Video',
+                    title: block.name || block.video_id || 'Video',
                     segments: segments,
                     fps: block.fps,
                     thumbnail: block.thumbnail

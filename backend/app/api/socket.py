@@ -330,6 +330,9 @@ async def handle_stream_chat(socket_id, data: dict):
                                         # sort segment_list based on start time
                                         segment_list.sort(key=lambda x: x.start)
                                         video = await Video.get(video_id)
+                                        if video is None:
+                                            print(f"⚠️ VideoBlock: video {video_id} not found in DB — skipping block")
+                                            continue
                                         video_block = VideoBlock(
                                             video_id=video_id,
                                             # public url
