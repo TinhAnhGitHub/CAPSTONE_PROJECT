@@ -10,7 +10,7 @@ export default function AppBar() {
       {/* Hamburger button - only visible on mobile (md and below) */}
       <button
         onClick={toggleSidebar}
-        className="p-2 rounded-lg text-text-muted hover:text-text hover:bg-surface-light transition-colors cursor-pointer"
+        className="p-2 rounded-lg text-text-muted hover:text-text hover:bg-surface-light transition-colors cursor-pointer active:bg-white/20"
         aria-label="Toggle sidebar"
       >
         <Bars3Icon className="w-6 h-6" />

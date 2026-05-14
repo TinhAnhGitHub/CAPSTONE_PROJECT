@@ -16,8 +16,6 @@ import SendButton from './SendButton';
 import AppBar from '../Appbar';
 import { XMarkIcon } from '@heroicons/react/16/solid';
 import toast from 'react-hot-toast';
-import VideoModal from '@/components/Home/Sidebar/components/Library/VideoModal';
-import { useVideoModalStore } from '@/stores/videoModal';
 
 export default function Chat() {
   const {
@@ -363,12 +361,8 @@ export default function Chat() {
     });
   };
 
-  const { video: modalVideo, isOpen: isVideoModalOpen, close: closeVideoModal } = useVideoModalStore();
-
   return (
     <div className='h-screen w-full flex flex-col justify-between bg-background'>
-      {/* Single VideoModal instance for chip-opened videos */}
-      <VideoModal isModalOpen={isVideoModalOpen} closeModal={closeVideoModal} video={modalVideo} />
       <AppBar />
       <div className='sticky top-0 border-b flex-shrink-0 max-md:hidden border-surface-light h-14'>
       </div>
@@ -405,6 +399,7 @@ export default function Chat() {
               cursor-pointer
               hover:bg-surface-light
               transition-all ease-out
+              active:bg-surface-light
             "
               aria-label="Scroll to bottom"
             >
@@ -423,22 +418,28 @@ export default function Chat() {
             'flex flex-col w-full rounded-xl bg-surface border border-surface-light',
             'focus-within:ring-2 focus-within:ring-accent/50 focus-within:border-accent transition-all'
           )}>
-            {/* Video thumbnails inside the input container */}
+            {/* Video context pills inside the input container */}
             {isOverrideMode() && overrideVideos.length > 0 && (
-              <div className='flex flex-wrap gap-2 px-3 pt-3'>
+              <div className='flex flex-wrap gap-1.5 px-3 pt-3'>
                 {overrideVideos.map((video, index) => (
                   <div
                     key={index}
-                    className='relative group rounded-lg overflow-hidden border border-surface-light hover:border-accent/50 transition-colors'
+                    className='group flex items-center gap-0 rounded-lg overflow-hidden border border-surface-light hover:border-accent/50 transition-colors bg-surface max-w-[160px]'
                   >
+                    {/* Thumbnail */}
                     <img
                       src={video.thumbnail || '/images/testImage.png'}
                       alt={video.title}
-                      className='w-16 h-10 object-cover'
+                      className='w-10 h-8 object-cover shrink-0'
                     />
+                    {/* Name */}
+                    <span className='px-2 text-[11px] text-text-muted truncate flex-1 min-w-0'>
+                      {video.title}
+                    </span>
+                    {/* Remove */}
                     <button
                       onClick={() => setOverrideVideos(overrideVideos.filter((v) => v.video_id !== video.video_id))}
-                      className='absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-all cursor-pointer'
+                      className='shrink-0 mr-1 p-0.5 rounded-full text-text-dim hover:bg-red-500/80 hover:text-white active:bg-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer'
                       title='Remove video'
                     >
                       <XMarkIcon className='w-3 h-3' />

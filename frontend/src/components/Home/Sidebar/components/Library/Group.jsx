@@ -27,7 +27,7 @@ export default function Group({ group, onEdit }) {
 
   return isEditing ? (
     <input
-      className="relative mx-1 my-1 py-2 px-3 bg-surface rounded-lg text-sm text-text outline-none focus:ring-2 focus:ring-accent/50"
+      className="relative mx-1 my-1 py-2 px-3 bg-surface rounded-lg text-sm text-text outline-none focus:ring-2 focus:ring-accent/50 shrink-0 min-w-[5rem]"
       autoFocus
       value={editValue}
       onChange={(e) => setEditValue(e.target.value)}
@@ -41,7 +41,8 @@ export default function Group({ group, onEdit }) {
     <div
       className={clsx(
         "relative mx-1 my-0.5 py-2 px-3 rounded-lg cursor-pointer transition-colors",
-        "text-text-muted hover:text-text hover:bg-white/5",
+        "text-text-muted hover:text-text hover:bg-white/5 active:bg-white/5",
+        "shrink-0 min-w-[5rem]",
         currentGroup === group._id && "bg-white/10 text-text",
         "group"
       )}
@@ -49,7 +50,7 @@ export default function Group({ group, onEdit }) {
     >
       <div className="text-sm truncate pr-6">{group.name}</div>
 
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 hover:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block">
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 hover:bg-white/10 active:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block">
         <GroupDropdownList group={group} onStartEdit={startEditing} />
       </div>
     </div>

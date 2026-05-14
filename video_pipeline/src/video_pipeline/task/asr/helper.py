@@ -57,19 +57,36 @@ def delete_audio_file(path: str) -> None:
         pass
 
 
+import re
+
 def parse_asr_response(raw: str) -> str:
-    """Parse a Qwen3-ASR response string into clean transcription text.
-
-    Qwen3-ASR prefixes each language segment with:
-        ``language <lang><asr_text><transcription>``
-
-    This strips all such markers and returns the joined text.
-
-    Example raw input::
-        "language English<asr_text>Hello world.language Chinese<asr_text>你好。"
-
-    Returns::
-        "Hello world.你好。"
     """
-    text = re.sub(r"language\s+[^<]+<asr_text>", "", raw)
-    return text.strip()
+    Extract only non-Chinese transcription text from Qwen3-ASR output.
+    """
+
+    parts = re.findall(
+        r'language\s+([^<]+)<asr_text>(.*?)(?=language\s+[^<]+<asr_text>|$)',
+        raw,
+        flags=re.DOTALL
+    )
+
+    cleaned = []
+
+    for lang, text in parts:
+        lang = lang.strip().lower()
+        text = text.strip()
+
+        if not text:
+            continue
+
+        if "chinese" in lang:
+            continue
+
+        text = re.sub(r'[\u4e00-\u9fff]+', '', text)
+
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        if text:
+            cleaned.append(text)
+
+    return ' '.join(cleaned)

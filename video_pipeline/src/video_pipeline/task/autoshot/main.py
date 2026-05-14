@@ -25,7 +25,6 @@ from .helper import (
 )
 AUTOSHOT_CONFIG = TaskConfig.from_yaml("autoshot_detection")
 
-# Maximum concurrent batch inference requests to Triton
 MAX_CONCURRENT_BATCHES = 4
 
 
@@ -46,7 +45,6 @@ class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
         video_path = input_data.video_minio_url
         bucket, object_name = split_minio_url(video_path)
 
-        # Create temp file and stream video directly to it (avoids OOM)
         tmp_file = tempfile.NamedTemporaryFile(
             suffix=f".{input_data.video_extension or '.mp4'}",
             delete=False

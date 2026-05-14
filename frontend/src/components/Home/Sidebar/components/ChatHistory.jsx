@@ -35,7 +35,7 @@ export default function ChatHistory({ conv, session_id, onEdit }) {
             <div
                 className={
                     clsx('relative mx-2 my-0.5 py-2 px-3 rounded-lg cursor-pointer transition-colors',
-                        'text-text-muted hover:text-text hover:bg-white/5',
+                        'text-text-muted hover:text-text hover:bg-white/5 active:bg-white/5',
                         session_id === conv._id && 'bg-white/10 text-text',
                         "group"
                     )
@@ -44,7 +44,7 @@ export default function ChatHistory({ conv, session_id, onEdit }) {
                 }>
                 <div className='text-sm truncate pr-6'>{conv.name || conv._id}</div>
                 {/* Ellipsis: always visible on mobile (md:hidden), hover on desktop (md:group-hover:block) */}
-                <div className='absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 hover:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block'>
+                <div className='absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 hover:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block active:bg-white/10'>
                     <SessionDropdownList session={conv} onStartEdit={startEditing} />
                 </div>
             </div>

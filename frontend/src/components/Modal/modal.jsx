@@ -39,7 +39,7 @@ export default function Modal({
         >
             <DialogBackdrop
                 transition
-                className="fixed inset-0 bg-black/30 transition-opacity duration-300 ease-out data-closed:opacity-0"
+                className={`fixed inset-0 bg-black/30 ${zIndex} transition-opacity duration-300 ease-out data-closed:opacity-0`}
             />
             <div className={`fixed inset-0 ${zIndex} w-screen overflow-y-auto `}>
                 <div className="flex min-h-full items-center justify-center p-4">
@@ -47,7 +47,7 @@ export default function Modal({
                         transition
                         className={`
                             w-full rounded-xl bg-surface p-6 backdrop-blur-2xl
-                            transition-all duration-300 ease-out
+                            transition-[opacity,transform] duration-300 ease-out
                             data-closed:scale-95 data-closed:opacity-0
                             ${sizeClasses[size] || sizeClasses.lg}
                             ${(size === 'full' || size === 'xl') ? 'flex flex-col' : ''}
@@ -57,7 +57,7 @@ export default function Modal({
                         {showCloseButton && (
                             <button
                                 onClick={onClose}
-                                className="absolute top-4 right-4 p-1 rounded-lg text-text-muted hover:text-text hover:bg-surface-light transition-colors z-10 cursor-pointer"
+                                className="absolute top-4 right-4 p-1 rounded-lg text-text-muted hover:text-text hover:bg-white/10 active:bg-white/10 transition-colors z-10 cursor-pointer"
                                 aria-label="Close modal"
                             >
                                 <XMarkIcon className="size-5" />

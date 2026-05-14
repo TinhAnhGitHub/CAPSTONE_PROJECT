@@ -2,15 +2,22 @@ import VideoJS from '@/components/common/components/VideoPlayer/VideoJS'
 import Modal from '@/components/Modal/modal'
 import { useStore as useChatStore } from '@/stores/chat'
 import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 
 export default function VideoModal({ isModalOpen, closeModal, video }) {
   // ALL hooks must run unconditionally — before any early return
   const overrideVideos = useChatStore((s) => s.overrideVideos);
   const setOverrideVideos = useChatStore((s) => s.setOverrideVideos);
 
+  // Keep a cached copy of video so the exit animation isn't cut short
+  // (close() sets video=null immediately, which would unmount before the fade-out)
+  const [displayVideo, setDisplayVideo] = useState(null);
+  useEffect(() => {
+    if (video) setDisplayVideo(video);
+  }, [video]);
+
   // Normalise: chip videos use _id/id; VideoPlayer uses video_id
-  const videoId = video?._id ?? video?.id ?? video?.video_id;
+  const videoId = displayVideo?._id ?? displayVideo?.id ?? displayVideo?.video_id;
   const isAdded = overrideVideos.some(v => (v.video_id ?? v._id ?? v.id) === videoId);
 
   // Memoised so VideoJS never sees a new options object on re-render (prevents reload)
@@ -31,11 +38,11 @@ export default function VideoModal({ isModalOpen, closeModal, video }) {
         'fullscreenToggle',
       ],
     },
-    sources: [{ src: video?.url, type: 'video/mp4' }],
-  }), [video?.url]); // only rebuild if the URL changes
+    sources: [{ src: displayVideo?.url, type: 'video/mp4' }],
+  }), [displayVideo?.url]); // only rebuild if the URL changes
 
-  // Guard after hooks
-  if (!video) return null;
+  // Guard after hooks - only block render if we've never had a video
+  if (!displayVideo) return null;
 
   const toggleContext = () => {
     if (isAdded) {
@@ -51,7 +58,7 @@ export default function VideoModal({ isModalOpen, closeModal, video }) {
   };
 
   return (
-    <Modal isOpen={isModalOpen} onClose={closeModal} title={video.name} zIndex='z-60'>
+    <Modal isOpen={isModalOpen} onClose={closeModal} title={displayVideo.name} zIndex='z-60'>
       <VideoJS options={videoJsOptions} />
 
       {/* Add-to-context button */}

@@ -72,7 +72,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
     return (
         <div className={clsx(
             "group relative rounded-xl p-2 cursor-pointer transition-all",
-            "hover:bg-white/5",
+            "hover:bg-white/5 active:bg-white/5",
             (errorIngested(video.ingested_status) || !ingested(video.ingested_status)) && "opacity-50",
             isHighlighted && "animate-highlight-pulse ring-2 ring-accent ring-offset-2 ring-offset-background rounded-xl")}
             onClick={handleOpenModal}>
@@ -160,7 +160,7 @@ export default function VideoCard({ video, isHighlighted = false, onEdit }) {
 
                 {/* 3-dots */}
                 <div
-                    className="absolute top-0 right-0 rounded-md p-1 hover:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block"
+                    className="absolute top-0 right-0 rounded-md p-1 hover:bg-white/10 active:bg-white/10 cursor-pointer block md:hidden md:group-hover:block has-data-open:block"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <VideoDropdownList
