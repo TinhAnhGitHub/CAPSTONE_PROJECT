@@ -90,3 +90,8 @@ code {
     from { opacity: 0; transform: translateY(4px) scale(0.97); }
     to   { opacity: 1; transform: translateY(0)   scale(1);    }
 }
+
+@keyframes dot-shimmer {
+    0%, 100% { opacity: 0.2; transform: scale(0.75); }
+    50%      { opacity: 1;   transform: scale(1);    }
+}

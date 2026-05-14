@@ -56,11 +56,13 @@ export default function Chat() {
   const selectedVideosIds = videos.filter(video => video.selected).map(video => video._id);
   const [querying, setQuerying] = useState(false);
   const isStreamingRef = useRef(false); // Track if we received continue_stream
+  const streamEndedRef = useRef(false);  // Guard: prevents late continue_stream from re-opening querying
   const previousSessionIdRef = useRef(session_id);
 
   // chạy khi chuyển session
   useEffect(() => {
     isStreamingRef.current = false;
+    streamEndedRef.current = false;
     setQuerying(false); // Reset querying state - will be set to true by continue_stream if needed
     // Only clear when session actually changes, not on initial mount/remount.
     if (previousSessionIdRef.current && previousSessionIdRef.current !== session_id) {
@@ -246,16 +248,24 @@ export default function Chat() {
       console.log("continue_stream updated", updated);
       setChatMessages(updated);
       scrollToBottomIfNeeded();
-      setQuerying(true);
+      // Only re-enter querying state if stream hasn't already ended
+      // (guards against network reordering where stream_end arrives before continue_stream)
+      if (!streamEndedRef.current) {
+        setQuerying(true);
+      }
     }
     const handleStreamEnd = (msg) => {
       isStreamingRef.current = false; // Reset streaming flag
+      streamEndedRef.current = true;  // Mark that stream has ended for this query
       setQuerying(false);
     }
 
     const handleError = () => {
       toast.error('Failed to reach agent');
-      stopStreaming();
+      // Just reset state — don't emit cancel_stream, the backend is already in an error state
+      isStreamingRef.current = false;
+      streamEndedRef.current = true;
+      setQuerying(false);
     }
 
     socket.on('message_received', handleMessageReceived);
@@ -381,6 +391,15 @@ export default function Chat() {
               ))}
             </div>
           ))}
+
+          {/* Typing / streaming indicator */}
+          {querying && (
+            <div className="flex items-center gap-1.5 px-1 py-2">
+              <span className="w-1 h-1 rounded-full bg-accent" style={{ animation: 'dot-shimmer 1.4s ease-in-out infinite', animationDelay: '0ms' }} />
+              <span className="w-1 h-1 rounded-full bg-accent" style={{ animation: 'dot-shimmer 1.4s ease-in-out infinite', animationDelay: '280ms' }} />
+              <span className="w-1 h-1 rounded-full bg-accent" style={{ animation: 'dot-shimmer 1.4s ease-in-out infinite', animationDelay: '560ms' }} />
+            </div>
+          )}
 
           {showScrollDown && (
             <button

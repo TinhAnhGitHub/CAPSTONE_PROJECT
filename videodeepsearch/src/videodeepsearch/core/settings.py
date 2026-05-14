@@ -175,18 +175,30 @@ class StorageConfig(BaseModel):
 class QwenVLConfig(BaseModel):
     base_url: str = "http://localhost:8000"
 
+    def model_post_init(self, __context) -> None:
+        if os.environ.get("QWENVL_BASE_URL"):
+            self.base_url = os.environ["QWENVL_BASE_URL"]
+
 
 class MMBertInfConfig(BaseModel):
     base_url: str = "http://localhost:8009"
     model_name: str = "mmbert"
 
+    def model_post_init(self, __context) -> None:
+        if os.environ.get("MMBERT_BASE_URL"):
+            self.base_url = os.environ["MMBERT_BASE_URL"]
+
 
 class SpladeConfig(BaseModel):
-    url: str = "http://localhost:8001"
+    url: str = "localhost:8001"
     model_name: str = "splade"
     timeout: int = 30
     verbose: bool = False
     max_batch_size: int = 32
+
+    def model_post_init(self, __context) -> None:
+        if os.environ.get("SPLADE_URL"):
+            self.url = os.environ["SPLADE_URL"]
 
 
 class InferenceConfig(BaseModel):

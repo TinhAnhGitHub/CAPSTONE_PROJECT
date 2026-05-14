@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -23,7 +24,9 @@ function VideoIdChip({ videoId }) {
     const workspaceVideos = useChatStore((s) => s.workspaceVideos);
     const open = useVideoModalStore((s) => s.open);
     const [showPreview, setShowPreview] = useState(false);
+    const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
     const hoverTimerRef = useRef(null);
+    const buttonRef = useRef(null);
 
     // Try to find a richer record (name, thumbnail) in workspace; fall back to ID-only
     const workspaceVideo = workspaceVideos.find((v) => v._id === videoId || v.id === videoId);
@@ -33,9 +36,25 @@ function VideoIdChip({ videoId }) {
         thumbnail: workspaceVideo?.thumbnail ?? null,
     };
 
+    const mousePosRef = useRef({ x: 0, y: 0 });
+
+    const showTooltip = () => {
+        const { x, y } = mousePosRef.current;
+        const TOOLTIP_W = 224; // w-56 = 14rem = 224px
+        // Center the tooltip horizontally on the cursor, clamped to viewport edges
+        const left = Math.max(8, Math.min(x - TOOLTIP_W / 2, window.innerWidth - TOOLTIP_W - 8));
+        const top = y; // used to compute 'bottom' in render
+        setTooltipPos({ top, left });
+        setShowPreview(true);
+    };
+
     // ── Desktop: show on hover (400ms delay) ──
-    const handleMouseEnter = () => {
-        hoverTimerRef.current = setTimeout(() => setShowPreview(true), 400);
+    const handleMouseMove = (e) => {
+        mousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    const handleMouseEnter = (e) => {
+        mousePosRef.current = { x: e.clientX, y: e.clientY };
+        hoverTimerRef.current = setTimeout(showTooltip, 400);
     };
     const handleMouseLeave = () => {
         clearTimeout(hoverTimerRef.current);
@@ -48,7 +67,7 @@ function VideoIdChip({ videoId }) {
 
     const handleTouchStart = () => {
         longPressRef.current = setTimeout(() => {
-            setShowPreview(true);
+            showTooltip();
             // auto-dismiss after 2.5s
             autoDismissRef.current = setTimeout(() => setShowPreview(false), 2500);
         }, 600);
@@ -66,12 +85,14 @@ function VideoIdChip({ videoId }) {
         <span
             className="relative inline-flex"
             onMouseEnter={handleMouseEnter}
+            onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
         >
             <button
+                ref={buttonRef}
                 onClick={() => open(videoObj)}
                 title={videoObj.name}
                 className={clsx(
@@ -86,11 +107,13 @@ function VideoIdChip({ videoId }) {
                 {videoObj.name}
             </button>
 
-            {/* Hover / long-press video preview tooltip */}
-            {showPreview && (
+            {/* Hover / long-press video preview tooltip — portalled to body to escape overflow clipping */}
+            {showPreview && createPortal(
                 <div
-                    className="absolute bottom-full left-0 mb-2 z-50 w-56 rounded-xl overflow-hidden pointer-events-none"
+                    className="fixed z-[9999] w-56 rounded-xl overflow-hidden pointer-events-none"
                     style={{
+                        bottom: `${window.innerHeight - tooltipPos.top}px`,
+                        left: tooltipPos.left,
                         background: 'rgba(48,48,48,0.97)',
                         border: '1px solid rgba(255,255,255,0.1)',
                         boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,173,181,0.2)',
@@ -115,7 +138,8 @@ function VideoIdChip({ videoId }) {
                         <p className="text-xs font-medium text-text truncate">{videoObj.name}</p>
                         <p className="text-[10px] text-accent/80 mt-0.5">Click to open player</p>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </span>
     );
