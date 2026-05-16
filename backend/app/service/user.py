@@ -36,6 +36,9 @@ from fastapi.encoders import jsonable_encoder
 
 from werkzeug.utils import secure_filename
 
+# Celery task imports — lazy-import-safe because Celery registers tasks at module load
+from app.worker.tasks import ingest_video_task, cancel_ingestion_task
+
 
 class UserService:
     def __init__(self, minio_service: MinioService, sio):
@@ -243,26 +246,42 @@ class UserService:
 
         return video_id_video_url_thumbnail_url_length_fps_obj
 
-    async def ingest_videos(self, user_id: str, video_ids_video_url_obj):
-        # bảo ingestion ingest mấy video có id đó
-        try:
-            async with httpx.AsyncClient() as client:
-                answer = await client.post(
-                    "http://100.113.186.28:8050/uploads/",
-                    json={"videos": video_ids_video_url_obj, "user_id": user_id},
-                )
-        except Exception as e:
-            logging.error(f"Error notifying ingestion service: {e}")
+    def ingest_videos(self, user_id: str, video_ids_video_url_obj: list[dict]) -> list[str]:
+        """Enqueue one Celery task per video (non-blocking, fire-and-forget).
 
-    async def retry_ingestion(self, user_id: str, video_ids: list[str]):
-        # get videos info from db and filter videoid and url only
+        Each video is processed independently so a slow/failed video does not
+        block the others.  Workers retry up to 3 times with exponential back-off.
+
+        Returns:
+            List of Celery task IDs (useful for debugging / Flower monitoring).
+        """
+        task_ids = []
+        for item in video_ids_video_url_obj:
+            task = ingest_video_task.delay(
+                video_id=item["video_id"],
+                video_url=item["video_url"],
+                user_id=user_id,
+            )
+            task_ids.append(task.id)
+            logging.info(
+                "📋 Enqueued ingest_video_task task_id=%s video_id=%s",
+                task.id,
+                item["video_id"],
+            )
+        return task_ids
+
+    async def retry_ingestion(self, user_id: str, video_ids: list[str]) -> list[str]:
+        """Re-enqueue ingestion Celery tasks for videos that previously failed."""
         video_objs = []
         for vid in video_ids:
             video = await Video.get(PydanticObjectId(vid))
             if video:
                 video_objs.append({"video_id": vid, "video_url": video.url})
-        print("🔄🔄🔄 Retrying ingestion for videos:", video_objs)
-        await self.ingest_videos(user_id, video_objs)
+                # Reset ingestion status so the frontend shows progress again
+                video.ingested_status = 0
+                await video.save()
+        logging.info("🔄 Retrying ingestion for videos: %s", video_objs)
+        return self.ingest_videos(user_id, video_objs)
 
     async def get_user_videos(self, group_id: str, session_id: str):
         # all videos and their selected state
@@ -316,19 +335,14 @@ class UserService:
         await SessionVideo.find({"video_id": {"$in": video_ids}}).delete()
         # also tell ingestion to stop processing if it is processing those videos
         # request ingestion service
-        async with httpx.AsyncClient() as client:
-            # loop thorugh video ids to make request
-            # liệu ingested có đưa ra 2th là xoá hay chưa xoá ko?
-            for vid in video_ids:
-                try:
-                    await client.post(
-                        f"http://100.113.186.28:8000/management/runs/{vid}/cancel",
-                        json={"video_id": str(vid)},
-                    )
-                except Exception as e:
-                    print(
-                        f"Error notifying ingestion service to delete video {vid}: {e}"
-                    )
+        # Fire cancellation tasks via Celery (non-blocking, with retries)
+        for vid in video_ids:
+            try:
+                cancel_ingestion_task.delay(video_id=str(vid))
+                logging.info("🛑 Enqueued cancel_ingestion_task for video_id=%s", vid)
+            except Exception as e:
+                # Even if Redis is down we still continue with local cleanup
+                logging.error("Failed to enqueue cancel task for video_id=%s: %s", vid, e)
 
         # also delete from minio
         self.minio_service.delete_videos(video_ids)

@@ -3,8 +3,9 @@ import socketio
 
 
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
@@ -32,6 +33,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    """Suppresses Chrome's 'connect to local devices' prompt.
+    Required when the backend is accessed via a private/Tailscale IP."""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+
+app.add_middleware(PrivateNetworkAccessMiddleware)
 
 
 app_with_sockets = socketio.ASGIApp(sio, other_asgi_app=app)
