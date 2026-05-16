@@ -197,9 +197,9 @@ async def upload_files(
         for vid, video_url, thumb_url, length, fps in video_id_video_url_thumbnail_url_s3_url_obj
     ]
 
-    await user_service.ingest_videos(user_id, video_ids_video_url_obj)
+    task_ids = user_service.ingest_videos(user_id, video_ids_video_url_obj)
 
-    return {"msg": "File uploaded successfully"}
+    return {"msg": "File uploaded successfully", "queued_tasks": len(task_ids)}
 
 
 # for retry ingestion

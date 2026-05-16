@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from beanie import init_beanie
 from minio import Minio
+import threading
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from llama_index.core.llms import LLM
@@ -20,6 +21,7 @@ from app.model.group import Group
 from app.model.session_video import SessionVideo
 from app.model.video import Video
 from app.model.session_message import SessionMessage
+from app.worker.celery_app import celery_app
 
 
 class AppState:
@@ -60,7 +62,6 @@ async def lifespan(app: FastAPI):
         )
 
         minio_service = MinioService(minio_client)
-        # minio_service = None  # Placeholder for MinioService initialization
 
         print("✓ MinIO initialized")
     except Exception as e:
@@ -73,9 +74,28 @@ async def lifespan(app: FastAPI):
     app_state.user_service = UserService(minio_service, app_state.sio)
     print("✓ Services initialized")
 
+    # ── Embedded Celery worker ────────────────────────────────────────────────
+    # Runs in a background daemon thread so you don't need a separate terminal.
+    # daemon=True means it shuts down automatically when FastAPI exits.
+    # pool=threads avoids spawning child processes inside uvicorn's process.
+    worker = celery_app.Worker(
+        loglevel="info",
+        concurrency=4,
+        pool="threads",       # thread pool — safe to embed inside uvicorn
+        without_gossip=True,  # reduce Redis chatter
+        without_mingle=True,  # skip worker sync on startup (faster boot)
+        without_heartbeat=False,
+    )
+    worker_thread = threading.Thread(target=worker.start, daemon=True, name="celery-worker")
+    worker_thread.start()
+    print("✓ Celery worker started (embedded, thread pool, concurrency=4)")
+    # ─────────────────────────────────────────────────────────────────────────
+
     yield
 
     print("Shutting down application...")
+    worker.stop()
+    print("✓ Celery worker stopped")
     if app_state.mongo_client:
         app_state.mongo_client.close()
     print("✓ Application shutdown complete")
