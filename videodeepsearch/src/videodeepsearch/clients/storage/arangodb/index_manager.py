@@ -18,7 +18,7 @@ class ArangoIndexManager:
     """Manages ArangoDB indexes for Knowledge Graph collections.
 
     Creates the following index types:
-    - Vector indexes (semantic embeddings: 384-dim, structural embeddings: 128-dim)
+    - Vector indexes (semantic embeddings)
     - Inverted indexes (BM25/TF-IDF full-text search)
     - MDI indexes (multi-dimensional interval queries for time ranges)
     - Persistent indexes (fast lookups on video_id, entity_type)
@@ -28,7 +28,6 @@ class ArangoIndexManager:
     """
 
     SEMANTIC_DIM = 768 
-    STRUCTURAL_DIM = 128  
     GRAPH_NAME = "video_knowledge_graph"
     VIEW_NAME = "video_kg_search_view"
 
@@ -43,7 +42,6 @@ class ArangoIndexManager:
         """
         self.db = db
         self._semantic_dim = self.SEMANTIC_DIM
-        self._structural_dim = self.STRUCTURAL_DIM
 
     def _is_async(self) -> bool:
         """Check if the database client is async."""
@@ -363,7 +361,6 @@ class ArangoIndexManager:
             ("events", "event_semantic_idx", ["segment_index", "start_time"]),
             ("micro_events", "micro_event_semantic_idx", ["segment_index",
                                                           "micro_index"]),
-            ("communities", "community_semantic_idx", ["title", "size"]),
         ]
 
         for coll_name, idx_name, stored_fields in semantic_targets:
@@ -386,77 +383,6 @@ class ArangoIndexManager:
             }
 
             await self._create_index_safe(coll_name, index_config)
-
-    async def create_vector_indexes_structural(
-        self,
-        structural_dim: int | None = None,
-    ) -> None:
-        """Create structural (Node2Vec) vector indexes.
-
-        Creates IVF vector indexes on structural embedding fields.
-        Supports multiple structural embedding variants:
-        - entity_only: Entity-only graph structure
-        - entity_event: Entity-event bipartite graph
-        - full: Full heterogeneous graph
-
-        Args:
-            structural_dim: Dimension of structural embeddings (default: 128)
-        """
-        if structural_dim:
-            self._structural_dim = structural_dim
-
-        logger.info("[Vector Indexes — Structural]")
-
-        structural_targets = [
-            (
-                "entities",
-                [
-                    "structural_embedding_entity_only",
-                    "structural_embedding_entity_event",
-                    "structural_embedding_full",
-                ],
-            ),
-            (
-                "events",
-                [
-                    "structural_embedding_entity_event",
-                    "structural_embedding_full",
-                ],
-            ),
-            (
-                "micro_events",
-                [
-                    "structural_embedding_entity_event",
-                    "structural_embedding_full",
-                ],
-            ),
-            (
-                "communities",
-                [
-                    "structural_embedding_full",
-                ],
-            ),
-        ]
-
-        for coll_name, fields in structural_targets:
-            n_docs = await self._get_collection_count(coll_name)
-            nlists = self._safe_nlists(n_docs)
-
-            for field in fields:
-                idx_name = f"{coll_name}_{field}_idx"
-                index_config = {
-                    "type": "vector",
-                    "name": idx_name,
-                    "fields": [field],
-                    "params": {
-                        "dimension": self._structural_dim,
-                        "metric": "cosine",
-                        "nLists": nlists,
-                        "defaultNProbe": min(10, nlists),
-                        "trainingIterations": 40,
-                    },
-                }
-                await self._create_index_safe(coll_name, index_config)
 
     async def create_inverted_indexes(self) -> None:
         """Create inverted indexes for BM25/TF-IDF full-text search.
@@ -510,17 +436,6 @@ class ArangoIndexManager:
                     "micro_index",
                 ],
                 "optimizeTopK": ["BM25(@doc) DESC", "TFIDF(@doc) DESC"],
-            },
-            {
-                "collection": "communities",
-                "name": "communities_inverted_idx",
-                "fields": [
-                    {"name": "video_id"},
-                    {"name": "title", "analyzer": "text_en"},
-                    {"name": "summary", "analyzer": "text_en"},
-                ],
-                "storedValues": ["size", "comm_idx"],
-                "optimizeTopK": ["BM25(@doc) DESC"],
             },
         ]
 
@@ -594,12 +509,6 @@ class ArangoIndexManager:
                 "fields": ["video_id", "segment_index", "micro_index"],
                 "sparse": True,
             },
-            {
-                "collection": "communities",
-                "name": "communities_video_id_idx",
-                "fields": ["video_id"],
-                "sparse": True,
-            },
         ]
 
         for cfg in persistent_configs:
@@ -660,14 +569,6 @@ class ArangoIndexManager:
                 },
                 "includeAllFields": False,
             },
-            "communities": {
-                "analyzers": ["text_en"],
-                "fields": {
-                    "title": {"analyzers": ["text_en"]},
-                    "summary": {"analyzers": ["text_en"]},
-                },
-                "includeAllFields": False,
-            },
         }
 
         try:
@@ -698,14 +599,11 @@ class ArangoIndexManager:
             else:
                 logger.warning(f"Failed to create view: {e}")
 
-    async def ensure_all_indexes(self, structural_dim: int | None = None) -> dict[str, bool]:
+    async def ensure_all_indexes(self) -> dict[str, bool]:
         """Create all required indexes for KG collections.
 
         This is the main entry point for index creation during lifespan.
         All operations are idempotent.
-
-        Args:
-            structural_dim: Dimension of structural embeddings (optional)
 
         Returns:
             Dict mapping index type to success status
@@ -729,13 +627,6 @@ class ArangoIndexManager:
         except Exception as e:
             logger.error(f"Failed to create semantic vector indexes: {e}")
             results["vector_semantic"] = False
-
-        try:
-            await self.create_vector_indexes_structural(structural_dim)
-            results["vector_structural"] = True
-        except Exception as e:
-            logger.error(f"Failed to create structural vector indexes: {e}")
-            results["vector_structural"] = False
 
         try:
             await self.create_inverted_indexes()
@@ -768,31 +659,6 @@ class ArangoIndexManager:
         logger.info(f"=== Index creation complete: {results} ===")
         return results
 
-    async def detect_structural_dim(self) -> int:
-        """Detect structural embedding dimension from existing data.
-
-        Returns:
-            Detected dimension or default (128)
-        """
-        try:
-            aql = """
-            FOR e IN entities
-                FILTER e.structural_embedding_full != null
-                LIMIT 1
-                RETURN LENGTH(e.structural_embedding_full)
-            """
-            if self._is_async():
-                cursor = await self.db.aql.execute(aql)
-                async for dim in cursor:
-                    return dim
-            else:
-                cursor = self.db.aql.execute(aql)
-                for dim in cursor:
-                    return dim
-        except Exception:
-            pass
-        return self.STRUCTURAL_DIM
-    
     async def get_index_stats(self) -> dict[str, Any]:
         """Get statistics about existing indexes.
 
@@ -800,7 +666,7 @@ class ArangoIndexManager:
             Dict with index statistics per collection
         """
         stats = {}
-        collections = ["entities", "events", "micro_events", "communities"]
+        collections = ["entities", "events", "micro_events"]
 
         for coll_name in collections:
             try:
