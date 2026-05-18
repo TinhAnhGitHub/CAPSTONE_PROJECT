@@ -37,7 +37,6 @@ class KGSearchToolkit(Toolkit):
                 self.search_entities_semantic,
                 self.search_events,
                 self.search_micro_events,
-                self.search_communities,
                 self.traverse_from_entity,
                 self.multi_granularity_search,
                 self.search_bm25,
@@ -352,84 +351,7 @@ class KGSearchToolkit(Toolkit):
 
     @tool(
         description=(
-            "Search for communities (clusters of related entities) in the knowledge graph using semantic similarity. "
-            "Communities represent thematic groupings of entities that share common context.\n\n"
-            "Typical workflow - High-level theme discovery:\n"
-            "  1. This tool - find thematic communities\n"
-            "  2. search_entities_semantic - drill down into entities in communities\n"
-            "  3. traverse_from_entity - explore entity relationships\n\n"
-            "When to use:\n"
-            "  - Understanding overarching themes in video content\n"
-            "  - High-level understanding of what topics a video covers\n"
-            "  - Finding thematic summaries and groupings of related entities\n\n"
-            "Related tools:\n"
-            "  - search_entities_semantic: Drill down into entities\n"
-            "  - search_events: Find events in communities\n\n"
-            "Args:\n"
-            "  query (str): Search query text (REQUIRED)\n"
-            "  top_k (int): Number of results to return (default 5)\n"
-            "  video_ids (list[str] | str | None): Optional list of video IDs to filter. Can be a Python list or a JSON string like [\"id1\", \"id2\"] (handles both formats)\n"
-            "  min_score (float): Minimum similarity score threshold (default 0.4)"
-        ),
-        instructions=(
-            "Use this to find thematic summaries and groupings of related entities.\n\n"
-            "Each community has a title, summary, and member entities. "
-        ),
-    )
-    @traced_tool()
-    async def search_communities(
-        self,
-        query: str,
-        top_k: int = 5,
-        video_ids: list[str] | str | None = None, min_score: float = 0.4,
-    ) -> ToolResult:
-        effective_video_ids = self._get_effective_context(video_ids)
-        try:
-            query_emb = await self._encode_query_async(query)
-            if query_emb is None:
-                return ToolResult(content="Error: MMBert client required for semantic search")
-
-            vf = self._video_filter("c", effective_video_ids)
-            uf = self._user_filter("c", self._user_id)
-
-            aql = f"""
-            FOR c IN communities
-                {uf}
-                {vf}
-                LET score = COSINE_SIMILARITY(c.semantic_embedding, @query)
-                FILTER score > @min_score
-                SORT score DESC
-                LIMIT @top_k
-                RETURN {{
-                    _key: c._key,
-                    video_id: c.video_id,
-                    user_id: c.user_id,
-                    title: c.title,
-                    summary: c.summary,
-                    size: c.size,
-                    score: score
-                }}
-            """
-
-            results = self._execute_aql(
-                aql,
-                {
-                    "query": query_emb,
-                    "top_k": top_k,
-                    "min_score": min_score,
-                    **self._video_bind(effective_video_ids),
-                    **self._user_bind(self._user_id),
-                },
-            )
-            return ToolResult(content=self.display_result(results))
-
-        except Exception as e:
-            logger.error(f"[KGSearchToolkit] search_communities failed: {e}")
-            return ToolResult(content=f"Error: Community search failed - {str(e)}")
-
-    @tool(
-        description=(
-            "Traverse the knowledge graph from a seed entity to discover connected nodes (entities, events, micro-events, communities). "
+            "Traverse the knowledge graph from a seed entity to discover connected nodes (entities, events, micro-events). "
             "Explores relationships and finds related content through graph edges.\n\n"
             "Typical workflow - Graph exploration:\n"
             "  1. search_entities_semantic - find a seed entity of interest\n"
@@ -468,7 +390,7 @@ class KGSearchToolkit(Toolkit):
             uf = self._user_filter("v", self._user_id)
 
             aql = f"""
-            WITH entities, events, micro_events, communities
+            WITH entities, events, micro_events
             FOR v, e, p IN 1..@depth ANY @start
             GRAPH @graph_name
             OPTIONS {{ uniqueVertices: "global", order: "bfs" }}
@@ -479,7 +401,7 @@ class KGSearchToolkit(Toolkit):
                 _id: v._id,
                 video_id: v.video_id,
                 user_id: v.user_id,
-                label: v.entity_name || v.caption || v.title || v.text || "",
+                label: v.entity_name || v.caption || v.text || "",
                 edge_type: e.relation_type || e.edge_type || "link",
                 weight: e.weight,
                 path_length: LENGTH(p.vertices)
@@ -566,7 +488,7 @@ class KGSearchToolkit(Toolkit):
                 FILTER score > {min_score}
                 SORT score DESC LIMIT @top_k
                 RETURN MERGE(
-                    UNSET(doc, "semantic_embedding", "structural_embedding_entity_only", "structural_embedding_entity_event", "structural_embedding_full"),
+                    UNSET(doc, "semantic_embedding"),
                     {{score: score, collection: '{coll}'}}
                 )
                 """
@@ -598,7 +520,7 @@ class KGSearchToolkit(Toolkit):
             "Args:\n"
             "  query (str): Search query text - keywords/phrases (REQUIRED)\n"
             "  collections (list[str] | str | None): Optional list of collections to search. Can be a Python list or a JSON string like [\"entities\", \"events\"] (handles both formats). "
-            "Valid values: ['entities', 'events', 'micro_events', 'communities']. Default: all\n"
+            "Valid values: ['entities', 'events', 'micro_events']. Default: all\n"
             "  top_k (int): Number of results per collection (default 10)\n"
             "  video_ids (list[str] | str | None): Optional list of video IDs to filter. Can be a Python list or a JSON string like [\"id1\", \"id2\"] (handles both formats)\n"
             "  min_score (float): Minimum BM25 score threshold (default 0.1)"
@@ -619,7 +541,7 @@ class KGSearchToolkit(Toolkit):
         effective_video_ids = self._get_effective_context(video_ids)
         effective_collections = parse_json_list(collections) if collections else None
 
-        valid_collections = ["entities", "events", "micro_events", "communities"]
+        valid_collections = ["entities", "events", "micro_events"]
         search_collections = effective_collections if effective_collections else valid_collections
         search_collections = [c for c in search_collections if c in valid_collections]
 
@@ -674,19 +596,6 @@ class KGSearchToolkit(Toolkit):
                         score: s,
                         collection: 'micro_events'
                     """
-                else:  # communities
-                    search_fields = 'doc.title IN TOKENS(@text, "text_en") OR doc.summary IN TOKENS(@text, "text_en")'
-                    return_fields = """
-                        _key: doc._key,
-                        video_id: doc.video_id,
-                        user_id: doc.user_id,
-                        title: doc.title,
-                        summary: doc.summary,
-                        size: doc.size,
-                        score: s,
-                        collection: 'communities'
-                    """
-
                 aql = f"""
                 FOR doc IN {self.search_view}
                 SEARCH ANALYZER({search_fields}, 'text_en')
@@ -780,24 +689,8 @@ class KGSearchToolkit(Toolkit):
                 RETURN {{_key: doc._key, score: s, source: 'bm25', collection: 'micro_events'}}
                 """
 
-            bm25_communities = f"""
-                FOR doc IN {self.search_view}
-                SEARCH ANALYZER(
-                    doc.title IN TOKENS(@text, 'text_en') OR
-                    doc.summary IN TOKENS(@text, 'text_en'),
-                    'text_en'
-                )
-                OPTIONS {{ parallelism: 4 }}
-                FILTER IS_SAME_COLLECTION('communities', doc)
-                {uf}
-                {vf}
-                LET s = BM25(doc)
-                SORT s DESC LIMIT 50
-                RETURN {{_key: doc._key, score: s, source: 'bm25', collection: 'communities'}}
-                """
-
             bm25_hits = []
-            for bm25_aql in [bm25_entities, bm25_events, bm25_micro, bm25_communities]:
+            for bm25_aql in [bm25_entities, bm25_events, bm25_micro]:
                 bm25_hits.extend(self._execute_aql(bm25_aql, {"text": query, **video_bind, **user_bind}))
 
             vec_entities = f"""
@@ -830,18 +723,8 @@ class KGSearchToolkit(Toolkit):
                 RETURN {{_key: doc._key, score: s, source: 'vector', collection: 'micro_events'}}
                 """
 
-            vec_communities = f"""
-                FOR doc IN communities
-                {uf}
-                {vf}
-                LET s = COSINE_SIMILARITY(doc.semantic_embedding, @vec)
-                FILTER s > 0.4
-                SORT s DESC LIMIT 50
-                RETURN {{_key: doc._key, score: s, source: 'vector', collection: 'communities'}}
-                """
-
             vec_hits = []
-            for vec_aql in [vec_entities, vec_events, vec_micro, vec_communities]:
+            for vec_aql in [vec_entities, vec_events, vec_micro]:
                 vec_hits.extend(self._execute_aql(vec_aql, {"vec": query_emb, **video_bind, **user_bind}))
 
         else:
@@ -967,7 +850,7 @@ class KGSearchToolkit(Toolkit):
             FOR d IN {coll}
             FILTER d._key == @key
             LIMIT 1
-            RETURN UNSET(d, "semantic_embedding", "structural_embedding_entity_only", "structural_embedding_entity_event", "structural_embedding_full")
+            RETURN UNSET(d, "semantic_embedding")
             """
             docs = self._execute_aql(doc_aql, {"key": key})
             if docs:
@@ -1008,7 +891,7 @@ class KGSearchToolkit(Toolkit):
         instructions=(
             "Use this as the primary retrieval tool for complex queries.\n\n"
             "Combines keyword matching (BM25), semantic understanding (vectors), and graph relationships. "
-            "Set search_all_collections=True to search across entities, events, micro_events, and communities."
+            "Set search_all_collections=True to search across entities, events, and micro_events."
         ),
     )
     @traced_tool()

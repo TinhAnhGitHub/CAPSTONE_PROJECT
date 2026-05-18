@@ -138,13 +138,11 @@ class ArangoCollectionsConfig(BaseModel):
     entities: str = "entities"
     events: str = "events"
     micro_events: str = "micro_events"
-    communities: str = "communities"
     relations: str = "relations"
 
 
 class ArangoIndexesConfig(BaseModel):
     semantic_dim: int = 768
-    structural_dim: int = 128
 
 
 class ArangoConfig(BaseModel):
