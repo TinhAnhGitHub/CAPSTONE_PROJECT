@@ -155,14 +155,14 @@ llm_provider:
 
 storage:
   postgres:
-    host: localhost
+    host: postgres
     port: 5432
     database: video-pipeline
     username: admin123
     password: admin123
     url: null
   minio:
-    host: localhost
+    host: minio
     port: '9000'
     access_key: minioadmin
     secret_key: minioadmin
@@ -172,13 +172,13 @@ storage:
       artifacts: video-artifacts
       asr: asr-data
   qdrant:
-    host: localhost
+    host: qdrant
     port: 6333
     grpc_port: 6334
     prefer_grpc: true
     collection_name: video_embeddings_dev
   elasticsearch:
-    host: localhost
+    host: elasticsearch
     port: 9200
     user: null
     password: null
@@ -187,7 +187,7 @@ storage:
     request_timeout: 30
     index_name: video_ocr_docs_dev
   arangodb:
-    host: http://localhost:8529
+    host: http://arangodb:8529
     database: video_kg
     username: root
     password: ''
@@ -197,20 +197,18 @@ storage:
       entities: entities
       events: events
       micro_events: micro_events
-      communities: communities
       relations: relations
     indexes:
       semantic_dim: 768
-      structural_dim: 128
 
 inference:
   qwenvl:
-    base_url: http://localhost:8010/embedding
+    base_url: http://qwen_vl_embedding:8080/embedding
   mmbert:
-    base_url: http://localhost:8009
+    base_url: http://mmbert:8000
     model_name: mmbert
   splade:
-    url: localhost:8001
+    url: triton-server:8001
     model_name: splade
     timeout: 30
     verbose: false
@@ -228,5 +226,5 @@ server:
   - http://localhost:5173
 mlflow:
   enabled: false
-  tracking_uri: http://localhost:5000
+  tracking_uri: http://mlflow:5000
   experiment_name: VideoDeepSearch
