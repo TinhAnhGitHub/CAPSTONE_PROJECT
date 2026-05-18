@@ -23,7 +23,7 @@ services:
       - ARANGO_HOST=http://arangodb:8529
       - ARANGO_DB=video_kg
       - ARANGO_PASSWORD=
-      - MMBERT_BASE_URL=http://te_mmbert:8000
+      - MMBERT_BASE_URL=http://mmbert:8000
       - QWENVL_BASE_URL=http://qwen_vl_embedding:8080/embedding
       - SPLADE_URL=triton-server:8001
     ports:
@@ -37,9 +37,7 @@ services:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks:
-      - mlflow-network
-      - video_shared_net
+    networks: [shared]
 
   mlflow-postgres:
     image: postgres:15
@@ -118,7 +116,7 @@ services:
       mlflow-create-bucket:
         condition: service_completed_successfully
     environment:
-      MLFLOW_SERVER_ALLOWED_HOSTS: "100.113.186.28,127.0.0.1,localhost,host.docker.internal,qwen_36_server"
+      MLFLOW_SERVER_ALLOWED_HOSTS: "100.113.186.28,127.0.0.1,localhost,host.docker.internal,qwen_36_server,mlflow,mlflow:5000"
       MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@mlflow-postgres:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://mlflow-storage:9000
       MLFLOW_ARTIFACTS_DESTINATION: s3://mlflow-artifacts/
@@ -137,7 +135,7 @@ services:
         mlflow server \
           --backend-store-uri "postgresql://mlflow:mlflow@mlflow-postgres:5432/mlflow" \
           --artifacts-destination "s3://mlflow-artifacts/" \
-          --allowed-hosts "100.113.186.28:5000,127.0.0.1,localhost,qwen_36_server" \
+          --allowed-hosts "100.113.186.28:5000,127.0.0.1,localhost,qwen_36_server,mlflow,mlflow:5000" \
           --cors-allowed-origins "*" \
           --host 0.0.0.0 \
           --port 5000
@@ -145,6 +143,7 @@ services:
       - "5000:5000"
     networks:
       - mlflow-network
+      - shared
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 10s
@@ -154,6 +153,6 @@ services:
 networks:
   mlflow-network:
     external: true
-  video_shared_net:
+  shared:
     external: true
     name: video_shared_net
