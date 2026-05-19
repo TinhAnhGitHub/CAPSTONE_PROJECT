@@ -13,8 +13,8 @@ def split_minio_url(uri: str) -> tuple[str, str]:
     if parsed.scheme == "s3":
         return parsed.netloc, parsed.path.lstrip("/")
     path_parts = parsed.path.lstrip("/").split("/", 1)
-    bucket = path_parts[0]
-    object_name = path_parts[1] if len(path_parts) > 1 else ""
+    bucket = path_parts[1]
+    object_name = path_parts[2] if len(path_parts) > 1 else ""
     return bucket, object_name
 
 
