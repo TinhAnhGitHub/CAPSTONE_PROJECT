@@ -245,6 +245,7 @@ async def run_llm_resolution(
     clusters: dict[str, list[dict]],
     llm_client,
     max_concurrent: int = 5,
+    max_entities_per_cluster: int = 25,
     cost_tracker: CostTracker | None = None,
 ) -> list[dict]:
     """Run LLM resolution on all clusters."""
@@ -254,9 +255,31 @@ async def run_llm_resolution(
     if cost_tracker is None:
         cost_tracker = CostTracker()
 
+    bounded_clusters: list[tuple[str, list[dict]]] = []
+    for cid, ents in clusters.items():
+        if len(ents) <= max_entities_per_cluster:
+            bounded_clusters.append((cid, ents))
+            continue
+
+        ordered_entities = sorted(
+            ents,
+            key=lambda entity: (
+                entity.get("belong_index", -1),
+                entity.get("entity_name", ""),
+                entity.get("local_id", ""),
+            ),
+        )
+        for chunk_index, start in enumerate(range(0, len(ordered_entities), max_entities_per_cluster), start=1):
+            bounded_clusters.append(
+                (
+                    f"{cid}:{chunk_index}",
+                    ordered_entities[start : start + max_entities_per_cluster],
+                )
+            )
+
     tasks = [
         resolve_cluster(cid, ents, structured_llm, semaphore, cost_tracker)
-        for cid, ents in clusters.items()
+        for cid, ents in bounded_clusters
     ]
 
     all_resolved: list[dict] = []
@@ -406,6 +429,7 @@ async def run_entity_resolution(
     sparse_weight: float = 0.1,
     sim_threshold: float = 0.75,
     max_concurrent: int = 5,
+    max_entities_per_cluster: int = 25,
     cost_tracker: CostTracker | None = None,
 ) -> ResolvedKG:
     """Run the full entity resolution pipeline."""
@@ -428,7 +452,13 @@ async def run_entity_resolution(
     )
 
     print(f"  Running LLM resolution on {len(clusters)} clusters...")
-    resolved_entities = await run_llm_resolution(clusters, llm_client, max_concurrent, cost_tracker)
+    resolved_entities = await run_llm_resolution(
+        clusters,
+        llm_client,
+        max_concurrent,
+        max_entities_per_cluster,
+        cost_tracker,
+    )
 
     n_global = len({e["global_entity_id"] for e in resolved_entities})
     print(f"  {len(flat_entities)} raw → {n_global} canonical entities.")
