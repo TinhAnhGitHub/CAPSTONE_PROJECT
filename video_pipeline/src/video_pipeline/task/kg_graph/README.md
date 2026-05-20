@@ -45,19 +45,6 @@ The same applies to the MicroEvents
 
 
 
-## Stage 4: Community Detection
-DEtect communities of related entities using the Leiden algorithm and generate LLm summaries.
-
-We create graph from igraph with entities + relationship, apply leiden algorithm. For each Community -> genetate llm summaries.
-
-## Stage 5: Node2vec structural embeddings
-
-Generate structural embeddings for all graph nodes using node2vec.
-We will train on 3 kind of graph:
-1. Entities only
-2. Entities + micro events
-3. Entities + events + micro-events + communities
-
 ## Storing into Arangodb
 
 The whole knowledge graph , we will store them into the Arangodb with following edge collections:
@@ -67,7 +54,6 @@ VERTEX_COLLECTIONS = [
     "entities",        # CanonicalEntity
     "events",          # EventNode (segment-level)
     "micro_events",    # MicroEventNode
-    "communities",     # CommunityDoc
 ]
 
 EDGE_COLLECTIONS = [
@@ -77,8 +63,5 @@ EDGE_COLLECTIONS = [
     "micro_event_sequences",   # micro_event <-> micro_event
     "micro_event_parents",     # micro_event -> event (parent)
     "micro_event_entities",    # micro_event <-> entity
-    "community_members",       # entity -> community
-    "event_communities",       # event  -> community
 ]
 ```
-

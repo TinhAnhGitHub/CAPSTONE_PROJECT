@@ -232,104 +232,12 @@ class EnhancedKG(BaseModel):
         d["micro_event_edges"] = [me.to_arango_doc() for me in self.micro_event_edges]
         return d
 
-class CommunityDoc(BaseModel):
-    """One Leiden community of tightly connected entities."""
-    video_id: str
-    comm_key: str
-    comm_idx: int
-    title: str
-    summary: str
-    size: int
-    member_keys: list[str] = Field(default_factory=list)
-    event_keys: list[str] = Field(default_factory=list)
-    embedding: Optional[list[float]] = None
-
-
-class MembershipEdge(BaseModel):
-    """Edge: entity → community."""
-    video_id: str
-    from_key: str
-    to_key: str
-
-    def to_arango_doc(self) -> dict:
-        return {"_from": self.from_key, "_to": self.to_key}
-
-
-class EventCommunityEdge(BaseModel):
-    """Edge: event → community (assigned by majority vote on shared entities)."""
-    video_id: str
-    from_key: str
-    to_key: str
-    shared_entities: int = 0
-    assignment: str = "majority_vote"
-
-    def to_arango_doc(self) -> dict:
-        d = self.model_dump(exclude={"from_key", "to_key"})
-        d["_from"] = self.from_key
-        d["_to"] = self.to_key
-        return d
-
-
-class GraphStats(BaseModel):
-    """Statistics from the Leiden community detection run."""
-    n_nodes: int
-    n_edges: int
-    n_communities: int
-    modularity: float
-
-
-class CommunitiesOutput(BaseModel):
-    """Full output of Stage 4 (community detection + LLM summaries)."""
-    video_id: str
-    communities: list[CommunityDoc] = Field(default_factory=list)
-    membership_edges: list[MembershipEdge] = Field(default_factory=list)
-    event_community_edges: list[EventCommunityEdge] = Field(default_factory=list)
-    graph_stats: GraphStats
-
-    def to_raw_dict(self) -> dict:
-        """Dict format for downstream processing."""
-        return {
-            "communities": [c.model_dump() for c in self.communities],
-            "membership_edges": [e.to_arango_doc() for e in self.membership_edges],
-            "event_community_edges": [e.to_arango_doc() for e in self.event_community_edges],
-            "graph_stats": self.graph_stats.model_dump(),
-        }
-        
-class Node2VecMeta(BaseModel):
-    """Hyperparameters used when training the node2vec models."""
-    dim: int
-    walk_length: int
-    num_walks: int
-    p: float
-    q: float
-    window: int
-    graphs: list[str] = Field(default_factory=list)
-    edge_weight_schema: dict[str, str] = Field(default_factory=dict)
-
-
-class NodeEmbedding(BaseModel):
-    """Structural node2vec embeddings for a single graph node."""
-    video_id: str
-    node_type: str  # "entity" | "event" | "community"
-    label: str
-    entity_only_embedding: Optional[list[float]] = None
-    entity_event_embedding: Optional[list[float]] = None
-    full_heterogeneous_embedding: Optional[list[float]] = None
-
-
-class Node2VecOutput(BaseModel):
-    """Full output of Stage 5 - structural embeddings for all node types."""
-    video_id: str
-    meta: Node2VecMeta
-    nodes: dict[str, NodeEmbedding] = Field(default_factory=dict)
-
 class VideoPipelineKGResult(BaseModel):
     """Result of processing one video through all KG pipeline stages."""
     video_id: str
     enhanced_kg: Optional[EnhancedKG] = None
-    communities: Optional[CommunitiesOutput] = None
-    node2vec: Optional[Node2VecOutput] = None
     error: Optional[str] = None
+
 
 class CostTracker(BaseModel):
     """Track LLM costs across all KG pipeline stages."""
@@ -352,3 +260,14 @@ class CostTracker(BaseModel):
         self.total_completion_tokens += other.total_completion_tokens
         self.total_cost += other.total_cost
         self.llm_calls += other.llm_calls
+
+
+class KGEntityResolutionResult(BaseModel):
+    """Merged extraction output after global entity resolution."""
+
+    resolved_kg: ResolvedKG
+    cost_tracker: CostTracker
+    user_id: str
+    related_segment_caption_artifact_ids: list[str] = Field(default_factory=list)
+    related_kg_extraction_artifact_ids: list[str] = Field(default_factory=list)
+    total_raw_entities: int = 0
