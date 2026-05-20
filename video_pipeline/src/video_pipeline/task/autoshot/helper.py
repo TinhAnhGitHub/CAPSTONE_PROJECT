@@ -1,5 +1,5 @@
+import math
 from typing import Iterator
-import ffmpeg
 import numpy as np
 from urllib.parse import urlparse
 
