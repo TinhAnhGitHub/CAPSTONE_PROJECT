@@ -109,6 +109,12 @@ class AudioTranscriptEmbeddingTask(
             f"[AudioTranscriptEmbeddingTask] Embedding {len(preprocessed)} transcript(s) via mmBERT"
         )
 
+        if not preprocessed:
+            logger.info(
+                "[AudioTranscriptEmbeddingTask] No non-empty transcript text to embed, skipping mmBERT call"
+            )
+            return []
+
         texts = [audio_text for _, audio_text in preprocessed]
         embeddings: list[list[float]] | None = await client.ainfer(texts)
 
