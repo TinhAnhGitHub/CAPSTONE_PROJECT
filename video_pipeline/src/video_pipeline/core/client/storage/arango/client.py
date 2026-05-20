@@ -13,7 +13,7 @@ from typing import Any
 
 from arango.client import ArangoClient
 from arango.database import StandardDatabase
-from loguru import logger
+from prefect import get_run_logger
 
 from .config import ArangoConfig
 
@@ -23,7 +23,6 @@ VERTEX_COLLECTIONS = [
     "entities",        # CanonicalEntity
     "events",          # EventNode (segment-level)
     "micro_events",    # MicroEventNode
-    "communities",     # CommunityDoc
 ]
 
 EDGE_COLLECTIONS = [
@@ -33,8 +32,6 @@ EDGE_COLLECTIONS = [
     "micro_event_sequences",   # micro_event <-> micro_event
     "micro_event_parents",     # micro_event -> event (parent)
     "micro_event_entities",    # micro_event <-> entity
-    "community_members",       # entity -> community
-    "event_communities",       # event  -> community
 ]
 
 
@@ -48,6 +45,7 @@ class ArangoStorageClient:
         self._config = config
         self._client: ArangoClient | None = None
         self._db: StandardDatabase | None = None
+        self._logger = get_run_logger()
 
     def connect(self) -> StandardDatabase:
         """Connect to ArangoDB and return the configured database.
@@ -65,11 +63,12 @@ class ArangoStorageClient:
 
             if not sys_db.has_database(self._config.database):
                 sys_db.create_database(self._config.database)
-                logger.info(f"Created ArangoDB database: {self._config.database}")
+                
+                self._logger.info(f"Created ArangoDB database: {self._config.database}")
 
             self._db = self._client.db(self._config.database)
 
-            logger.info(f"Connected to ArangoDB database: {self._config.database}")
+            self._logger.info(f"Connected to ArangoDB database: {self._config.database}")
             return self._db
         except Exception as e:
             raise RuntimeError(f"ArangoDB connection error: {e}") from e
@@ -79,7 +78,7 @@ class ArangoStorageClient:
         """Close the ArangoDB connection."""
         self._db = None
         self._client = None
-        logger.info("Disconnected from ArangoDB")
+        self._logger.info("Disconnected from ArangoDB")
 
     def get_db(self) -> StandardDatabase:
         """Get the database connection, connecting if necessary.
@@ -113,12 +112,12 @@ class ArangoStorageClient:
             for name in VERTEX_COLLECTIONS:
                 if not db.has_collection(name):
                     db.create_collection(name)
-                    logger.info(f"Created vertex collection: {name}")
+                    self._logger.info(f"Created vertex collection: {name}")
 
             for name in EDGE_COLLECTIONS:
                 if not db.has_collection(name):
                     db.create_collection(name, edge=True)
-                    logger.info(f"Created edge collection: {name}")
+                    self._logger.info(f"Created edge collection: {name}")
 
             if not db.has_graph(graph_name):
                 graph = db.create_graph(graph_name)
@@ -159,21 +158,9 @@ class ArangoStorageClient:
                     to_vertex_collections=["entities"],
                 )
 
-                graph.create_edge_definition( #type:ignore
-                    edge_collection="community_members",
-                    from_vertex_collections=["entities"],
-                    to_vertex_collections=["communities"],
-                )
+                self._logger.info(f"Created named graph: {graph_name}")
 
-                graph.create_edge_definition( #type:ignore
-                    edge_collection="event_communities",
-                    from_vertex_collections=["events"],
-                    to_vertex_collections=["communities"],
-                )
-
-                logger.info(f"Created named graph: {graph_name}")
-
-            logger.info("ArangoDB setup complete (no vector indexes)")
+            self._logger.info("ArangoDB setup complete (no vector indexes)")
             return db
         except Exception as e:
             raise RuntimeError(f"ArangoDB setup error: {e}") from e
