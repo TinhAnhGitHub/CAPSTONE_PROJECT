@@ -10,7 +10,7 @@ async def trigger_video_pipeline(
     video_s3_path: str,
     timeout: int = 300,
 ):
-    user_id = "tinhanhuser"
+    user_id = "6916f84e9a79606c0413d5d6"
 
     result = await run_deployment(  # type: ignore
         name=DEPLOYMENT_NAME,
@@ -57,8 +57,8 @@ async def trigger_concurrent(video_paths: list[tuple[str, str]], timeout: int = 
 
 if __name__ == "__main__":
     video_paths = [
-        ('0e64f1c0da591ca67f07b7f9', 's3://video/veritasium_00.mp4'),
-        ('c98019fd17ff4420ea47eee7', 's3://video/veritasium_01.mp4'),
+        ('6a094bf3b14eaa4a033eabb4', 's3://videos/6a094bf3b14eaa4a033eabb4.mp4'),
+        # ('c98019fd17ff4420ea47eee7', 's3://video/veritasium_01.mp4'),
         # ('eee3534844edab3ebb4d6ceb', 's3://video/veritasium_02.mp4'),
         # ('f784df5c6c00eb123f9820dc', 's3://video/veritasium_03.mp4'),
         # ('c510fac771767405c891bf64', 's3://video/veritasium_04.mp4'),
