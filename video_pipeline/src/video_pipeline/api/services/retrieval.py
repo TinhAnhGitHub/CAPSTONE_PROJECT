@@ -102,7 +102,6 @@ class VideoRetrievalService:
             "entities": [],
             "events": [],
             "micro_events": [],
-            "communities": [],
             "relationships": [],
             "event_edges": [],
         }
@@ -124,11 +123,6 @@ class VideoRetrievalService:
             query = "FOR doc IN micro_events FILTER doc.video_id == @video_id RETURN doc"
             cursor = db.aql.execute(query, bind_vars={"video_id": video_id})
             result["micro_events"] =    list(cursor) #type:ignore
-
-            # Fetch communities
-            query = "FOR doc IN communities FILTER doc.video_id == @video_id RETURN doc"
-            cursor = db.aql.execute(query, bind_vars={"video_id": video_id})
-            result["communities"] = list(cursor) #type:ignore
 
             # Fetch entity relationships
             query = "FOR doc IN entity_relations FILTER doc.video_id == @video_id RETURN doc"

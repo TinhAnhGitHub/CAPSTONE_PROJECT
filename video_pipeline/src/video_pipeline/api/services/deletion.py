@@ -16,7 +16,7 @@ from video_pipeline.core.client.storage.minio import MinioStorageClient
 from video_pipeline.core.client.storage.pg.schema import ArtifactSchema, ArtifactLineageSchema
 
 
-ARANGO_VERTEX_COLLECTIONS = ["entities", "events", "micro_events", "communities"]
+ARANGO_VERTEX_COLLECTIONS = ["entities", "events", "micro_events"]
 ARANGO_EDGE_COLLECTIONS = [
     "entity_relations",
     "event_sequences",
@@ -24,8 +24,6 @@ ARANGO_EDGE_COLLECTIONS = [
     "micro_event_sequences",
     "micro_event_parents",
     "micro_event_entities",
-    "community_members",
-    "event_communities",
 ]
 
 
@@ -89,6 +87,10 @@ class VideoDeletionService:
 
             for collection in ARANGO_VERTEX_COLLECTIONS:
                 try:
+                    if not db.has_collection(collection):
+                        result[collection] = {"skipped": "collection does not exist"}
+                        logger.info(f"[ArangoDB] Skipped missing collection {collection}")
+                        continue
                     query = f"FOR doc IN {collection} FILTER doc.video_id == @video_id REMOVE doc IN {collection}"
                     cursor = db.aql.execute(query, bind_vars={"video_id": video_id})
                     stats = cursor.statistics()  # type: ignore
@@ -101,6 +103,10 @@ class VideoDeletionService:
 
             for collection in ARANGO_EDGE_COLLECTIONS:
                 try:
+                    if not db.has_collection(collection):
+                        result[collection] = {"skipped": "collection does not exist"}
+                        logger.info(f"[ArangoDB] Skipped missing collection {collection}")
+                        continue
                     query = f"FOR doc IN {collection} FILTER doc.video_id == @video_id REMOVE doc IN {collection}"
                     cursor = db.aql.execute(query, bind_vars={"video_id": video_id})
                     stats = cursor.statistics()  # type: ignore
