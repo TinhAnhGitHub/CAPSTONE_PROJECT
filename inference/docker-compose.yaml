@@ -41,7 +41,8 @@ services:
     networks: [shared]
     
   qwen_vl_embedding:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    # image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    image: llama-cpp-server-cuda:old-2months
     container_name: qwen_vl_embedding
     shm_size: "8gb"
     deploy:
