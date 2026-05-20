@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.api import chat
 from app.api import user
 from app.api import ingestion
+from app.api import media
 
 from app.api.socket import sio
 
@@ -54,6 +55,7 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.include_router(chat.router)
 app.include_router(user.router)
 app.include_router(ingestion.router)
+app.include_router(media.router)
 
 
 @app.get("/")

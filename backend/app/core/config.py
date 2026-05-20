@@ -38,6 +38,8 @@ class AppSettings(BaseSettings):
     MINIO_ACCESS_KEY: str = Field("minioadmin", description="MinIO access key")
     MINIO_SECRET_KEY: str = Field("minioadmin", description="MinIO secret key")
     # MINIO_SECURE: bool = Field(False, description="Use secure connection (HTTPS) for MinIO")
+    # media url 
+    MEDIA_URL_BASE: str = Field("http://localhost:8011/media/", description="Media URL base")
 
     # Redis / Celery settings
     REDIS_URL: str = Field("redis://localhost:6379/0", description="Redis connection URL (broker + result backend)")

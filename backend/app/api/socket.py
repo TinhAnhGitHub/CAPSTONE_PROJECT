@@ -11,6 +11,7 @@ import websockets
 import re
 
 import asyncio
+from app.core.config import settings
 from app.core.lifespan import app_state
 from app.model.session_message import (
     ImageBlock,
@@ -264,7 +265,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 
 
                             s3_base = "s3://"
-                            http_base = "http://100.113.186.28:9000/"
+                            http_base = getattr(settings, 'MEDIA_URL_BASE', "https://api.departmentofcodingknight.site/media/")
 
                             async def format_tool_result():
                                 if "image_search" in media_type:

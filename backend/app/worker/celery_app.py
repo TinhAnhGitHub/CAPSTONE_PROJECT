@@ -1,10 +1,6 @@
-"""
-Celery application factory.
+# Celery tạo celery factory.
 
-Celery uses Redis as both the message broker and result backend.
-Workers are started separately:
-    cd backend && uv run celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
-"""
+# Celery uses Redis as both the message broker and result backend.
 
 import os
 from celery import Celery
