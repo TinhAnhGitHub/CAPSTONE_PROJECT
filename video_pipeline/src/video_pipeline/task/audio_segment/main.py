@@ -17,95 +17,68 @@ from video_pipeline.core.client.llm_provider.openrouter import OpenRouterClient,
 from video_pipeline.task.kg_graph.models import CostTracker
 from video_pipeline.config import get_settings
 
-from .util import AudioSegments, build_audio_batches, format_batch_for_llm
+from .util import (
+    MergeList,
+    create_segment_from_group,
+    format_segment_for_llm,
+    passthrough_segments,
+)
+from .prompt import SYSTEM_PROMPT
 
 AUDIO_SEGMENT_CONFIG = TaskConfig.from_yaml("audio_segmentation")
 
+MAX_RAW_SEGMENTS_WITHOUT_MERGE = 10
+MIN_SEGMENTS_AFTER_MERGE = 8
 
-
-
-def _create_segment_from_group(
-    asr_group: list[ASRArtifact],
-    segment_index: int,
-    video_id: str,
-) -> AudioSegmentArtifact:
-    first_asr = asr_group[0]
-    last_asr = asr_group[-1]
-
-    fps = first_asr.related_video_fps
-    first_frame_num = first_asr.metadata.get("frame_num", [0, 0]) if first_asr.metadata else [0, 0]
-    last_frame_num = last_asr.metadata.get("frame_num", [0, 0]) if last_asr.metadata else [0, 0]
-
-    start_frame = first_frame_num[0]
-    end_frame = last_frame_num[1]
-
-    start_sec = start_frame / fps
-    end_sec = end_frame / fps
-
-    start_timestamp = first_asr.metadata.get("timestamp", ["", ""])[0] if first_asr.metadata else ""
-    end_timestamp = last_asr.metadata.get("timestamp", ["", ""])[1] if last_asr.metadata else ""
-
-    audio_text = " ".join(a.metadata.get("text", "") for a in asr_group if a.metadata)
-
-    asr_artifact_ids = [a.artifact_id for a in asr_group]
-
-    return AudioSegmentArtifact(
-        asr_artifact_ids=asr_artifact_ids,
-        related_video_id=video_id,
-        related_video_minio_url=first_asr.related_video_minio_url,
-        related_video_extension=first_asr.related_video_extension,
-        related_video_fps=fps,
-        segment_index=segment_index,
-        start_sec=start_sec,
-        end_sec=end_sec,
-        start_timestamp=start_timestamp,
-        end_timestamp=end_timestamp,
-        audio_text=audio_text,
-        start_frame=start_frame,
-        end_frame=end_frame,
-        user_id=first_asr.user_id,
-    )
-
-
-def rule_based_segment(
+def build_segments_from_merge_rules(
     asr_artifacts: list[ASRArtifact],
     video_id: str,
-    min_duration_sec: float = 30.0,
+    merge_rules: list,
 ) -> list[AudioSegmentArtifact]:
-    if not asr_artifacts:
-        return []
+    """Apply conservative raw-segment merge rules while preserving untouched segments."""
+    last_index = len(asr_artifacts) - 1
+    normalized_rules = []
+    for rule in merge_rules:
+        start_idx = min(max(0, rule.from_segment), last_index)
+        end_idx = min(max(0, rule.to_segment), last_index)
+        if start_idx <= end_idx:
+            normalized_rules.append((start_idx, end_idx))
+    normalized_rules.sort()
 
-    segments = []
-    current_group = []
-    current_duration = 0.0
-    segment_index = 0
+    segments: list[AudioSegmentArtifact] = []
+    current_idx = 0
+    for start_idx, end_idx in normalized_rules:
+        if start_idx < current_idx:
+            continue
 
-    for asr in asr_artifacts:
-        duration = asr.metadata.get("duration", 0.0) if asr.metadata else 0.0
-        current_group.append(asr)
-        current_duration += duration
+        while current_idx < start_idx:
+            segments.append(
+                create_segment_from_group(
+                    [asr_artifacts[current_idx]], len(segments), video_id
+                )
+            )
+            current_idx += 1
 
-        if current_duration >= min_duration_sec:
-            segment = _create_segment_from_group(current_group, segment_index, video_id)
-            segments.append(segment)
-            segment_index += 1
-            current_group = []
-            current_duration = 0.0
+        group = asr_artifacts[start_idx : end_idx + 1]
+        if group:
+            segments.append(create_segment_from_group(group, len(segments), video_id))
+            current_idx = end_idx + 1
 
-    if current_group:
-        segment = _create_segment_from_group(current_group, segment_index, video_id)
-        segments.append(segment)
+    while current_idx < len(asr_artifacts):
+        segments.append(
+            create_segment_from_group([asr_artifacts[current_idx]], len(segments), video_id)
+        )
+        current_idx += 1
 
     return segments
 
 
 @StageRegistry.register
 class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifact], CostTracker]]):
-    """Audio segmentation task that converts ASR artifacts into audio segments.
+    """Audio merge task that converts raw ASR artifacts into audio segments.
 
-    Uses LLM for semantic segmentation, with rule-based fallback if:
-    - ASR is empty
-    - LLM returns empty segments
+    Small inputs are kept as-is. Larger inputs may be conservatively merged by
+    the LLM, but raw segments are preserved whenever the result is too coarse.
     """
 
     config = AUDIO_SEGMENT_CONFIG
@@ -133,70 +106,49 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifa
             logger.info("[AudioSegmentTask] No ASR artifacts to segment")
             return [], cost_tracker
 
-        batch_size = self.config.additional_kwargs.get("batch_size", 10)
-        min_duration_sec = self.config.additional_kwargs.get("min_duration_sec", 30)
-
         has_content = any(a.metadata and a.metadata.get("text", "").strip() for a in preprocessed)
 
         video_id = preprocessed[0].related_video_id if preprocessed else ""
 
+        if len(preprocessed) <= MAX_RAW_SEGMENTS_WITHOUT_MERGE:
+            logger.info(
+                "[AudioSegmentTask] Skipping merge because raw ASR segment count "
+                f"is <= {MAX_RAW_SEGMENTS_WITHOUT_MERGE}"
+            )
+            return passthrough_segments(preprocessed, video_id), cost_tracker
+
         if not has_content:
             logger.info(
-                "[AudioSegmentTask] ASR has no meaningful content, using rule-based segmentation"
+                "[AudioSegmentTask] ASR has no meaningful content, preserving raw segments"
             )
-            return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
+            return passthrough_segments(preprocessed, video_id), cost_tracker
 
-        batches = build_audio_batches(preprocessed, batch_size)
-        all_batches_text = "\n\n\n\n\n\n\n\n".join(
-            format_batch_for_llm(batch, i) for i, batch in enumerate(batches)
+        all_segments_text = "\n\n\n\n\n\n\n\n".join(
+            format_segment_for_llm(segment, i) for i, segment in enumerate(preprocessed)
         )
 
-        system_prompt = """
-        You are an expert audio semantic segmenter.
-        Your task is to divide numbered audio batches into semantically meaningful segments.
-        STRICT RULES:
-        1. Output ONLY valid JSON.
-        2. Do NOT include markdown.
-        3. Do NOT include explanations outside the JSON.
-        4. Do NOT add extra fields.
-        5. Do NOT rename fields.
-        6. Segments must:
-            - Merge or split batches based on semantic continuity.
-            - Use approximately 15-second granularity.
-            - Avoid overly small segments unless there is a strong topic shift.
-            - Avoid overly large segments that mix unrelated themes.
-        7. from_batch and to_batch must refer to existing batch numbers.
-        8. Segments must be contiguous and non-overlapping.
-        9. If valid audio content is provided:
-            - Populate new_au_seg.
-            - Set reason why do segment that way.
-        10. If the input does NOT contain usable audio batches:
-            - Leave new_au_seg as an empty list.
-            - Fill reason with an explanation.
-        """
+        user_prompt = f"""Here are numbered raw ASR segments.
 
-        user_prompt = f"""Here are numbered audio batches.
-
-        Please segment them into semantically meaningful audio chapters.
-
-        Follow ~15 second granularity.
-        Merge related batches.
-        Split when topic meaningfully changes.
+        Please merge only neighboring raw segments that clearly belong to the same local event.
+        Keep the result fine-grained and conservative.
+        Do not be aggressive: preserve boundaries whenever the relationship is weak or uncertain.
+        Because this input has more than {MAX_RAW_SEGMENTS_WITHOUT_MERGE} raw ASR segments,
+        the final merged result must contain at least {MIN_SEGMENTS_AFTER_MERGE} segments.
 
         Return structured JSON only.
 
-        Audio Batches:
+        Raw ASR Segments:
 
-        {all_batches_text}
+        {all_segments_text}
         """
 
         messages = [
-            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="system", content=SYSTEM_PROMPT),
             ChatMessage(role="user", content=user_prompt),
         ]
 
         try:
-            structured_llm = client.as_structured_llm(AudioSegments)
+            structured_llm = client.as_structured_llm(MergeList)
             llm_result, usage = await structured_llm(messages) #type:ignore
             cost_tracker.add_usage(
                 prompt_tokens=usage.get("prompt_tokens", 0),
@@ -210,37 +162,32 @@ class AudioSegmentTask(BaseTask[list[ASRArtifact], tuple[list[AudioSegmentArtifa
                 f"cost=${usage.get('cost', 0.0):.6f}"
             )
         except Exception as e:
-            logger.warning(f"[AudioSegmentTask] LLM call failed: {e}, using rule-based fallback")
-            return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
+            logger.warning(
+                f"[AudioSegmentTask] LLM call failed: {e}, preserving raw segments"
+            )
+            return passthrough_segments(preprocessed, video_id), cost_tracker
 
-        llm_reason = llm_result.reason
-        logger.info(f"Reason: {llm_reason=}")
-        if not llm_result.new_au_seg:
-            logger.info("[AudioSegmentTask] LLM returned empty segments, using rule-based fallback")
-            return rule_based_segment(preprocessed, video_id, min_duration_sec), cost_tracker
+        if not llm_result.merge_rules:
+            logger.info("[AudioSegmentTask] LLM returned no merge rules, preserving raw segments")
+            return passthrough_segments(preprocessed, video_id), cost_tracker
 
-        segments = []
-        for seg_info in llm_result.new_au_seg:
-            from_idx = seg_info.from_batch
-            to_idx = seg_info.to_batch
-
-            start_batch_idx = from_idx * batch_size
-            end_batch_idx = min((to_idx + 1) * batch_size, len(preprocessed))
-
-            if start_batch_idx >= len(preprocessed):
-                continue
-
-            group = preprocessed[start_batch_idx:end_batch_idx]
-            if not group:
-                continue
-
-            segment = _create_segment_from_group(group, len(segments), video_id)
-            segments.append(segment)
+        segments = build_segments_from_merge_rules(
+            preprocessed,
+            video_id,
+            llm_result.merge_rules,
+        )
 
         logger.info(
             f"[AudioSegmentTask] Created {len(segments)} segment(s) from LLM | "
             f"total_cost=${cost_tracker.total_cost:.6f}"
         )
+        if len(segments) < MIN_SEGMENTS_AFTER_MERGE:
+            logger.info(
+                "[AudioSegmentTask] LLM merge was too aggressive "
+                f"({len(segments)} < {MIN_SEGMENTS_AFTER_MERGE}); preserving raw segments"
+            )
+            return passthrough_segments(preprocessed, video_id), cost_tracker
+    
         return segments, cost_tracker
 
     async def postprocess(
