@@ -312,9 +312,32 @@ class SegmentCaptionMultimodalEmbedArtifact(BaseArtifact):
 
 
 
+class KGExtractionArtifact(BaseArtifact):
+    """Persisted output from one parallel KG extraction chunk."""
+
+    related_video_id: str
+    related_segment_caption_artifact_ids: list[str] = Field(default_factory=list)
+    kg_segments: list[dict] = Field(default_factory=list)
+    total_raw_entities: int = 0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_llm_cost: float = 0.0
+    llm_model: str = ""
+    llm_calls: int = 0
+
+    def _build_lineage_parents(self) -> list[str]:
+        return self.related_segment_caption_artifact_ids
+
+    @property
+    def minio_url_path(self) -> str:
+        """KG extraction artifacts do not store anything in MinIO."""
+        return ""
+
+
 class KGGraphArtifact(BaseArtifact):
     related_video_id: str
     related_segment_caption_artifact_ids: list[str] = Field(default_factory=list)
+    related_kg_extraction_artifact_ids: list[str] = Field(default_factory=list)
     entities: list[dict] = Field(default_factory=list)
     relationships: list[dict] = Field(default_factory=list)
     segment_views: list[dict] = Field(default_factory=list)
@@ -326,24 +349,13 @@ class KGGraphArtifact(BaseArtifact):
     micro_event_nodes: list[dict] = Field(default_factory=list)
     micro_event_edges: list[dict] = Field(default_factory=list)
 
-    communities: list[dict] = Field(default_factory=list)
-    membership_edges: list[dict] = Field(default_factory=list)
-    event_community_edges: list[dict] = Field(default_factory=list)
-    node2vec_meta: dict = Field(default_factory=dict)
-
-    node_embeddings: dict[str, dict] = Field(default_factory=dict)
-
     total_raw_entities: int = 0
     total_canonical_entities: int = 0
     total_relationships: int = 0
     total_events: int = 0
     total_micro_events: int = 0
-    total_communities: int = 0
     total_event_edges: int = 0
     total_micro_event_edges: int = 0
-    total_membership_edges: int = 0
-    total_nodes_with_embeddings: int = 0
-    graph_modularity: float = 0.0
 
     total_prompt_tokens: int = 0
     total_completion_tokens: int = 0
@@ -352,7 +364,7 @@ class KGGraphArtifact(BaseArtifact):
     llm_calls: int = 0
 
     def _build_lineage_parents(self) -> list[str]:
-        return self.related_segment_caption_artifact_ids
+        return self.related_kg_extraction_artifact_ids or self.related_segment_caption_artifact_ids
 
     @property
     def minio_url_path(self) -> str:
@@ -377,16 +389,12 @@ class ArangoIndexingArtifact(BaseArtifact):
     entities: int = 0
     events: int = 0
     micro_events: int = 0
-    communities: int = 0
-
     entity_relations: int = 0
     event_sequences: int = 0
     event_entities: int = 0
     micro_event_sequences: int = 0
     micro_event_parents: int = 0
     micro_event_entities: int = 0
-    community_members: int = 0
-    event_communities: int = 0
 
     def _build_lineage_parents(self) -> list[str]:
         return [self.related_kg_artifact_id]

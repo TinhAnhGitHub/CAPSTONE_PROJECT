@@ -28,6 +28,7 @@ tasks:
     additional_kwargs:
       model_name: "autoshot"
       model_version: "01"
+      min_segments: 4
 
   asr_transcription:
     name: "ASR Transcription"
@@ -326,9 +327,9 @@ tasks:
     cache_expiration_seconds: 2592000
     cache_key_fn: "segment_caption_qdrant_indexing_cache_key"
 
-  kg_pipeline:
-    name: "Knowledge Graph Pipeline"
-    description: "Complete KG pipeline: extraction, entity resolution, event linking, community detection, and Node2Vec embeddings"
+  kg_extraction:
+    name: "KG Extraction"
+    description: "Extract raw KG segments from one segment-caption chunk"
     stage: "Analysis"
     tags:
       - "kg-task"
@@ -339,12 +340,13 @@ tasks:
     timeout_seconds: 1800
     cache_enabled: true
     cache_expiration_seconds: 86400
-    cache_key_fn: "kg_pipeline_cache_key"
+    cache_key_fn: "kg_extraction_cache_key"
 
     additional_kwargs:
-      model: "google/gemini-2.5-flash-lite"
+      model: "deepseek/deepseek-v4-flash"
       base_url: "https://openrouter.ai/api/v1"
-      max_tokens: 50000
+      max_tokens: 65535
+      reasoning_effort: "none"
 
       dense_embedding_base_url: "http://mmbert:8000"
 
@@ -354,10 +356,59 @@ tasks:
 
       hybrid_dense_weight: 0.9
       hybrid_sparse_weight: 0.1
-      similarity_threshold: 0.75
+      similarity_threshold: 0.85
       max_concurrent_llm: 5
 
-      # Stage 3: Event Linking
+      seed: 42
+
+  kg_entity_resolution:
+    name: "KG Entity Resolution"
+    description: "Resolve entities globally across all extracted KG chunks"
+    stage: "Analysis"
+    tags:
+      - "kg-task"
+      - "llm-service"
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 1800
+    cache_enabled: true
+    cache_expiration_seconds: 86400
+    cache_key_fn: "kg_entity_resolution_cache_key"
+    additional_kwargs:
+      model: "deepseek/deepseek-v4-flash"
+      base_url: "https://openrouter.ai/api/v1"
+      max_tokens: 65535
+      reasoning_effort: "none"
+      dense_embedding_base_url: "http://mmbert:8000"
+      sparse_embedding_url: "triton-server:8001"
+      hybrid_dense_weight: 0.9
+      hybrid_sparse_weight: 0.1
+      similarity_threshold: 0.85
+      max_concurrent_llm: 5
+      max_entities_per_cluster: 25
+
+  kg_finalization:
+    name: "KG Finalization"
+    description: "Build global event links and persist the final KG graph artifact"
+    stage: "Analysis"
+    tags:
+      - "kg-task"
+      - "llm-service"
+      - "embedding-task"
+    retries: 2
+    retry_delay_seconds: 10
+    timeout_seconds: 1800
+    cache_enabled: true
+    cache_expiration_seconds: 86400
+    cache_key_fn: "kg_finalization_cache_key"
+    additional_kwargs:
+      model: "deepseek/deepseek-v4-flash"
+      base_url: "https://openrouter.ai/api/v1"
+      max_tokens: 65535
+      reasoning_effort: "none"
+      dense_embedding_base_url: "http://mmbert:8000"
+      max_concurrent_llm: 5
       semantic_threshold: 0.9
       llm_confirm_threshold: 0.75
       jaccard_threshold: 0.30
@@ -366,18 +417,7 @@ tasks:
       micro_llm_confirm_threshold: 0.65
       micro_jaccard_threshold: 0.40
 
-      # Stage 4: Community Detection
-      n_iterations: 10
       seed: 42
-
-      # Stage 5: Node2Vec
-      dim: 128
-      walk_length: 80
-      num_walks: 10
-      p: 1.0
-      q: 1.0
-      window: 10
-      workers: 4
 
   arango_indexing:
     name: "ArangoDB Indexing"
@@ -393,4 +433,3 @@ tasks:
 
     additional_kwargs:
       dense_embedding_base_url: "http://mmbert:8000"
-

@@ -46,8 +46,11 @@ def autoshot_artifact_cache_key(
 def asr_batch_cache_key(
     _context: Any, parameters: dict[str, Any]
 ) -> str | None:
-    """Cache key: video_id + sorted frame ranges."""
+    """Cache key: video_id + frame range(s)."""
     items = parameters.get("items")
+    item = parameters.get("item")
+    if item is not None:
+        items = [item]
     if not items:
         return None
 
@@ -297,7 +300,7 @@ def segment_qdrant_indexing_cache_key(
     return f"seg-qdrant-{video_id}-{key_hash}"
 
 
-def kg_pipeline_cache_key(
+def kg_extraction_cache_key(
     _context: Any, parameters: dict[str, Any]
 ) -> str | None:
     """Cache key: video_id + sorted frame ranges + text hash."""
@@ -321,7 +324,27 @@ def kg_pipeline_cache_key(
     frame_hash = _hash_string(frame_string)
     text_hash = _hash_string(text_string)
 
-    return f"kg-pipeline-{video_id}-{frame_hash}-{text_hash}"
+    return f"kg-extract-{video_id}-{frame_hash}-{text_hash}"
+
+
+def kg_entity_resolution_cache_key(
+    _context: Any, parameters: dict[str, Any]
+) -> str | None:
+    artifacts = parameters.get("extraction_artifacts")
+    if not artifacts:
+        return None
+    ids = "|".join(sorted(artifact.artifact_id for artifact in artifacts))
+    return f"kg-entity-resolution-{_hash_string(ids)}"
+
+
+def kg_finalization_cache_key(
+    _context: Any, parameters: dict[str, Any]
+) -> str | None:
+    result = parameters.get("resolution_result")
+    if not result:
+        return None
+    ids = "|".join(sorted(result.related_kg_extraction_artifact_ids))
+    return f"kg-finalization-{_hash_string(ids)}"
 
 
 def audio_transcript_embedding_cache_key(
@@ -424,7 +447,9 @@ CACHE_KEY_FUNCTIONS: dict[str, Any] = {
     "caption_embedding_batch_cache_key": caption_embedding_batch_cache_key,
     "image_qdrant_indexing_cache_key": image_qdrant_indexing_cache_key,
     "segment_qdrant_indexing_cache_key": segment_qdrant_indexing_cache_key,
-    "kg_pipeline_cache_key": kg_pipeline_cache_key,
+    "kg_extraction_cache_key": kg_extraction_cache_key,
+    "kg_entity_resolution_cache_key": kg_entity_resolution_cache_key,
+    "kg_finalization_cache_key": kg_finalization_cache_key,
     "audio_transcript_embedding_cache_key": audio_transcript_embedding_cache_key,
     "audio_transcript_qdrant_indexing_cache_key": audio_transcript_qdrant_indexing_cache_key,
     "image_caption_qdrant_indexing_cache_key": image_caption_qdrant_indexing_cache_key,
