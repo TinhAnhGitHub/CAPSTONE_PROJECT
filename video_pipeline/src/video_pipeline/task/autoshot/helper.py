@@ -13,6 +13,8 @@ def split_minio_url(uri:str):
 
 
 def get_frames_fast(video_file_path: str, width=48, height=27) -> np.ndarray:
+    import ffmpeg
+
     stream = (
         ffmpeg
         .input(video_file_path, threads=0)
@@ -177,5 +179,3 @@ def postprocess_output_client(one_hot: np.ndarray) -> np.ndarray:
 
     prediction = 1 / (1 + np.exp(-one_hot[0]))
     return prediction[25:75]
-
-
