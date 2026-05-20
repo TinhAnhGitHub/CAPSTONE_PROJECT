@@ -2,12 +2,13 @@ import VideoJS from '@/components/common/components/VideoPlayer/VideoJS'
 import Modal from '@/components/Modal/modal'
 import { useStore as useChatStore } from '@/stores/chat'
 import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/20/solid'
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 
-export default function VideoModal({ isModalOpen, closeModal, video }) {
+export default function VideoModal({ isModalOpen, closeModal, video, startTime }) {
   // ALL hooks must run unconditionally — before any early return
   const overrideVideos = useChatStore((s) => s.overrideVideos);
   const setOverrideVideos = useChatStore((s) => s.setOverrideVideos);
+  const playerRef = useRef(null);
 
   // Keep a cached copy of video so the exit animation isn't cut short
   // (close() sets video=null immediately, which would unmount before the fade-out)
@@ -15,6 +16,13 @@ export default function VideoModal({ isModalOpen, closeModal, video }) {
   useEffect(() => {
     if (video) setDisplayVideo(video);
   }, [video]);
+
+  // Seek to startTime whenever the modal opens with a new startTime
+  useEffect(() => {
+    if (isModalOpen && startTime != null && playerRef.current) {
+      playerRef.current.currentTime(startTime);
+    }
+  }, [isModalOpen, startTime]);
 
   // Normalise: chip videos use _id/id; VideoPlayer uses video_id
   const videoId = displayVideo?._id ?? displayVideo?.id ?? displayVideo?.video_id;
@@ -57,9 +65,19 @@ export default function VideoModal({ isModalOpen, closeModal, video }) {
     }
   };
 
+  const handlePlayerReady = (player) => {
+    playerRef.current = player;
+    // Seek once the player has loaded enough metadata
+    if (startTime != null) {
+      player.on('loadedmetadata', () => {
+        player.currentTime(startTime);
+      });
+    }
+  };
+
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal} title={displayVideo.name} zIndex='z-60'>
-      <VideoJS options={videoJsOptions} />
+      <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
 
       {/* Add-to-context button */}
       <div className="flex items-center justify-end mt-3">

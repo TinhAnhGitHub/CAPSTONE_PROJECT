@@ -1,3 +1,5 @@
+// DEPRECATED NOT USED
+
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useModalStore, MODAL_NAMES } from '@/stores/modal';
 

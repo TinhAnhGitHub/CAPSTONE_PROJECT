@@ -14,12 +14,26 @@ import { useVideoModalStore } from "@/stores/videoModal";
 // Capture group 1 = the raw ID (no surrounding punctuation).
 const OBJECT_ID_RE = /["'`]?([0-9a-f]{24})["'`]?/g;
 
+// not using
+// Matches `hh:mm:ss.mmm - hh:mm:ss.mmm | video_id` or `hh:mm:ss.mmm | video_id`
+// inside a backtick-wrapped inline-code node (content only, no backticks).
+// Groups: 1=start, 2=end (optional), 3=videoId
+const TIMESTAMP_RE = /^(\d{2}:\d{2}:\d{2}\.\d{3})(?:\s*-\s*(\d{2}:\d{2}:\d{2}\.\d{3}))?\s*\|\s*([0-9a-f]{24})$/;
+
+// not using
+/** Convert hh:mm:ss.mmm string to total seconds (float). */
+function tsToSeconds(ts) {
+    const [hh, mm, rest] = ts.split(':');
+    const [ss, ms] = rest.split('.');
+    return parseInt(hh, 10) * 3600 + parseInt(mm, 10) * 60 + parseInt(ss, 10) + parseInt(ms, 10) / 1000;
+}
+
 /**
  * Clickable chip for a video ObjectId. Looks up the video in workspaceVideos
  * and calls useVideoModalStore.open(video) directly — no <a> tag involved.
  */
-const MINIO_BASE = 'http://100.113.186.28:9000/videos';
-
+const MINIO_BASE = import.meta.env.VITE_PRIMARY_URL + "/media/videos";
+    
 function VideoIdChip({ videoId }) {
     const workspaceVideos = useChatStore((s) => s.workspaceVideos);
     const open = useVideoModalStore((s) => s.open);
@@ -137,6 +151,105 @@ function VideoIdChip({ videoId }) {
                     <div className="px-3 py-2">
                         <p className="text-xs font-medium text-text truncate">{videoObj.name}</p>
                         <p className="text-[10px] text-accent/80 mt-0.5">Click to open player</p>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </span>
+    );
+}
+
+/**
+ * Clickable chip for a timestamp + video_id.
+ * Matches: `hh:mm:ss.mmm - hh:mm:ss.mmm | video_id` or `hh:mm:ss.mmm | video_id`
+ * Clicking opens the video modal seeked to the start time.
+ */
+function TimestampChip({ startTs, endTs, videoId }) {
+    const workspaceVideos = useChatStore((s) => s.workspaceVideos);
+    const open = useVideoModalStore((s) => s.open);
+    const [showPreview, setShowPreview] = useState(false);
+    const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+    const hoverTimerRef = useRef(null);
+    const mousePosRef = useRef({ x: 0, y: 0 });
+
+    const workspaceVideo = workspaceVideos.find((v) => v._id === videoId || v.id === videoId);
+    const videoObj = {
+        url: `${MINIO_BASE}/${videoId}.mp4`,
+        name: workspaceVideo?.name ?? videoId,
+        thumbnail: workspaceVideo?.thumbnail ?? null,
+    };
+
+    const label = endTs ? `${startTs} – ${endTs}` : startTs;
+    const startSeconds = tsToSeconds(startTs);
+
+    const showTooltip = () => {
+        const { x, y } = mousePosRef.current;
+        const TOOLTIP_W = 224;
+        const left = Math.max(8, Math.min(x - TOOLTIP_W / 2, window.innerWidth - TOOLTIP_W - 8));
+        setTooltipPos({ top: y, left });
+        setShowPreview(true);
+    };
+
+    const handleMouseMove = (e) => { mousePosRef.current = { x: e.clientX, y: e.clientY }; };
+    const handleMouseEnter = (e) => {
+        mousePosRef.current = { x: e.clientX, y: e.clientY };
+        hoverTimerRef.current = setTimeout(showTooltip, 400);
+    };
+    const handleMouseLeave = () => {
+        clearTimeout(hoverTimerRef.current);
+        setShowPreview(false);
+    };
+
+    return (
+        <span
+            className="relative inline-flex"
+            onMouseEnter={handleMouseEnter}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+        >
+            <button
+                onClick={() => open(videoObj, startSeconds)}
+                title={`${videoObj.name} @ ${label}`}
+                className={clsx(
+                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono align-baseline',
+                    'border transition-all cursor-pointer',
+                    'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 hover:border-emerald-500 active:bg-emerald-500/40 active:scale-95'
+                )}
+            >
+                {/* Clock icon */}
+                <svg className="w-3 h-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+                {label}
+            </button>
+
+            {showPreview && createPortal(
+                <div
+                    className="fixed z-[9999] w-56 rounded-xl overflow-hidden pointer-events-none"
+                    style={{
+                        bottom: `${window.innerHeight - tooltipPos.top}px`,
+                        left: tooltipPos.left,
+                        background: 'rgba(48,48,48,0.97)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(16,185,129,0.2)',
+                        animation: 'chip-preview-in 0.15s ease-out both',
+                    }}
+                >
+                    <div className="relative w-full aspect-video bg-surface-light">
+                        <video
+                            src={videoObj.url}
+                            poster={videoObj.thumbnail ?? undefined}
+                            className="w-full h-full object-cover"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                        />
+                        <div className="absolute top-0 inset-x-0 h-px bg-emerald-500/60" />
+                    </div>
+                    <div className="px-3 py-2">
+                        <p className="text-xs font-medium text-text truncate">{videoObj.name}</p>
+                        <p className="text-[10px] text-emerald-400/80 mt-0.5">⏱ {label}</p>
                     </div>
                 </div>,
                 document.body
@@ -278,13 +391,27 @@ export default function TextBlock({ block, role }) {
                     remarkPlugins={[remarkGfm]}
                     components={{
                         code: ({ inline, className, children, ...props }) => {
-                            // Backtick-wrapped ObjectId → chip (e.g. `69d1fa…`)
                             if (!className && role === 'assistant') {
                                 const text = typeof children === 'string'
                                     ? children
                                     : Array.isArray(children) ? children.join('') : '';
-                                if (/^[0-9a-f]{24}$/.test(text.trim())) {
-                                    return <VideoIdChip videoId={text.trim()} />;
+                                const trimmed = text.trim();
+
+                                // Timestamp chip: `hh:mm:ss.mmm - hh:mm:ss.mmm | video_id`
+                                const tsMatch = TIMESTAMP_RE.exec(trimmed);
+                                if (tsMatch) {
+                                    return (
+                                        <TimestampChip
+                                            startTs={tsMatch[1]}
+                                            endTs={tsMatch[2] ?? null}
+                                            videoId={tsMatch[3]}
+                                        />
+                                    );
+                                }
+
+                                // Plain ObjectId chip: `69d1fa…`
+                                if (/^[0-9a-f]{24}$/.test(trimmed)) {
+                                    return <VideoIdChip videoId={trimmed} />;
                                 }
                             }
                             if (className) {

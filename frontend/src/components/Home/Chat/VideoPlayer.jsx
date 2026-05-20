@@ -131,8 +131,9 @@ export default function VideoPlayer({ video }) {
   const videoJsOptions = useMemo(() => ({
     autoplay: false,
     controls: true,
-    responsive: true,
-    fluid: true,
+    // Do NOT use fluid/responsive — they compute padding-top from the video's
+    // intrinsic ratio (e.g. 177% for 9:16) and blow out our fixed-ratio wrapper.
+    fill: true,
     poster: video.thumbnail,
     controlBar: {
       children: [
@@ -268,7 +269,17 @@ export default function VideoPlayer({ video }) {
 
           {/* ── Left: video + actions ── */}
           <div className='lg:flex-[2] lg:self-start shrink-0'>
-            <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+            {/* Force 16:9 — black bars for vertical / non-standard videos.
+                fill:true makes vjs expand to 100%/100% of this box;
+                object-fit:contain letterboxes/pillarboxes the actual video. */}
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', overflow: 'hidden' }}>
+              <style>{`
+                [data-vjs-player], [data-vjs-player] > div,
+                .video-js { width: 100% !important; height: 100% !important; }
+                .video-js video { object-fit: contain !important; }
+              `}</style>
+              <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+            </div>
             {/* Action buttons — stack on mobile, row on sm+ */}
             <div className='mt-2 flex flex-col sm:flex-row sm:items-center gap-2'>
               <SaveKeyframes segments={video.segments} videoId={video.video_id} videoName={video.title} />

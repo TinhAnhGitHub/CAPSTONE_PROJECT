@@ -6,7 +6,7 @@ import VideoModal from './components/Home/Sidebar/components/Library/VideoModal'
 import { useVideoModalStore } from './stores/videoModal';
 export default function App() {
   // isModalOpen, closeModal, title="Video name", video
-  const { isOpen, video, close } = useVideoModalStore();
+  const { isOpen, video, close, startTime } = useVideoModalStore();
 
   return (
     <div>
@@ -17,6 +17,7 @@ export default function App() {
       <VideoModal isModalOpen={isOpen}
         video={video}
         closeModal={close}
+        startTime={startTime}
       />
     </div>
   )
