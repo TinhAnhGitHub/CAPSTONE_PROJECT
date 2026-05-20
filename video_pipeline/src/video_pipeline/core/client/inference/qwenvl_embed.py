@@ -4,7 +4,6 @@ import httpx
 import numpy as np
 from typing import List, Optional
 from pydantic import BaseModel
-from loguru import logger
 
 class QwenVLEmbeddingConfig(BaseModel):
     base_url: str
@@ -90,5 +89,4 @@ class QwenVLEmbeddingClient:
         prompt_string = f"Video:\n{media_tags}\nRepresent for later on retrieval."
         if text:
             prompt_string += f" {text}"
-
         return await self._get_embedding(prompt_string, b64_frames)
