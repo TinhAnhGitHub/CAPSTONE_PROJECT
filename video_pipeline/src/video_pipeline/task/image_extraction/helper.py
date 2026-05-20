@@ -72,4 +72,5 @@ def get_segment_frame_indices(start: int, end: int, n: int) -> list[int]:
     if n <= 0 or end <= start:
         return []
     total = end - start
-    return [start + (i + 1) * total // (n + 1) for i in range(n)]
+    segment_return =  [start + (i + 1) * total // (n + 1) for i in range(n)]
+    return list(set(segment_return))
