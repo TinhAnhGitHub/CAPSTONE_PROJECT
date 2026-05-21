@@ -337,7 +337,7 @@ tasks:
       - "embedding-task"
     retries: 2
     retry_delay_seconds: 10
-    timeout_seconds: 1800
+    timeout_seconds: 7200
     cache_enabled: true
     cache_expiration_seconds: 86400
     cache_key_fn: "kg_extraction_cache_key"
@@ -371,7 +371,7 @@ tasks:
       - "embedding-task"
     retries: 2
     retry_delay_seconds: 10
-    timeout_seconds: 1800
+    timeout_seconds: 7200
     cache_enabled: true
     cache_expiration_seconds: 86400
     cache_key_fn: "kg_entity_resolution_cache_key"
@@ -398,7 +398,7 @@ tasks:
       - "embedding-task"
     retries: 2
     retry_delay_seconds: 10
-    timeout_seconds: 1800
+    timeout_seconds: 7200
     cache_enabled: true
     cache_expiration_seconds: 86400
     cache_key_fn: "kg_finalization_cache_key"
