@@ -477,7 +477,7 @@ export default function Chat() {
                 }}
                 rows={1}
                 className={clsx(
-                  'block flex-1 border-none bg-transparent text-sm/6 text-text',
+                  'block flex-1 border-none bg-transparent text-md/6 text-text',
                   'focus:outline-none resize-none placeholder:text-text-muted',
                   'whitespace-pre-wrap leading-relaxed',
                   'max-h-[10rem] overflow-y-auto',
