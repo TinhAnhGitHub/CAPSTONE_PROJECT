@@ -1,5 +1,34 @@
 llm_provider:
   api_key: ${OPENROUTER_API_KEY}
+  
+  model_to_provider:
+    z-ai/glm-5.1:
+      order:
+        - friendli
+        - fireworks
+        - baidu/fp8
+        - gmicloud/fp8
+        - deepinfra/fp4
+        - streamlake
+      allow_fallbacks: true
+      require_parameters: true
+
+    deepseek/deepseek-v4-pro:
+      order:
+        - streamlake
+        - alibaba
+        - fireworks
+      allow_fallbacks: true
+      require_parameters: true
+
+    deepseek/deepseek-v4-flash:
+      order:
+        - deepseek
+        - siliconflow/fp8
+        - cloudflare
+      allow_fallbacks: true
+      require_parameters: true
+  
   agents:
     greeter:
       model_id: qwen/qwen3.6-plus
