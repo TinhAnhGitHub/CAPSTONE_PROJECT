@@ -31,7 +31,7 @@ llm_provider:
   
   agents:
     greeter:
-      model_id: qwen/qwen3.6-plus
+      model_id: deepseek/deepseek-v4-flash
       temperature: 0.7
       top_p: 0.95
       max_output_tokens: 2048
@@ -43,13 +43,13 @@ llm_provider:
       max_output_tokens: 4096
       max_tool_calls: 20
     planning:
-      model_id: qwen/qwen3.6-plus
+      model_id: deepseek/deepseek-v4-flash
       temperature: 0.4
       top_p: 0.85
       max_output_tokens: 2048
       max_tool_calls: 15
     llm_tool:
-      model_id: qwen/qwen3.5-35b-a3b
+      model_id: deepseek/deepseek-v4-flash
       temperature: 0.3
       top_p: 0.8
       max_output_tokens: 1024
@@ -58,130 +58,80 @@ llm_provider:
         top_k: 40
         repeat_penalty: 1.05
     summarizer:
-      model_id: qwen/qwen3.5-35b-a3b
+      model_id: deepseek/deepseek-v4-flash
       temperature: 0.3
       top_p: 0.85
       max_output_tokens: 2048
       max_tool_calls: 10
 
   workers:
-    - name: qwen/qwen3.6-plus
-      model_id: qwen/qwen3.6-plus
+    - name: deepseek/deepseek-v4-flash
+      model_id: deepseek/deepseek-v4-flash
       temperature: 0.3
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "Qwen 3.6 Plus builds on a hybrid architecture combining efficient linear attention with sparse mixture-of-experts routing, enabling strong scalability and high-performance inference with 1M context length."
+      description: "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model with 284B total parameters, 13B activated parameters, and a 1M-token context window. It is optimized for fast inference, high-throughput workloads, coding, reasoning, and responsive agent workflows."
       strengths:
-        - complex reasoning
-        - multi-step planning
-        - long-context understanding
-        - scalability
-        - high-performance inference
-
-    - name: google/gemma-4-31b-it
-      model_id: google/gemma-4-31b-it
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "Gemma 4 31B Instruct is Google DeepMind's 30.7B dense multimodal model supporting text and image input with 256K context window, configurable thinking/reasoning mode, and native function calling."
-      strengths:
-        - multimodal understanding
-        - reasoning mode
-        - function calling
-        - vision tasks
-        - instruction following
-
-    - name: xiaomi/mimo-v2-pro
-      model_id: xiaomi/mimo-v2-pro
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "MiMo-V2-Pro is Xiaomi's flagship foundation model with 1T+ parameters and 1M context length, deeply optimized for agentic scenarios and multi-step tool execution."
-      strengths:
-        - large-scale modeling
-        - multi-step planning
-        - complex agentic workflows
-        - long-context reasoning
-        - tool integration
-
-    - name: qwen/qwen3.5-plus-02-15
-      model_id: qwen/qwen3.5-plus-02-15
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "Qwen3.5 Plus vision-language model with hybrid linear attention + sparse MoE architecture, delivering high inference efficiency with 1M context for diverse multimodal tasks."
-      strengths:
-        - cost efficiency
-        - tool use
-        - multimodal tasks
-        - efficient inference
-        - large context window
-
-    - name: google/gemini-3.1-flash-lite-preview
-      model_id: google/gemini-3.1-flash-lite-preview
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "Gemini 3.1 Flash Lite Preview is Google's high-efficiency model for high-volume use cases, approaching Gemini 2.5 Flash performance at lower cost with 1M context."
-      strengths:
-        - ultra cost efficiency
-        - high throughput
-        - fast response
-        - tool use
-        - search and retrieval
-        - simple reasoning
-
-    - name: qwen/qwen3.5-flash-02-23
-      model_id: qwen/qwen3.5-flash-02-23
-      temperature: 0.3
-      top_p: 0.85
-      max_output_tokens: 8192
-      max_tool_calls: 20
-      description: "Qwen3.5 Flash vision-language model with hybrid architecture achieving higher inference efficiency. Ideal for real-time applications and cost-sensitive workloads with 1M context."
-      strengths:
-        - ultra cost efficiency
         - fast inference
-        - tool use
-        - search and retrieval
-        - agent workflows
         - high throughput
+        - cost efficiency
+        - coding
+        - reasoning
+        - long-context processing
+        - agent workflows
 
-    - name: minimax/minimax-m2.5
-      model_id: minimax/minimax-m2.5
+    - name: xiaomi/mimo-v2.5
+      model_id: xiaomi/mimo-v2.5
       temperature: 0.3
       top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      description: "MiniMax-M2.5 is a SOTA model designed for real-world productivity and coding expertise, trained in diverse complex digital working environments."
+      description: "MiMo-V2.5 is Xiaomi's native omnimodal model with a 1M-token context window. It is designed for strong agentic performance, multimodal perception, image and video understanding, long-context reasoning, and cost-efficient agent framework integration."
       strengths:
+        - multimodal perception
+        - image understanding
+        - video understanding
+        - agentic reasoning
+        - long-context reasoning
         - cost efficiency
-        - coding tasks
-        - real-world productivity
-        - task automation
-        - agent workflows
+        - document understanding
 
-    - name: qwen/qwen3-coder-next
-      model_id: qwen/qwen3-coder-next
-      temperature: 0.2
-      top_p: 0.8
+    - name: deepseek/deepseek-v4-pro
+      model_id: deepseek/deepseek-v4-pro
+      temperature: 0.3
+      top_p: 0.85
       max_output_tokens: 8192
       max_tool_calls: 20
-      extra_body:
-        top_k: 40
-        repeat_penalty: 1.05
-      description: "Qwen3-Coder-Next is optimized for coding agents with sparse MoE design (80B total, 3B active per token), perfect for autonomous programming and tool calling workflows."
+      description: "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model with 1.6T total parameters, 49B activated parameters, and a 1M-token context window. It is designed for advanced reasoning, coding, math, software engineering, full-codebase analysis, multi-step automation, and large-scale synthesis."
       strengths:
-        - coding tasks
-        - autonomous programming
-        - tool calling
-        - repository understanding
-        - code generation
+        - advanced reasoning
+        - coding
+        - math
+        - software engineering
+        - full-codebase analysis
+        - multi-step automation
+        - large-scale synthesis
+        - long-horizon agent workflows
 
+    - name: minimax/minimax-m3
+      model_id: minimax/minimax-m3
+      temperature: 0.3
+      top_p: 0.85
+      max_output_tokens: 8192
+      max_tool_calls: 20
+      description: "MiniMax M3 is a multimodal foundation model supporting text, image, and video inputs with text output. It has a 1M-token context window and is suited for long-horizon agentic work, coding, tool use, and sustained multi-step collaboration."
+      strengths:
+        - multimodal input
+        - image understanding
+        - video understanding
+        - long-horizon agentic work
+        - coding
+        - tool use
+        - multi-step collaboration
+        - long-context processing
+
+    
 storage:
   postgres:
     host: postgres
