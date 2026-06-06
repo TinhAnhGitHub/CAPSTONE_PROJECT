@@ -40,6 +40,7 @@ class LLMProviderConfig(BaseModel):
     api_key: str | None = None
     agents: AgentsConfig
     workers: list[WorkerModelConfig] = []
+    model_to_provider: dict[str, str] = Field(default_factory=dict)
 
     @property
     def resolved_api_key(self) -> str | None:
