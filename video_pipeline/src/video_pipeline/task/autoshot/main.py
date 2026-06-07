@@ -22,15 +22,17 @@ from .helper import (
     preprocess_input_client,
     postprocess_output_client,
     predictions_to_scenes,
+    enforce_min_scene_segments,
+    split_outlier_scenes,
 )
 AUTOSHOT_CONFIG = TaskConfig.from_yaml("autoshot_detection")
 
-# Maximum concurrent batch inference requests to Triton
 MAX_CONCURRENT_BATCHES = 4
 
 
 @StageRegistry.register
 class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
+    config = AUTOSHOT_CONFIG
 
     async def preprocess(
         self, input_data: VideoArtifact
@@ -46,7 +48,6 @@ class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
         video_path = input_data.video_minio_url
         bucket, object_name = split_minio_url(video_path)
 
-        # Create temp file and stream video directly to it (avoids OOM)
         tmp_file = tempfile.NamedTemporaryFile(
             suffix=f".{input_data.video_extension or '.mp4'}",
             delete=False
@@ -122,7 +123,19 @@ class AutoshotTask(BaseTask[VideoArtifact, AutoshotArtifact]):
             AutoshotArtifact with detected scenes
         """
         predictions, video_artifact = result
-        scenes = predictions_to_scenes(predictions).tolist()
+        raw_scenes = predictions_to_scenes(predictions).tolist()
+        scenes = split_outlier_scenes([(start, end) for start, end in raw_scenes])
+        min_segments = self.config.additional_kwargs.get("min_segments", 4)
+        if 0 < len(scenes) < min_segments:
+            logger = get_run_logger()
+            original_count = len(scenes)
+            scenes = enforce_min_scene_segments(scenes, min_segments)
+            logger.info(
+                "[AutoshotTask] Applied minimum segment split | "
+                f"original={original_count} final={len(scenes)} min={min_segments}"
+            )
+
+        scenes = [list(scene) for scene in scenes]
 
         metadata = {"segments": scenes}
 

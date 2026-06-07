@@ -59,7 +59,12 @@ from video_pipeline.task.video.main import (
     VideoRegistryTask,
     video_reg_task,
 )
-from video_pipeline.task.kg_graph import KGPipelineTask, kg_pipeline_task
+from video_pipeline.task.kg_graph import (
+    KGPipelineTask,
+    kg_entity_resolution_task,
+    kg_extraction_chunk_task,
+    kg_finalization_task,
+)
 from video_pipeline.task.arango_indexing import ArangoIndexingTask, arango_indexing_task
 
 from video_pipeline.task.autoshot.main import AutoshotArtifact
@@ -551,23 +556,45 @@ async def run_segment_caption_qdrant_indexing(
 async def run_kg_pipeline(
     segment_caption_results: list,
     segment_caption_futures: Any,
+    segment_batch_size: int,
     tracker: HTTPProgressTracker | None,
     video_id: str,
     timing: TimingRegistry,
-) -> tuple[list, Any]:
-    """Stage 12: Run Knowledge Graph pipeline on segment captions."""
-    with timing.record("Knowledge Graph Pipeline") as t:
-        t.start()
-        kg_futures = kg_pipeline_task.submit(  # type: ignore
-            segment_caption_results,
+) -> tuple[Any, Any]:
+    """Stage 12: Run parallel KG extraction, then global KG assembly."""
+    if not segment_caption_results:
+        logger = get_run_logger()
+        logger.info("[KGPipeline] Skipping KG pipeline because no segment captions were produced")
+        return None, None
+
+    with timing.record("KG Extraction") as t:
+        extraction_batches = make_batches(segment_caption_results, segment_batch_size)
+        extraction_futures = kg_extraction_chunk_task.map(  # type: ignore
+            extraction_batches,
             wait_for=segment_caption_futures,
         )
-        kg_results = kg_futures.result()
+        extraction_artifacts = extraction_futures.result()
+        t.stop()
+
+    with timing.record("KG Entity Resolution") as t:
+        entity_resolution_future = kg_entity_resolution_task.submit(  # type: ignore
+            extraction_artifacts,
+            wait_for=extraction_futures,
+        )
+        resolution_result = entity_resolution_future.result()
+        t.stop()
+
+    with timing.record("KG Finalization") as t:
+        finalization_future = kg_finalization_task.submit(  # type: ignore
+            resolution_result,
+            wait_for=entity_resolution_future,
+        )
+        kg_results = finalization_future.result()
         await KGPipelineTask.summary_artifact(kg_results)
         if tracker:
             await tracker.complete_stage(video_id, KGPipelineTask.__name__)
         t.stop()
-    return kg_results, kg_futures
+    return kg_results, finalization_future
 
 
 async def run_arango_indexing(
@@ -578,6 +605,11 @@ async def run_arango_indexing(
     timing: TimingRegistry,
 ) -> Any:
     """Stage 13: Index Knowledge Graph into ArangoDB."""
+    if kg_artifact is None:
+        logger = get_run_logger()
+        logger.info("[ArangoDBIndexing] Skipping because no KG artifact was produced")
+        return None
+
     with timing.record("ArangoDB Indexing") as t:
         t.start()
         arango_futures = arango_indexing_task.submit(  # type: ignore
@@ -661,6 +693,7 @@ async def run_audio_branch(
     kg_results, kg_futures = await run_kg_pipeline(
         segment_caption_results,
         segment_caption_futures,
+        segment_batch_size,
         tracker,
         video_id,
         timing,
@@ -793,12 +826,9 @@ async def create_summary_artifact(
     kg_raw_entities = kg_artifact.total_raw_entities if kg_artifact else 0
     kg_events = kg_artifact.total_events if kg_artifact else 0
     kg_micro_events = kg_artifact.total_micro_events if kg_artifact else 0
-    kg_communities = kg_artifact.total_communities if kg_artifact else 0
     kg_relationships = kg_artifact.total_relationships if kg_artifact else 0
     kg_event_edges = kg_artifact.total_event_edges if kg_artifact else 0
     kg_micro_edges = kg_artifact.total_micro_event_edges if kg_artifact else 0
-    kg_nodes_embed = kg_artifact.total_nodes_with_embeddings if kg_artifact else 0
-    kg_modularity = kg_artifact.graph_modularity if kg_artifact else 0.0
 
     kg_prompt_tokens = kg_artifact.total_prompt_tokens if kg_artifact else 0
     kg_completion_tokens = kg_artifact.total_completion_tokens if kg_artifact else 0
@@ -829,13 +859,6 @@ async def create_summary_artifact(
 | Micro-Events | `{kg_micro_events}` |
 | Event-to-Event Edges | `{kg_event_edges}` |
 | Micro-Event Edges | `{kg_micro_edges}` |
-
-### Community Structure
-| Field | Value |
-|-------|-------|
-| Communities Detected | `{kg_communities}` |
-| Graph Modularity | `{kg_modularity:.4f}` |
-| Nodes with Node2Vec Embeddings | `{kg_nodes_embed}` |
 
 ### LLM Cost & Usage
 | Field | Value |
@@ -979,11 +1002,11 @@ async def single_video_processing_flow(
         logger.info(f"[Flow:{flow_run_name}] Shot detection done | {n_shots} shot(s) detected")
 
         asr_batches, image_batches = await run_preprocess(shot_result, shots_fut, timing)
-        n_asr = sum(len(b) for b in asr_batches)
+        n_asr = sum(len(batch) for batch in asr_batches)
         n_img = sum(len(b) for b in image_batches)
         logger.info(
             f"[Flow:{flow_run_name}] Preprocess done | "
-            f"{n_asr} audio chunk(s) in {len(asr_batches)} ASR batch(es) | "
+            f"{n_asr} ASR item(s) in {len(asr_batches)} batch(es) | "
             f"{n_img} frame(s) in {len(image_batches)} image batch(es)"
         )
 

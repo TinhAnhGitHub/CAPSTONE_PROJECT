@@ -1,4 +1,5 @@
-import { get } from "idb-keyval";
+//  DEPRACATED NOT USED ANYMORE
+
 const KEYFRAMES_URL = import.meta.env.VITE_KEYFRAMES_PATH || 'http://100.113.186.28:8000/keyframe/';
 const VIDEOS_URL = import.meta.env.VITE_VIDEOS_PATH || 'http://100.113.186.28:8000/video/';
 

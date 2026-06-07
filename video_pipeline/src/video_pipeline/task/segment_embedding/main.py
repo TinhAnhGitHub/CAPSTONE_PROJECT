@@ -100,6 +100,7 @@ class SegmentEmbeddingTask(BaseTask[list[SegmentCaptionArtifact], list[SegmentEm
                 def _to_jpeg(data: bytes, size: int = 640) -> bytes:
                     buf = io.BytesIO()
                     img = PILImage.open(io.BytesIO(data)).convert("RGB")
+                    img.verify()
                     img = img.resize((size, size), PILImage.Resampling.LANCZOS)
                     img.save(buf, format="JPEG", quality=90)
                     return buf.getvalue()

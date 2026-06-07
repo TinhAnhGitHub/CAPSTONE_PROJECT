@@ -68,7 +68,7 @@ async def preprocess_video_task(
 
     logger.info(
         f"[VideoPreprocess] Downloading video and extracting "
-        f"{len(segments)} audio chunk(s) + "
+        f"{len(segments)} audio chunk(s) + up to "
         f"{len(segments) * frames_per_segment} frame index(es)..."
     )
 

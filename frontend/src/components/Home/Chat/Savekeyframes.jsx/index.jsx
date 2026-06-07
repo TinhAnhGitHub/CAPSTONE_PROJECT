@@ -50,7 +50,7 @@ export default function SaveKeyframes({ segments, videoId, videoName }) {
     }
 
     return (
-        <div className="h-5 w-5" onClick={(e) => { e.stopPropagation(); }}>
+        <div className="inline-flex" onClick={(e) => { e.stopPropagation(); }}>
             <Menu>
                 <MenuButton className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-1.5 text-sm/6 font-semibold text-white shadow-inner shadow-white/10 focus:not-data-focus:outline-none data-focus:outline data-focus:outline-white data-hover:bg-accent/90 data-open:bg-accent/90 whitespace-nowrap hover:cursor-pointer">
                     Download Keyframes

@@ -3,8 +3,9 @@ import socketio
 
 
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
@@ -14,6 +15,7 @@ from app.core.config import settings
 from app.api import chat
 from app.api import user
 from app.api import ingestion
+from app.api import media
 
 from app.api.socket import sio
 
@@ -34,6 +36,17 @@ app.add_middleware(
 )
 
 
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    """Suppresses Chrome's 'connect to local devices' prompt.
+    Required when the backend is accessed via a private/Tailscale IP."""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+
+app.add_middleware(PrivateNetworkAccessMiddleware)
+
+
 app_with_sockets = socketio.ASGIApp(sio, other_asgi_app=app)
 
 
@@ -42,6 +55,7 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.include_router(chat.router)
 app.include_router(user.router)
 app.include_router(ingestion.router)
+app.include_router(media.router)
 
 
 @app.get("/")

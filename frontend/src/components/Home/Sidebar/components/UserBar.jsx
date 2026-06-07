@@ -42,7 +42,7 @@ export default function UserBar() {
                     {user ? user.name : 'Guest'}
                 </div>
 
-                <button className='bg-surface-light hover:bg-surface-hover text-text-muted hover:text-text px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer transition-colors'
+                <button className='bg-surface-light hover:bg-surface-hover active:bg-surface-hover text-text-muted hover:text-text px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer transition-colors'
                     onClick={() => user ? logoutConfirm() : navigate('/login')}
                 >
                     {user ? 'Logout' : 'Login'}

@@ -2,10 +2,9 @@
 
 Inserts Knowledge Graph data into ArangoDB for graph-based retrieval.
 This task takes the KGGraphArtifact output from the KG pipeline and loads:
-- Vertex collections: videos, entities, events, micro_events, communities
+- Vertex collections: videos, entities, events, micro_events
 - Edge collections: entity_relations, event_sequences, event_entities,
-  micro_event_sequences, micro_event_parents, micro_event_entities,
-  community_members, event_communities
+  micro_event_sequences, micro_event_parents, micro_event_entities
 
 Note: Vector indexes are NOT created here - they should be created separately
 after data is loaded (ArangoDB IVF indexes need training data).
@@ -79,15 +78,12 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 "entity_count": len(preprocessed.entities),
                 "event_count": len(preprocessed.events),
                 "micro_event_count": len(preprocessed.micro_event_nodes),
-                "community_count": len(preprocessed.communities),
                 "segment_count": len(preprocessed.segment_views),
                 "created_at": datetime.now().isoformat(),
             },
             overwrite_mode="replace",
         )
         logger.info(f"[ArangoIndexing] Inserted video document: {video_id}")
-
-        nodes = preprocessed.node_embeddings
 
         entity_docs = []
         entity_texts = []
@@ -102,7 +98,6 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
 
             for idx, entity in enumerate(preprocessed.entities):
                 gid = entity.get("global_entity_id", "")
-                n2v_node = nodes.get(gid, {})
                 sem_emb = entity_embeddings[idx] if idx < len(entity_embeddings) else []
 
                 entity_docs.append({
@@ -117,13 +112,10 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                     "first_seen_segment": entity.get("first_seen_segment"),
                     "last_seen_segment": entity.get("last_seen_segment"),
                     "semantic_embedding": sem_emb,
-                    "structural_embedding_entity_only": n2v_node.get("entity_only_embedding"),
-                    "structural_embedding_entity_event": n2v_node.get("entity_event_embedding"),
-                    "structural_embedding_full": n2v_node.get("full_heterogeneous_embedding"),
                 })
 
         if entity_docs:
-            db.collection("entities").insert_many(entity_docs, overwrite_mode="replace")
+            db.collection("entities").insert_many(entity_docs, overwrite_mode="replace", raise_on_document_error=True)
             stats["entities"] = len(entity_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(entity_docs)} entities")
 
@@ -135,7 +127,6 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
 
             for idx, event in enumerate(preprocessed.events):
                 ekey = event.get("_key", event.get("key", ""))
-                n2v_node = nodes.get(ekey, {})
                 sem_emb = event_embeddings[idx] if idx < len(event_embeddings) else []
                 event_docs.append({
                     "_key": _ns(video_id, ekey),
@@ -150,13 +141,10 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                     "micro_events": event.get("micro_events", []),
                     "entities_global": event.get("entities_global", []),
                     "semantic_embedding": sem_emb,
-                    "structural_embedding_entity_only": n2v_node.get("entity_only_embedding"),
-                    "structural_embedding_entity_event": n2v_node.get("entity_event_embedding"),
-                    "structural_embedding_full": n2v_node.get("full_heterogeneous_embedding"),
                 })
 
         if event_docs:
-            db.collection("events").insert_many(event_docs, overwrite_mode="replace")
+            db.collection("events").insert_many(event_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["events"] = len(event_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(event_docs)} events")
 
@@ -168,7 +156,6 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
 
             for idx, mn in enumerate(preprocessed.micro_event_nodes):
                 mkey = mn.get("_key", mn.get("key", ""))
-                n2v_node = nodes.get(mkey, {})
                 sem_emb = micro_embeddings[idx] if idx < len(micro_embeddings) else []
 
                 micro_docs.append({
@@ -186,39 +173,12 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                     "related_caption_context": mn.get("related_caption_context", ""),
                     "entities_global": mn.get("entities_global", []),
                     "semantic_embedding": sem_emb,
-                    "structural_embedding_entity_event": n2v_node.get("entity_event_embedding"),
-                    "structural_embedding_full": n2v_node.get("full_heterogeneous_embedding"),
                 })
 
         if micro_docs:
-            db.collection("micro_events").insert_many(micro_docs, overwrite_mode="replace")
+            db.collection("micro_events").insert_many(micro_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["micro_events"] = len(micro_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(micro_docs)} micro-events")
-
-        comm_docs = []
-        for comm in preprocessed.communities:
-            ckey = comm.get("comm_key", "")
-            n2v_node = nodes.get(ckey, {})
-            sem_emb = comm.get("embedding", [])  # Already embedded in community_detection
-
-            comm_docs.append({
-                "_key": _ns(video_id, ckey),
-                "video_id": video_id,
-                "user_id": user_id,
-                "comm_idx": comm.get("comm_idx"),
-                "title": comm.get("title", ""),
-                "summary": comm.get("summary", ""),
-                "size": comm.get("size", 0),
-                "member_keys": comm.get("member_keys", []),
-                "event_keys": comm.get("event_keys", []),
-                "semantic_embedding": sem_emb,
-                "structural_embedding_full": n2v_node.get("full_heterogeneous_embedding"),
-            })
-
-        if comm_docs:
-            db.collection("communities").insert_many(comm_docs, overwrite_mode="replace")
-            stats["communities"] = len(comm_docs)
-            logger.info(f"[ArangoIndexing] Inserted {len(comm_docs)} communities")
 
         rel_docs = []
         for rel in preprocessed.relationships:
@@ -238,7 +198,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             })
 
         if rel_docs:
-            db.collection("entity_relations").insert_many(rel_docs, overwrite_mode="replace")
+            db.collection("entity_relations").insert_many(rel_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["entity_relations"] = len(rel_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(rel_docs)} entity relations")
 
@@ -257,7 +217,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             })
 
         if ee_docs:
-            db.collection("event_entities").insert_many(ee_docs, overwrite_mode="replace")
+            db.collection("event_entities").insert_many(ee_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["event_entities"] = len(ee_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(ee_docs)} event-entity links")
 
@@ -281,7 +241,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             })
 
         if es_docs:
-            db.collection("event_sequences").insert_many(es_docs, overwrite_mode="replace")
+            db.collection("event_sequences").insert_many(es_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["event_sequences"] = len(es_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(es_docs)} event sequences")
 
@@ -305,7 +265,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             })
 
         if me_docs:
-            db.collection("micro_event_sequences").insert_many(me_docs, overwrite_mode="replace")
+            db.collection("micro_event_sequences").insert_many(me_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["micro_event_sequences"] = len(me_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(me_docs)} micro-event sequences")
 
@@ -324,7 +284,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             })
 
         if mp_docs:
-            db.collection("micro_event_parents").insert_many(mp_docs, overwrite_mode="replace")
+            db.collection("micro_event_parents").insert_many(mp_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["micro_event_parents"] = len(mp_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(mp_docs)} micro-event parents")
 
@@ -340,49 +300,9 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
                 })
 
         if mee_docs:
-            db.collection("micro_event_entities").insert_many(mee_docs, overwrite_mode="replace")
+            db.collection("micro_event_entities").insert_many(mee_docs, overwrite_mode="replace",  raise_on_document_error=True)
             stats["micro_event_entities"] = len(mee_docs)
             logger.info(f"[ArangoIndexing] Inserted {len(mee_docs)} micro-event entities")
-
-        cm_docs = []
-        for edge in preprocessed.membership_edges:
-            from_key = _strip_collection(edge.get("_from", ""))
-            to_key = _strip_collection(edge.get("_to", ""))
-            if not from_key or not to_key:
-                continue
-
-            cm_docs.append({
-                "_from": f"entities/{_ns(video_id, from_key)}",
-                "_to": f"communities/{_ns(video_id, to_key)}",
-                "video_id": video_id,
-                "user_id": user_id,
-            })
-
-        if cm_docs:
-            db.collection("community_members").insert_many(cm_docs, overwrite_mode="replace")
-            stats["community_members"] = len(cm_docs)
-            logger.info(f"[ArangoIndexing] Inserted {len(cm_docs)} community members")
-
-        ec_docs = []
-        for edge in preprocessed.event_community_edges:
-            from_key = _strip_collection(edge.get("_from", ""))
-            to_key = _strip_collection(edge.get("_to", ""))
-            if not from_key or not to_key:
-                continue
-
-            ec_docs.append({
-                "_from": f"events/{_ns(video_id, from_key)}",
-                "_to": f"communities/{_ns(video_id, to_key)}",
-                "video_id": video_id,
-                "user_id": user_id,
-                "shared_entities": edge.get("shared_entities", 0),
-                "assignment": edge.get("assignment", ""),
-            })
-
-        if ec_docs:
-            db.collection("event_communities").insert_many(ec_docs, overwrite_mode="replace")
-            stats["event_communities"] = len(ec_docs)
-            logger.info(f"[ArangoIndexing] Inserted {len(ec_docs)} event-community edges")
 
         artifact = ArangoIndexingArtifact(
             user_id=preprocessed.user_id,
@@ -427,7 +347,7 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             f"| **Entities** | `{final_result.entities}` |\n"
             f"| **Events** | `{final_result.events}` |\n"
             f"| **Micro-Events** | `{final_result.micro_events}` |\n"
-            f"| **Communities** | `{final_result.communities}` |\n\n"
+            "\n"
             f"## Edge Collections\n"
             f"| Collection | Count |\n"
             f"|------------|-------|\n"
@@ -437,8 +357,6 @@ class ArangoIndexingTask(BaseTask[KGGraphArtifact, ArangoIndexingArtifact]):
             f"| **Micro-Event Sequences** | `{final_result.micro_event_sequences}` |\n"
             f"| **Micro-Event Parents** | `{final_result.micro_event_parents}` |\n"
             f"| **Micro-Event Entities** | `{final_result.micro_event_entities}` |\n"
-            f"| **Community Members** | `{final_result.community_members}` |\n"
-            f"| **Event Communities** | `{final_result.event_communities}` |\n"
         )
 
         await acreate_markdown_artifact(

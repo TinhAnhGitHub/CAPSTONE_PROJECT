@@ -17,6 +17,7 @@ from .artifact import (
     SegmentEmbeddingArtifact,
     SegmentCaptionArtifact,
     # KG Artifact
+    KGExtractionArtifact,
     KGGraphArtifact,
     # ArangoDB Indexing
     ArangoIndexingArtifact,
@@ -41,6 +42,7 @@ __all__ = [
     "SegmentEmbeddingArtifact",
     "SegmentCaptionArtifact",
     # KG Artifact
+    "KGExtractionArtifact",
     "KGGraphArtifact",
     # ArangoDB Indexing
     "ArangoIndexingArtifact",

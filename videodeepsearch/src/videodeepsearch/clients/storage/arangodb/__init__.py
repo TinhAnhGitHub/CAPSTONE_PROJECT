@@ -1,6 +1,5 @@
 from .index_manager import ArangoIndexManager
 from .schema import (
-    KGCommunityResult,
     KGEntityResult,
     KGEventResult,
     KGMicroEventResult,
@@ -13,7 +12,6 @@ __all__ = [
     "KGEntityResult",
     "KGEventResult",
     "KGMicroEventResult",
-    "KGCommunityResult",
     "KGRagResult",
     "KGTraversalResult",
 ]

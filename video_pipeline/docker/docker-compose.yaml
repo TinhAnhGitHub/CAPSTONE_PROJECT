@@ -20,6 +20,8 @@ services:
     image: redis:latest
     volumes:
       - ${DOCKER_LOCAL_VOLUME}/redis:/data
+    ports:
+    - "6379:6379"
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping"]
       interval: 5s
