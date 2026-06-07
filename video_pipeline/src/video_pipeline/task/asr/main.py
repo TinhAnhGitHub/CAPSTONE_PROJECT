@@ -52,42 +52,41 @@ class ASRTask(BaseTask[list[ASRItem], list[ASRArtifact]]):
             for audio_path in audio_paths:
                 delete_audio_file(audio_path)
 
-        asr_artifact_list = []
-
+        asr_artifacts = []
         for raw_result, asr_data in zip(raw_results, preprocessed):
-            autoshot_artifact, start_frame, end_frame, audio_path = asr_data
-
+            autoshot_artifact, start_frame, end_frame, _audio_path = asr_data
             fps = autoshot_artifact.related_video_fps
             start_ts = frames_to_timestamp(start_frame, fps)
             end_ts = frames_to_timestamp(end_frame, fps)
             duration_sec = round((end_frame - start_frame) / fps, 3)
             text = parse_asr_response(raw_result["text"]) if raw_result else ""
-            asr_artifact = ASRArtifact(
-                related_autoshot_artifact_id=autoshot_artifact.artifact_id,
-                related_video_minio_url=autoshot_artifact.related_video_minio_url,
-                related_video_extension=autoshot_artifact.related_video_extension,
-                related_video_fps=fps,
-                related_video_id=autoshot_artifact.related_video_id,
-                user_id=autoshot_artifact.user_id,
-                metadata={
-                    "timestamp": [start_ts, end_ts],
-                    "frame_num": [start_frame, end_frame],
-                    "text": text,
-                    "duration": duration_sec,
-                },
+            asr_artifacts.append(
+                ASRArtifact(
+                    related_autoshot_artifact_id=autoshot_artifact.artifact_id,
+                    related_video_minio_url=autoshot_artifact.related_video_minio_url,
+                    related_video_extension=autoshot_artifact.related_video_extension,
+                    related_video_fps=fps,
+                    related_video_id=autoshot_artifact.related_video_id,
+                    user_id=autoshot_artifact.user_id,
+                    metadata={
+                        "timestamp": [start_ts, end_ts],
+                        "frame_num": [start_frame, end_frame],
+                        "text": text,
+                        "duration": duration_sec,
+                    },
+                )
             )
-            asr_artifact_list.append(asr_artifact)
 
-        return asr_artifact_list
+        return asr_artifacts
 
     async def postprocess(self, result: list[ASRArtifact]) -> list[ASRArtifact]:
-        """Persist ASR artifact to database."""
-        for res in result:
-            await self.artifact_visitor.visit_artifact(res)
+        """Persist ASR artifacts to database."""
+        for artifact in result:
+            await self.artifact_visitor.visit_artifact(artifact)
         return result
 
     @staticmethod
-    async def summary_artifact(final_result: list[ASRArtifact]) -> None:
+    async def summary_artifact(final_result: list[ASRArtifact]) -> None:  # type:ignore
         """Create a Prefect markdown artifact summarising an ASR batch."""
         if not final_result:
             return
@@ -164,21 +163,8 @@ class ASRTask(BaseTask[list[ASRItem], list[ASRArtifact]]):
 
 
 @task(**{**ASR_CONFIG.to_task_kwargs(), "name": "ASR Chunk"})  # type:ignore
-async def asr_chunk_task(
-    items: list[ASRItem],
-) -> list[ASRArtifact]:
-    """Process a batch of ASR segments using ASRTask.execute().
-
-    Iterates over each segment in the batch sequentially via BaseTask.execute(),
-    persisting each artifact immediately after inference via postprocess().
-
-    Args:
-        items: Batch of (AutoshotArtifact, start_frame, end_frame, audio_path)
-        context: Task execution context.
-
-    Returns:
-        List of ASRArtifacts, one per segment in the batch.
-    """
+async def asr_chunk_task(items: list[ASRItem]) -> list[ASRArtifact]:
+    """Process a batch of ASR segments."""
     logger = get_run_logger()
     settings = get_settings()
 

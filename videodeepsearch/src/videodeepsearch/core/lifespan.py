@@ -31,10 +31,34 @@ load_dotenv()
 
 
 def _build_model_kwargs(cfg) -> dict:
-    return {
+    provider = settings.llm_provider.model_to_provider.get(cfg.model_id)
+
+    config: dict = {
         "id": cfg.model_id,
         "api_key": settings.llm_provider.resolved_api_key,
     }
+
+    if cfg.temperature is not None:
+        config["temperature"] = cfg.temperature
+
+    if cfg.top_p is not None:
+        config["top_p"] = cfg.top_p
+
+    if cfg.max_output_tokens is not None:
+        config["max_output_tokens"] = cfg.max_output_tokens
+
+    if cfg.max_tool_calls is not None:
+        config["max_tool_calls"] = cfg.max_tool_calls
+
+    extra_body = dict(cfg.extra_body or {})
+
+    if provider:
+        extra_body["provider"] = provider
+
+    if extra_body:
+        config["extra_body"] = extra_body
+
+    return config
 
 
 

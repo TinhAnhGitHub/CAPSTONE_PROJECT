@@ -17,6 +17,7 @@ A FastAPI-based backend service that powers the Moment Retrieval Agent applicati
 | Auth | Google OAuth 2.0 + PyJWT |
 | LLM Framework | LlamaIndex 0.14+ (with OpenAI/MockLLM) |
 | Validation | Pydantic 2 + Pydantic-Settings |
+| **Task Queue** | **Celery 5 + Redis** |
 | Package Manager | `uv` |
 
 ---
@@ -44,11 +45,20 @@ uv sync
 # 3. Create environment file (see Environment Variables below)
 cp .env .env.local   # then edit .env.local with your values
 
-# 4. Run the application
+# 4. Start Redis (required for Celery task queue)
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+
+# 5. Start Celery worker (in a separate terminal)
+cd backend
+uv run celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
+
+# 6. Run the FastAPI application
 uv run main.py
 ```
 
 The server will start at `http://0.0.0.0:8011/` by default.
+
+> **Thesis demo tip:** Run `uv run celery -A app.worker.celery_app flower` in an extra terminal to get a beautiful web UI at `http://localhost:5555` showing task status, retries, and worker health.
 
 ### Available Endpoints
 
@@ -80,6 +90,13 @@ MINIO_SECRET_KEY=minioadmin
 # Server binding
 HOST=0.0.0.0
 PORT=8011
+
+# Redis (Celery broker + result backend)
+REDIS_URL=redis://localhost:6379/0
+
+# Ingestion pipeline service endpoints
+INGESTION_SERVICE_URL=http://<pipeline-host>:8050
+INGESTION_CANCEL_URL=http://<pipeline-host>:8000
 ```
 
 | Variable | Required | Default | Description |
@@ -92,6 +109,9 @@ PORT=8011
 | `MINIO_SECRET_KEY` | Yes | `minioadmin` | MinIO secret key |
 | `HOST` | No | `0.0.0.0` | Server bind host |
 | `PORT` | No | `8011` | Server bind port |
+| `REDIS_URL` | No | `redis://localhost:6379/0` | Redis broker + result backend for Celery |
+| `INGESTION_SERVICE_URL` | No | `http://100.113.186.28:8050` | Video pipeline ingestion endpoint |
+| `INGESTION_CANCEL_URL` | No | `http://100.113.186.28:8000` | Video pipeline cancel endpoint |
 
 > **Note:** Additional config (collection names, upload directory) is defined in `app/core/config.py` and can be overridden via env vars if needed.
 

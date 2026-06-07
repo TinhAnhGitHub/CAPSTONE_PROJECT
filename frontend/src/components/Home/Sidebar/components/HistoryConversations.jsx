@@ -31,7 +31,12 @@ export default function HistoryConversations() {
       onSuccess: (data) => {
         setChatHistory(data);
         if (data.length > 0) {
-          if (!session_id) {
+          // Always read live state — closure-captured session_id can be stale
+          const currentSessionId = useStoreChat.getState().session_id;
+          const sessionStillValid = currentSessionId &&
+            data.some(chat => chat._id === currentSessionId);
+          if (!sessionStillValid) {
+            // Switch to first session (covers login, logout-login, different user)
             setSessionId(data[0]._id);
           }
         }
@@ -64,14 +69,14 @@ export default function HistoryConversations() {
       <div className='sticky flex gap-2  top-0 px-2 py-2 border-b border-surface-light h-14'>
         <button
           onClick={createNewChat}
-          className='flex items-center gap-2 self-center w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
+          className='flex items-center gap-2 self-center w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover active:bg-accent-hover text-white text-sm font-medium transition-colors cursor-pointer'
         >
           <PencilSquareIcon className="w-5 h-5" />
           <span>New Chat</span>
         </button>
         <button
           onClick={() => setSearchOpen(true)}
-          className='flex items-center justify-center self-center px-3 py-2 rounded-lg bg-surface-hover hover:bg-surface-light text-text-muted hover:text-text transition-colors cursor-pointer'
+          className='flex items-center justify-center self-center px-3 py-2 rounded-lg bg-surface-hover hover:bg-surface-light text-text-muted hover:text-text transition-colors cursor-pointer active:bg-surface-light'
           title='Search chats'
         >
           <MagnifyingGlassIcon className="w-5 h-5" />

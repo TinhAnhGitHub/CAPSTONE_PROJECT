@@ -70,7 +70,7 @@ export default function VideoPlayer({ video }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const playerRef = useRef(null)
 
-  console.log(video)
+  // console.log(video)
 
   const setOverrideVideos = useStore((state) => state.setOverrideVideos)
   const overrideVideos = useStore((state) => state.overrideVideos)
@@ -131,8 +131,9 @@ export default function VideoPlayer({ video }) {
   const videoJsOptions = useMemo(() => ({
     autoplay: false,
     controls: true,
-    responsive: true,
-    fluid: true,
+    // Do NOT use fluid/responsive — they compute padding-top from the video's
+    // intrinsic ratio (e.g. 177% for 9:16) and blow out our fixed-ratio wrapper.
+    fill: true,
     poster: video.thumbnail,
     controlBar: {
       children: [
@@ -245,7 +246,7 @@ export default function VideoPlayer({ video }) {
           {video.title && <h2 className="text-sm text-text truncate flex-1">{video.title}</h2>}
           <button
             onClick={addVideoToChatSession}
-            className="p-1 rounded-full hover:bg-surface-light transition-colors cursor-pointer"
+            className="p-1 rounded-full hover:bg-white/10 active:bg-white/10 transition-colors cursor-pointer"
             title={overrideVideos.find(v => v.video_id === video.video_id) ? "Already added" : "Add to chat"}
           >
             {overrideVideos.find(v => v.video_id === video.video_id) ? (
@@ -263,19 +264,49 @@ export default function VideoPlayer({ video }) {
         title={video.title || "Video Player"}
         size="xl"
       >
-        <div className='flex flex-col lg:flex-row h-full lg:items-center gap-3'>
-          {/* 3 parts */}
-          <div className='flex-1 lg:flex-2 max-lg:max-h-[50%] lg:h-full'>
-            <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
-            {/* settings like, save allkeyframes, save all images from keyframe */}
-            <div className='m-2'>
+        {/* Mobile: single scrolling column. Desktop: side-by-side. */}
+        <div className='h-full flex flex-col lg:flex-row gap-4 overflow-y-auto lg:overflow-hidden'>
+
+          {/* ── Left: video + actions ── */}
+          <div className='lg:flex-[2] lg:self-start shrink-0'>
+            {/* Force 16:9 — black bars for vertical / non-standard videos.
+                fill:true makes vjs expand to 100%/100% of this box;
+                object-fit:contain letterboxes/pillarboxes the actual video. */}
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', overflow: 'hidden' }}>
+              <style>{`
+                [data-vjs-player], [data-vjs-player] > div,
+                .video-js { width: 100% !important; height: 100% !important; }
+                .video-js video { object-fit: contain !important; }
+              `}</style>
+              <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
+            </div>
+            {/* Action buttons — stack on mobile, row on sm+ */}
+            <div className='mt-2 flex flex-col sm:flex-row sm:items-center gap-2'>
               <SaveKeyframes segments={video.segments} videoId={video.video_id} videoName={video.title} />
+              <button
+                onClick={addVideoToChatSession}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer hover:bg-surface-light active:bg-surface-light"
+                title={overrideVideos.find(v => v.video_id === video.video_id) ? 'Remove from chat context' : 'Add to chat context'}
+              >
+                {overrideVideos.find(v => v.video_id === video.video_id) ? (
+                  <>
+                    <CheckCircleIcon className="w-5 h-5 text-accent" />
+                    <span className="text-accent">Added to context</span>
+                  </>
+                ) : (
+                  <>
+                    <PlusCircleIcon className="w-5 h-5 text-text-muted" />
+                    <span className="text-text-muted">Add to context</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
-          {/* 1 part */}
-          <div className='flex flex-col flex-1 max-lg:min-h-[50%] lg:h-full'>
-            <h3 className="text-xl font-medium text-text mb-2">{video.segments.length} Matches</h3>
-            <div className="h-[90%] overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
+
+          {/* ── Right: matches ── */}
+          <div className='lg:flex-1 lg:h-full flex flex-col lg:min-h-0'>
+            <h3 className="text-xl font-medium text-text mb-2 shrink-0">{video.segments.length} Matches</h3>
+            <div className="flex-1 min-h-0 overflow-y-auto max-lg:max-h-[50vh] scrollbar-thin scrollbar-thumb-surface-light scrollbar-track-transparent">
               {
                 video.segments?.map((segment, i) => {
                   const hue = (i * 137.5) % 360
@@ -291,8 +322,13 @@ export default function VideoPlayer({ video }) {
                   return (
                     <div
                       key={i}
-                      className=" flex flex-col gap-2 border border-white/10 rounded-lg p-2 my-2 cursor-pointer hover:bg-black/10 transition-colors w-full"
-                      onClick={() => playerRef.current?.currentTime(startTime)}
+                      className=" flex flex-col gap-2 border border-white/10 rounded-lg p-2 my-2 cursor-pointer hover:bg-black/10 active:bg-black/10  transition-colors w-full"
+                      onClick={() => {
+                        const player = playerRef.current;
+                        if (!player) return;
+                        player.currentTime(startTime);
+                        player.play();
+                      }}
                       style={{ borderLeftColor: color, borderLeftWidth: '3px' }}
                     >
                       <div className='flex items-center justify-between'>

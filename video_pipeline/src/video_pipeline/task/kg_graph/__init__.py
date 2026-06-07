@@ -14,18 +14,16 @@ from .models import (
     MicroEventNode,
     MicroEventEdge,
     EnhancedKG,
-    CommunityDoc,
-    MembershipEdge,
-    EventCommunityEdge,
-    GraphStats,
-    CommunitiesOutput,
-    Node2VecMeta,
-    NodeEmbedding,
-    Node2VecOutput,
     VideoPipelineKGResult,
     CostTracker,
 )
-from .main import KGPipelineTask, kg_pipeline_task
+from .main import (
+    KGExtractionTask,
+    KGPipelineTask,
+    kg_entity_resolution_task,
+    kg_extraction_chunk_task,
+    kg_finalization_task,
+)
 
 __all__ = [
     "CaptionSegment",
@@ -43,16 +41,11 @@ __all__ = [
     "MicroEventNode",
     "MicroEventEdge",
     "EnhancedKG",
-    "CommunityDoc",
-    "MembershipEdge",
-    "EventCommunityEdge",
-    "GraphStats",
-    "CommunitiesOutput",
-    "Node2VecMeta",
-    "NodeEmbedding",
-    "Node2VecOutput",
     "VideoPipelineKGResult",
     "CostTracker",
     "KGPipelineTask",
-    "kg_pipeline_task",
+    "KGExtractionTask",
+    "kg_extraction_chunk_task",
+    "kg_entity_resolution_task",
+    "kg_finalization_task",
 ]

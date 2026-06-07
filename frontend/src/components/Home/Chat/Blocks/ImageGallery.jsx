@@ -16,7 +16,7 @@ export default function ImageGallery({ allImages, imageCount, previewCount = 6 }
             {hasMany && (
                 <button
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="flex items-center gap-2 mb-2 px-2 py-1 text-sm text-text-muted hover:text-text transition-colors"
+                    className="flex items-center gap-2 mb-2 px-2 py-1 text-sm text-text-muted hover:text-text transition-colors active:text-text"
                 >
                     <PhotoIcon className="w-4 h-4" />
                     <span>{imageCount} images</span>

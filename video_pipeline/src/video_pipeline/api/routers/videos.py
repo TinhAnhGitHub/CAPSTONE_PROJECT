@@ -104,7 +104,7 @@ async def get_video_data(
 
     This endpoint fetches data from multiple storage backends in parallel:
     - PostgreSQL: Artifacts metadata and lineage
-    - ArangoDB: Knowledge graph (entities, events, communities, relationships)
+    - ArangoDB: Knowledge graph (entities, events, micro-events, relationships)
     - Qdrant: Embedding vectors (images, captions, segments)
     - Elasticsearch: OCR text documents
 

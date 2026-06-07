@@ -33,6 +33,7 @@ class OpenRouterConfig(BaseModel):
     max_tokens: int = 4096
     temperature: float = 0.6
     timeout: int = 120
+    reasoning_effort: str = "none"
 
     def __post_init__(self):
         if self.api_key is None:
@@ -68,11 +69,7 @@ class OpenRouterClient:
             max_completion_tokens=config.max_tokens,
             temperature=config.temperature,
             timeout=config.timeout,
-            model_kwargs={
-                "extra_body": {
-                    "reasoning": {"effort": "none"}
-                }
-            },
+            extra_body={"reasoning": {"effort": config.reasoning_effort}},
         )
 
     async def close(self):
@@ -85,7 +82,7 @@ class OpenRouterClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    def as_structured_llm(self, output_cls: type[T], max_retries: int = 3, retry_delay: float = 1.0):
+    def as_structured_llm(self, output_cls: type[T], max_retries: int = 5, retry_delay: float = 2.0):
         parser = PydanticOutputParser(pydantic_object=output_cls)
 
         async def ainvoke(messages: list[BaseMessage], **kwargs) -> tuple[T, dict]:

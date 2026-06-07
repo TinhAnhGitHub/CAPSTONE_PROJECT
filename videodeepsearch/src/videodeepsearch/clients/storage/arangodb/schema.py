@@ -118,38 +118,6 @@ class KGMicroEventResult(BaseModel):
         )
 
 
-class KGCommunityResult(BaseModel):
-    """Community search result from Knowledge Graph.
-
-    Represents a cluster of related entities forming a thematic group.
-    """
-
-    id: str = Field(..., description="Community document key (namespaced)")
-    video_id: str = Field(..., description="Video ID this community belongs to")
-    comm_idx: int = Field(..., description="Community index")
-    title: str = Field(..., description="Community title")
-    summary: str = Field(default="", description="Community summary")
-    size: int = Field(default=0, description="Number of entities in community")
-    score: float = Field(default=0.0, description="Search similarity score")
-    member_keys: list[str] = Field(default_factory=list, description="Entity keys in this community")
-    event_keys: list[str] = Field(default_factory=list, description="Event keys linked to this community")
-
-    def brief_representation(self) -> str:
-        """Return a brief string representation."""
-        return f"[{self.video_id}] {self.title} (size={self.size}, score={self.score:.3f})"
-
-    def detailed_representation(self) -> str:
-        """Return a detailed string representation."""
-        return (
-            f"Community: {self.title}\n"
-            f"  ID: {self.id} | Index: {self.comm_idx}\n"
-            f"  Video: {self.video_id}\n"
-            f"  Size: {self.size} entities\n"
-            f"  Summary: {self.summary[:100]}..." if len(self.summary) > 100 else f"  Summary: {self.summary}\n"
-            f"  Score: {self.score:.3f}"
-        )
-
-
 class KGTraversalResult(BaseModel):
     """Graph traversal result from Knowledge Graph.
 
@@ -183,7 +151,7 @@ class KGTraversalResult(BaseModel):
 class KGRagResult(BaseModel):
     """Combined RAG retrieval result from Knowledge Graph.
 
-    Contains entities, events, micro-events, communities, and graph context.
+    Contains entities, events, micro-events, and graph context.
     """
 
     query: str = Field(..., description="Original query text")
@@ -191,7 +159,6 @@ class KGRagResult(BaseModel):
     entities: list[KGEntityResult] = Field(default_factory=list, description="Entity results")
     events: list[KGEventResult] = Field(default_factory=list, description="Event results")
     micro_events: list[KGMicroEventResult] = Field(default_factory=list, description="Micro-event results")
-    communities: list[KGCommunityResult] = Field(default_factory=list, description="Community results")
     graph_context: list[KGTraversalResult] = Field(default_factory=list, description="Graph traversal context")
     videos_hit: dict[str, int] = Field(default_factory=dict, description="Video ID -> hit count")
     total_nodes: int = Field(default=0, description="Total number of nodes retrieved")
@@ -202,7 +169,7 @@ class KGRagResult(BaseModel):
             f"RAG Result for: '{self.query}'\n"
             f"  Videos: {self.video_ids_searched}\n"
             f"  Entities: {len(self.entities)} | Events: {len(self.events)} | "
-            f"Micro-events: {len(self.micro_events)} | Communities: {len(self.communities)}\n"
+            f"Micro-events: {len(self.micro_events)}\n"
             f"  Graph context: {len(self.graph_context)} nodes\n"
             f"  Total: {self.total_nodes} nodes"
         )
@@ -226,11 +193,6 @@ class KGRagResult(BaseModel):
             for me in self.micro_events[:5]:
                 sections.append(f"  - {me.brief_representation()}")
 
-        if self.communities:
-            sections.append("\n--- Communities ---")
-            for c in self.communities[:3]:
-                sections.append(f"  - {c.brief_representation()}")
-
         if self.graph_context:
             sections.append("\n--- Graph Context ---")
             for g in self.graph_context[:10]:
@@ -245,7 +207,6 @@ class KGSearchStatistics(BaseModel):
     total_entities: int = Field(default=0, description="Total entities in result")
     total_events: int = Field(default=0, description="Total events in result")
     total_micro_events: int = Field(default=0, description="Total micro-events in result")
-    total_communities: int = Field(default=0, description="Total communities in result")
     videos_represented: int = Field(default=0, description="Number of videos with hits")
     avg_score: float = Field(default=0.0, description="Average similarity score")
     search_methods: list[str] = Field(default_factory=list, description="Search methods used")

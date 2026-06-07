@@ -1,10 +1,26 @@
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
 from datetime import datetime
 from video_pipeline.core.client.storage.pg import PostgresClient, ArtifactMetadata
 from video_pipeline.core.client.storage.minio import MinioStorageClient
 
 if TYPE_CHECKING:
     from video_pipeline.core.artifact import BaseArtifact
+
+
+def sanitize_metadata_value(value: Any) -> Any:
+    """Remove PostgreSQL-incompatible null characters from nested metadata values."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {
+            sanitize_metadata_value(key): sanitize_metadata_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [sanitize_metadata_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(sanitize_metadata_value(item) for item in value)
+    return value
 
 
 class ArtifactPersistentVisitor:
@@ -30,6 +46,7 @@ class ArtifactPersistentVisitor:
     ):
         metadata = artifact.metadata or {}
         metadata.update(**artifact.model_dump(mode="json"))
+        metadata = sanitize_metadata_value(metadata)
         if upload_to_minio:
             assert artifact.object_name, "If uploaded binary file to minio, please overide the method construct_object_name()"
 

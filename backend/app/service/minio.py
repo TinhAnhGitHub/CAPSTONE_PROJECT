@@ -9,7 +9,7 @@ from PIL import Image
 from minio import Minio
 
 from app.model.video import Video
-
+from app.core.config import settings
 
 class MinioService:
     def __init__(self, minio_client: Minio = None):
@@ -232,7 +232,10 @@ class MinioService:
         return [self.generate_thumbnail_link(video_id, f) for f in frames]
 
     def generate_thumbnail_link(self, video_id, frame_index):
-        return f"http://100.113.186.28:9000/thumbnails/{video_id}_{frame_index}.jpg"
+        # We assume MEDIA_URL_BASE ends with a trailing slash, e.g. "https://api.departmentofcodingknight.site/media/"
+        base_url = getattr(settings, 'MEDIA_URL_BASE', 'http://100.113.186.28:9000/')
+        return f"{base_url}thumbnails/{video_id}_{frame_index}.jpg"
 
     def generate_video_link(self, video_id):
-        return f"http://100.113.186.28:9000/videos/{video_id}.mp4"
+        base_url = getattr(settings, 'MEDIA_URL_BASE', 'http://100.113.186.28:9000/')
+        return f"{base_url}videos/{video_id}.mp4"

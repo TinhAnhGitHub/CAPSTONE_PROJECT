@@ -1,7 +1,7 @@
 import React from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
-import offsetPlugin from "videojs-offset"; // 🔥 important
+import offsetPlugin from "videojs-offset"; // important
 videojs.registerPlugin('offset', offsetPlugin);
 import 'videojs-markers';
 import 'videojs-markers/dist/videojs.markers.css';

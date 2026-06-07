@@ -56,11 +56,13 @@ export default function Chat() {
   const selectedVideosIds = videos.filter(video => video.selected).map(video => video._id);
   const [querying, setQuerying] = useState(false);
   const isStreamingRef = useRef(false); // Track if we received continue_stream
+  const streamEndedRef = useRef(false);  // Guard: prevents late continue_stream from re-opening querying
   const previousSessionIdRef = useRef(session_id);
 
   // chạy khi chuyển session
   useEffect(() => {
     isStreamingRef.current = false;
+    streamEndedRef.current = false;
     setQuerying(false); // Reset querying state - will be set to true by continue_stream if needed
     // Only clear when session actually changes, not on initial mount/remount.
     if (previousSessionIdRef.current && previousSessionIdRef.current !== session_id) {
@@ -246,16 +248,24 @@ export default function Chat() {
       console.log("continue_stream updated", updated);
       setChatMessages(updated);
       scrollToBottomIfNeeded();
-      setQuerying(true);
+      // Only re-enter querying state if stream hasn't already ended
+      // (guards against network reordering where stream_end arrives before continue_stream)
+      if (!streamEndedRef.current) {
+        setQuerying(true);
+      }
     }
     const handleStreamEnd = (msg) => {
       isStreamingRef.current = false; // Reset streaming flag
+      streamEndedRef.current = true;  // Mark that stream has ended for this query
       setQuerying(false);
     }
 
     const handleError = () => {
       toast.error('Failed to reach agent');
-      stopStreaming();
+      // Just reset state — don't emit cancel_stream, the backend is already in an error state
+      isStreamingRef.current = false;
+      streamEndedRef.current = true;
+      setQuerying(false);
     }
 
     socket.on('message_received', handleMessageReceived);
@@ -382,6 +392,15 @@ export default function Chat() {
             </div>
           ))}
 
+          {/* Typing / streaming indicator */}
+          {querying && (
+            <div className="flex items-center gap-1.5 px-1 py-2">
+              <span className="w-1 h-1 rounded-full bg-accent" style={{ animation: 'dot-shimmer 1.4s ease-in-out infinite', animationDelay: '0ms' }} />
+              <span className="w-1 h-1 rounded-full bg-accent" style={{ animation: 'dot-shimmer 1.4s ease-in-out infinite', animationDelay: '280ms' }} />
+              <span className="w-1 h-1 rounded-full bg-accent" style={{ animation: 'dot-shimmer 1.4s ease-in-out infinite', animationDelay: '560ms' }} />
+            </div>
+          )}
+
           {showScrollDown && (
             <button
               onClick={() => {
@@ -399,6 +418,7 @@ export default function Chat() {
               cursor-pointer
               hover:bg-surface-light
               transition-all ease-out
+              active:bg-surface-light
             "
               aria-label="Scroll to bottom"
             >
@@ -417,22 +437,28 @@ export default function Chat() {
             'flex flex-col w-full rounded-xl bg-surface border border-surface-light',
             'focus-within:ring-2 focus-within:ring-accent/50 focus-within:border-accent transition-all'
           )}>
-            {/* Video thumbnails inside the input container */}
+            {/* Video context pills inside the input container */}
             {isOverrideMode() && overrideVideos.length > 0 && (
-              <div className='flex flex-wrap gap-2 px-3 pt-3'>
+              <div className='flex flex-wrap gap-1.5 px-3 pt-3'>
                 {overrideVideos.map((video, index) => (
                   <div
                     key={index}
-                    className='relative group rounded-lg overflow-hidden border border-surface-light hover:border-accent/50 transition-colors'
+                    className='group flex items-center gap-0 rounded-lg overflow-hidden border border-surface-light hover:border-accent/50 transition-colors bg-surface max-w-[160px]'
                   >
+                    {/* Thumbnail */}
                     <img
                       src={video.thumbnail || '/images/testImage.png'}
                       alt={video.title}
-                      className='w-16 h-10 object-cover'
+                      className='w-10 h-8 object-cover shrink-0'
                     />
+                    {/* Name */}
+                    <span className='px-2 text-[11px] text-text-muted truncate flex-1 min-w-0'>
+                      {video.title}
+                    </span>
+                    {/* Remove */}
                     <button
                       onClick={() => setOverrideVideos(overrideVideos.filter((v) => v.video_id !== video.video_id))}
-                      className='absolute top-0.5 right-0.5 p-0.5 rounded-full bg-black/60 hover:bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-all cursor-pointer'
+                      className='shrink-0 mr-1 p-0.5 rounded-full text-text-dim hover:bg-red-500/80 hover:text-white active:bg-red-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer'
                       title='Remove video'
                     >
                       <XMarkIcon className='w-3 h-3' />
@@ -451,7 +477,7 @@ export default function Chat() {
                 }}
                 rows={1}
                 className={clsx(
-                  'block flex-1 border-none bg-transparent text-sm/6 text-text',
+                  'block flex-1 border-none bg-transparent text-md/6 text-text',
                   'focus:outline-none resize-none placeholder:text-text-muted',
                   'whitespace-pre-wrap leading-relaxed',
                   'max-h-[10rem] overflow-y-auto',

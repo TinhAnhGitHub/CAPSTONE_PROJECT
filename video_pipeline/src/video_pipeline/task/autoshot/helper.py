@@ -1,5 +1,5 @@
+import math
 from typing import Iterator
-import ffmpeg
 import numpy as np
 from urllib.parse import urlparse
 
@@ -13,6 +13,8 @@ def split_minio_url(uri:str):
 
 
 def get_frames_fast(video_file_path: str, width=48, height=27) -> np.ndarray:
+    import ffmpeg
+
     stream = (
         ffmpeg
         .input(video_file_path, threads=0)
@@ -90,6 +92,82 @@ def predictions_to_scenes(predictions: np.ndarray, threshold: float = 0.5) -> np
     return np.array(scenes, dtype=np.int32)
 
 
+def compute_outlier_threshold(lengths: list[int]) -> float:
+    arr = np.array(lengths)
+    q1 = np.percentile(arr, 25)
+    q3 = np.percentile(arr, 75)
+    iqr = q3 - q1
+    return float(q3 + 1.5 * iqr)
+
+
+def compute_target_size(lengths: list[int], threshold: float) -> int:
+    arr = np.array(lengths)
+    normal = arr[arr <= threshold]
+    return max(1, int(np.percentile(normal, 75)))
+
+
+def split_long_segment(start: int, end: int, target_size: int) -> list[tuple[int, int]]:
+    length = end - start
+    if length <= target_size:
+        return [(start, end)]
+
+    num_chunks = math.ceil(length / target_size)
+    chunk_size = length / num_chunks
+    return [
+        (round(start + i * chunk_size), round(start + (i + 1) * chunk_size))
+        for i in range(num_chunks)
+    ]
+
+
+def split_outlier_scenes(scenes: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Split unusually long scenes into near-even chunks.
+
+    Uses the same IQR-based outlier rule as ``local/test_new_algo.ipynb``:
+    scenes above ``Q3 + 1.5 * IQR`` are split using a target size based on the
+    75th percentile of the non-outlier scene lengths.
+    """
+    if not scenes:
+        return []
+
+    lengths = [end - start for start, end in scenes]
+    threshold = compute_outlier_threshold(lengths)
+    target_size = compute_target_size(lengths, threshold)
+
+    final_scenes: list[tuple[int, int]] = []
+    for start, end in scenes:
+        if end - start > threshold:
+            final_scenes.extend(split_long_segment(start, end, target_size))
+        else:
+            final_scenes.append((start, end))
+    return final_scenes
+
+
+def enforce_min_scene_segments(
+    scenes: list[tuple[int, int]],
+    min_segments: int,
+) -> list[tuple[int, int]]:
+    """Evenly subdivide the current scene timeline when too few scenes exist."""
+    if min_segments <= 0 or not scenes or len(scenes) >= min_segments:
+        return scenes
+
+    ordered_scenes = sorted(scenes)
+    start_frame = ordered_scenes[0][0]
+    end_frame = ordered_scenes[-1][1]
+    total_frames = max(1, end_frame - start_frame)
+
+    boundaries = [
+        start_frame + round(index * total_frames / min_segments)
+        for index in range(min_segments + 1)
+    ]
+    boundaries[0] = start_frame
+    boundaries[-1] = end_frame
+
+    return [
+        (boundaries[index], boundaries[index + 1])
+        for index in range(min_segments)
+    ]
+
+
 def preprocess_input_client(batch: np.ndarray):
     batch = np.transpose(batch, (3, 0, 1, 2))
     batch = np.expand_dims(batch, axis=0)
@@ -101,5 +179,3 @@ def postprocess_output_client(one_hot: np.ndarray) -> np.ndarray:
 
     prediction = 1 / (1 + np.exp(-one_hot[0]))
     return prediction[25:75]
-
-

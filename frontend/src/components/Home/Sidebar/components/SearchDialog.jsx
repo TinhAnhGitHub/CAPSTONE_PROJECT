@@ -82,7 +82,7 @@ export default function SearchDialog({ isOpen, onClose }) {
             className="relative z-50 focus:outline-none"
         >
             <DialogBackdrop className="fixed inset-0 bg-black/50" />
-            <div className="fixed inset-0 flex items-start justify-center pt-[15vh]">
+            <div className="fixed inset-0 flex items-start justify-center pt-[15vh] px-4 sm:px-0">
                 <DialogPanel className="w-full max-w-xl rounded-xl bg-surface shadow-2xl border border-surface-light overflow-hidden">
                     {/* Search input */}
                     <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-light">
@@ -128,7 +128,7 @@ export default function SearchDialog({ isOpen, onClose }) {
                                 onClick={() => selectResult(item.session_id, item.message_id)}
                                 onMouseEnter={() => setSelectedIndex(index)}
                                 className={clsx(
-                                    'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer',
+                                    'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer active:bg-accent/20',
                                     index === selectedIndex
                                         ? 'bg-accent/15 text-text'
                                         : 'text-text-muted hover:bg-white/5'

@@ -38,6 +38,15 @@ class AppSettings(BaseSettings):
     MINIO_ACCESS_KEY: str = Field("minioadmin", description="MinIO access key")
     MINIO_SECRET_KEY: str = Field("minioadmin", description="MinIO secret key")
     # MINIO_SECURE: bool = Field(False, description="Use secure connection (HTTPS) for MinIO")
+    # media url 
+    MEDIA_URL_BASE: str = Field("http://localhost:8011/media/", description="Media URL base")
+
+    # Redis / Celery settings
+    REDIS_URL: str = Field("redis://localhost:6379/0", description="Redis connection URL (broker + result backend)")
+
+    # Ingestion pipeline service URLs
+    INGESTION_SERVICE_URL: str = Field("http://100.113.186.28:8050", description="Video pipeline ingestion endpoint")
+    INGESTION_CANCEL_URL: str = Field("http://100.113.186.28:8000", description="Video pipeline management/cancel endpoint")
 
     # Server settings
     HOST: str = Field("0.0.0.0", description="Server host")

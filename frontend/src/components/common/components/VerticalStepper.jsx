@@ -1,3 +1,6 @@
+// NOT USED YET CAUSE tinh anh DISABLED THINKING
+
+
 // type StepStatus = "done" | "active" | "pending" | "error";
 
 // type Step = {
@@ -25,6 +28,7 @@ function InlineCode({ children, ...props }) {
         </code>
     );
 }
+
 
 export default function VerticalStepper({ steps, autoExpand = true }) {
     // Track which steps are expanded

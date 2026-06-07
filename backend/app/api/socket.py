@@ -11,6 +11,7 @@ import websockets
 import re
 
 import asyncio
+from app.core.config import settings
 from app.core.lifespan import app_state
 from app.model.session_message import (
     ImageBlock,
@@ -264,7 +265,7 @@ async def handle_stream_chat(socket_id, data: dict):
                                 
 
                             s3_base = "s3://"
-                            http_base = "http://100.113.186.28:9000/"
+                            http_base = getattr(settings, 'MEDIA_URL_BASE', "https://api.departmentofcodingknight.site/media/")
 
                             async def format_tool_result():
                                 if "image_search" in media_type:
@@ -330,6 +331,9 @@ async def handle_stream_chat(socket_id, data: dict):
                                         # sort segment_list based on start time
                                         segment_list.sort(key=lambda x: x.start)
                                         video = await Video.get(video_id)
+                                        if video is None:
+                                            print(f"⚠️ VideoBlock: video {video_id} not found in DB — skipping block")
+                                            continue
                                         video_block = VideoBlock(
                                             video_id=video_id,
                                             # public url
@@ -403,8 +407,8 @@ async def handle_stream_chat(socket_id, data: dict):
                             # clean up global session task
                             asyncio.create_task(cleanup_session(session_id))
 
-                        else:
-                            pass
+                            # Stop reading from the WebSocket — agent is done
+                            break
 
                         # Update prev_msg_type at end of loop
                         accum.prev_msg_type = msg_type
@@ -488,27 +492,24 @@ async def cancel_stream(sid, data):
     """User explicitly requested to stop the stream (clicked Stop button)."""
     session_id = data.get("session_id")
     state = global_session_tasks.get(session_id)
-    if not state:
-        return
 
-    task = state["task"]
-    if task:
-        task.cancel()
+    if state:
+        task = state["task"]
+        if task:
+            task.cancel()
+        state["status"] = "cancelled"
+        #  save the accumulated thinking block and text block to Chat document in mongodb
+        await save_message(session_id, state["accum"])
+        # Clean up immediately since user cancelled
+        asyncio.create_task(cleanup_session(session_id, delay=1))
 
-    state["status"] = "cancelled"
-
-    # Notify client that stream was cancelled
+    # Always notify client that stream ended — even if state was already cleaned up.
+    # Without this, the FE stop-button stays stuck if the task finished just before cancel.
     await sio.emit(
         "stream_end",
         {"session_id": session_id, "cancelled": True},
         to=session_room(session_id),
     )
-
-    #  save the accumulated thinking block and text block to Chat document in mongodb
-    await save_message(session_id, state["accum"])
-
-    # Clean up immediately since user cancelled
-    asyncio.create_task(cleanup_session(session_id, delay=1))
 
 
 async def cleanup_session(session_id: str, delay: int = 5):
